@@ -93,7 +93,8 @@ func (d *Delmin2) Dequeue(node Node) (pkt Packet) {
 			d.priorMin = m
 		} else {
 			delta = -d.idleTime
-			sigma = d.nsScaledMul(-d.idleTime, d.idleTime)
+			// sigma term doesn't do much and doesn't make much sense
+			//sigma = d.nsScaledMul(-d.idleTime, d.idleTime)
 			d.priorMin = 0
 		}
 		d.accumulator += ((delta + sigma) * d.resonance)
