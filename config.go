@@ -9,7 +9,7 @@ import (
 
 // Sender
 const (
-	Duration      = 20 * time.Second
+	Duration      = 60 * time.Second
 	CE_MD         = 0.5
 	SCE_MD_Factor = 64
 
@@ -29,7 +29,7 @@ var Flows = []Flow{
 
 // Iface
 const (
-	Rate = 100 * Mbps
+	Rate = 2 * Mbps
 
 	PlotSojourn = true
 	PlotMarks   = false
@@ -37,7 +37,7 @@ const (
 
 // Delmin
 // var UseAQM = NewDelmin1(Clock(5 * time.Millisecond))
-var UseAQM = NewDelmin2(Clock(5*time.Millisecond),
+var UseAQM = NewDelmin2(Clock(5000*time.Microsecond),
 	Clock(100*time.Microsecond))
 
 // Ramp
