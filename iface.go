@@ -144,8 +144,8 @@ func (i *Iface) Ding(data any, node Node) error {
 		if p.SCE {
 			i.sceTotal++
 		}
-		i.marks.Dot(node.Now(), strconv.Itoa(i.sceTotal), 0)
-		i.marks.Dot(node.Now(), strconv.Itoa(i.ceTotal), 1)
+		i.marks.Dot(node.Now(), strconv.Itoa(i.sceTotal), 1)
+		i.marks.Dot(node.Now(), strconv.Itoa(i.ceTotal), 2)
 	}
 	return nil
 }
