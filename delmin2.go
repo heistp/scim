@@ -9,10 +9,10 @@ import (
 	"time"
 )
 
-// Delmin2 implements DelTiC with the sojourn time taken as the minimum sojourn
+// Delmin implements DelTiC with the sojourn time taken as the minimum sojourn
 // time down to one packet, within a given burst.  A running minimum window is
 // used to add a sub-burst update time for a faster reaction.
-type Delmin2 struct {
+type Delmin struct {
 	queue []Packet
 
 	burst     Clock
@@ -33,8 +33,8 @@ type Delmin2 struct {
 	sceAcc int
 }
 
-func NewDelmin2(burst, update Clock) *Delmin2 {
-	return &Delmin2{
+func NewDelmin(burst, update Clock) *Delmin {
+	return &Delmin{
 		make([]Packet, 0),
 		burst,
 		update,
@@ -53,7 +53,7 @@ func NewDelmin2(burst, update Clock) *Delmin2 {
 }
 
 // Enqueue implements AQM.
-func (d *Delmin2) Enqueue(pkt Packet, node Node) {
+func (d *Delmin) Enqueue(pkt Packet, node Node) {
 	if len(d.queue) == 0 {
 		d.idleTime += node.Now() - d.priorTime
 	}
@@ -61,7 +61,7 @@ func (d *Delmin2) Enqueue(pkt Packet, node Node) {
 }
 
 // Dequeue implements AQM.
-func (d *Delmin2) Dequeue(node Node) (pkt Packet) {
+func (d *Delmin) Dequeue(node Node) (pkt Packet) {
 	// pop from head
 	pkt, d.queue = d.queue[0], d.queue[1:]
 
@@ -135,12 +135,12 @@ func (d *Delmin2) Dequeue(node Node) (pkt Packet) {
 	return
 }
 
-func (d *Delmin2) nsScaledMul(a, b Clock) Clock {
+func (d *Delmin) nsScaledMul(a, b Clock) Clock {
 	return a * b / Clock(time.Second)
 }
 
 // Peek implements AQM.
-func (d *Delmin2) Peek(node Node) (pkt Packet) {
+func (d *Delmin) Peek(node Node) (pkt Packet) {
 	if len(d.queue) == 0 {
 		return
 	}
