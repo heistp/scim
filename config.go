@@ -32,8 +32,12 @@ const (
 
 // Sender: flows
 var Flows = []Flow{
-	AddFlow(true),
-	//AddFlow(true),
+	AddFlow(SCE, true),
+	AddFlow(SCE, false),
+}
+
+var FlowSchedule = []FlowAt{
+	FlowAt{1, Clock(10 * time.Second), true},
 }
 
 // Iface: plots

@@ -19,8 +19,8 @@ type Iface struct {
 }
 
 type RateAt struct {
-	Delay Clock
-	Rate  Bitrate
+	At   Clock
+	Rate Bitrate
 }
 
 type AQM interface {
@@ -75,7 +75,7 @@ func (i *Iface) Start(node Node) (err error) {
 		}
 	}
 	for _, r := range i.schedule {
-		node.Timer(r.Delay, r.Rate)
+		node.Timer(r.At, r.Rate)
 	}
 	return nil
 }

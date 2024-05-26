@@ -21,7 +21,7 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 	h := []Handler{
-		NewSender(),
+		NewSender(FlowSchedule),
 		NewIface(Rate, RateSchedule, UseAQM),
 		Delay(FlowDelay),
 		NewReceiver(),

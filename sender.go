@@ -9,18 +9,29 @@ import (
 
 var SCE_MD = math.Pow(CE_MD, float64(1)/SCE_MD_Factor)
 
+type FlowID int
+
 // Sender approximates a Reno sender with multiple flows.
 type Sender struct {
 	flow     []Flow
+	schedule []FlowAt
 	inFlight Xplot
 	cwnd     Xplot
 	rtt      Xplot
 }
 
+// FlowAt is used to mark flows active or inactive to start and stop them.
+type FlowAt struct {
+	ID     FlowID
+	At     Clock
+	Active bool
+}
+
 // NewSender returns a new Sender.
-func NewSender() *Sender {
+func NewSender(schedule []FlowAt) *Sender {
 	return &Sender{
 		Flows,
+		schedule,
 		Xplot{
 			Title: "SCE-MD data in-flight",
 			X: Axis{
@@ -75,6 +86,9 @@ func (s *Sender) Start(node Node) (err error) {
 			return
 		}
 	}
+	for _, a := range s.schedule {
+		node.Timer(a.At, a)
+	}
 	s.send(node)
 	return nil
 }
@@ -83,13 +97,13 @@ func (s *Sender) Start(node Node) (err error) {
 func (s *Sender) Handle(pkt Packet, node Node) error {
 	s.flow[pkt.Flow].receive(pkt, node)
 	if PlotInFlight {
-		s.inFlight.Dot(node.Now(), s.flow[pkt.Flow].inFlight, pkt.Flow)
+		s.inFlight.Dot(node.Now(), s.flow[pkt.Flow].inFlight, int(pkt.Flow))
 	}
 	if PlotCwnd {
-		s.cwnd.Dot(node.Now(), s.flow[pkt.Flow].cwnd, pkt.Flow)
+		s.cwnd.Dot(node.Now(), s.flow[pkt.Flow].cwnd, int(pkt.Flow))
 	}
 	if PlotRTT {
-		s.rtt.Dot(node.Now(), s.flow[pkt.Flow].rtt.StringMS(), pkt.Flow)
+		s.rtt.Dot(node.Now(), s.flow[pkt.Flow].rtt.StringMS(), int(pkt.Flow))
 	}
 	if node.Now() > Clock(Duration) {
 		node.Shutdown()
@@ -99,12 +113,24 @@ func (s *Sender) Handle(pkt Packet, node Node) error {
 	return nil
 }
 
+// Ding implements Dinger.
+func (s *Sender) Ding(data any, node Node) error {
+	a := data.(FlowAt)
+	node.Logf("ding %d %t %t", a.ID, s.flow[a.ID].active, a.Active)
+	s.flow[a.ID].active = a.Active
+	return nil
+}
+
 // send sends packets until the in-flight bytes reaches cwnd.
 func (s *Sender) send(node Node) {
 	var n int
 	for n < len(s.flow) {
 		n = 0
 		for i := range s.flow {
+			if !s.flow[i].active {
+				n++
+				continue
+			}
 			if !s.flow[i].sendMSS(node) {
 				n++
 			}
@@ -128,8 +154,9 @@ func (s *Sender) Stop(node Node) error {
 
 // Flow represents the state for a single Flow.
 type Flow struct {
-	id  int
-	sce bool
+	id     FlowID
+	active bool
+	sce    SCECapable
 
 	seq       int
 	congAvoid bool
@@ -143,10 +170,18 @@ type Flow struct {
 	esceCtr    int
 }
 
+type SCECapable bool
+
+const (
+	SCE   SCECapable = true
+	NoSCE            = false
+)
+
 // NewFlow returns a new flow.
-func NewFlow(id int, sce bool) Flow {
+func NewFlow(id FlowID, sce SCECapable, active bool) Flow {
 	return Flow{
 		id,
+		active,
 		sce,
 		0,
 		false,
@@ -161,13 +196,13 @@ func NewFlow(id int, sce bool) Flow {
 }
 
 // AddFlow adds a flow with an ID from the global flowID.
-func AddFlow(sce bool) (flow Flow) {
+func AddFlow(sce SCECapable, active bool) (flow Flow) {
 	i := flowID
 	flowID++
-	return NewFlow(i, sce)
+	return NewFlow(i, sce, active)
 }
 
-var flowID = 0
+var flowID FlowID = 0
 
 // sendMSS sends MSS sized packets while staying within cwnd.  It returns true
 // if it's possible to send more MSS sized packets.

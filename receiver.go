@@ -68,7 +68,7 @@ func (r *Receiver) updateGoodput(pkt Packet, node Node) {
 		r.goodput.Dot(
 			node.Now(),
 			strconv.FormatFloat(g.Mbps(), 'f', -1, 64),
-			pkt.Flow)
+			int(pkt.Flow))
 		r.count[pkt.Flow] = 0
 		r.countStart[pkt.Flow] = node.Now()
 	}
