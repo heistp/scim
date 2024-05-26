@@ -226,7 +226,7 @@ func (f *Flow) sendMSS(node Node) bool {
 func (f *Flow) receive(pkt Packet, node Node) {
 	f.inFlight -= pkt.Len
 	f.updateRTT(pkt, node)
-	// react to ECE
+	// react to congestion marks
 	if pkt.ECE {
 		var b bool
 		if f.congAvoid {
@@ -241,9 +241,7 @@ func (f *Flow) receive(pkt Packet, node Node) {
 			}
 			f.priorCEMD = node.Now()
 		}
-	}
-	// react to ESCE
-	if pkt.ESCE {
+	} else if pkt.ESCE {
 		f.esceCtr++
 		var b bool
 		if f.congAvoid {
