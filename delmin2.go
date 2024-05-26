@@ -5,12 +5,13 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"time"
 )
 
 // Delmin2 implements DelTiC with the sojourn time taken as the minimum sojourn
-// time within the given burst, adding an update time to Delmin2 for a faster
-// reaction.
+// time down to one packet, within a given burst.  A running minimum window is
+// used to add a sub-burst update time for a faster reaction.
 type Delmin2 struct {
 	queue []Packet
 
@@ -24,6 +25,7 @@ type Delmin2 struct {
 	priorMin    Clock
 	// error window variables
 	win         *errorWindow
+	minDelay    Clock
 	idleTime    Clock
 	updateStart Clock
 	updateEnd   Clock
@@ -42,7 +44,8 @@ func NewDelmin2(burst, update Clock) *Delmin2 {
 		0,
 		0,
 		0,
-		newErrorWindow(int(burst/update)+1, update),
+		newErrorWindow(int(burst/update)+2, burst),
+		math.MaxInt64,
 		0,
 		0,
 		0,
@@ -66,25 +69,31 @@ func (d *Delmin2) Dequeue(node Node) (pkt Packet) {
 	// pop from head
 	pkt, d.queue = d.queue[0], d.queue[1:]
 
-	// add sojourn to error window
-	var s Clock
+	// update minimum delay from next packet, or 0 if no next packet
 	if len(d.queue) > 0 {
-		n := d.queue[0]
-		s = (node.Now() - n.Now)
+		m := node.Now() - d.queue[0].Now
+		if m < d.minDelay {
+			d.minDelay = m
+		}
+	} else {
+		d.minDelay = 0
 	}
-	d.win.add(s, node.Now())
 
 	// run DelTiC after update time using minimum delay from window
 	if node.Now() > d.updateEnd {
-		bt := node.Now() - d.updateStart
-		if bt > Clock(time.Second) {
-			bt = Clock(time.Second)
+		// add min delay to error window
+		d.win.add(d.minDelay, node.Now())
+
+		// do delta-sigma
+		t := node.Now() - d.updateStart
+		if t > Clock(time.Second) {
+			t = Clock(time.Second)
 		}
 		var delta, sigma Clock
 		if d.idleTime == 0 {
-			m := d.win.min()
+			m := d.win.minimum()
 			delta = m - d.priorMin
-			sigma = d.nsScaledMul(m, bt)
+			sigma = d.nsScaledMul(m, t)
 			d.priorMin = m
 		} else {
 			delta = -d.idleTime
@@ -96,6 +105,9 @@ func (d *Delmin2) Dequeue(node Node) (pkt Packet) {
 			d.accumulator = 0
 			d.oscillator = 0
 		}
+
+		// reset update state
+		d.minDelay = math.MaxInt64
 		d.idleTime = 0
 		d.updateStart = node.Now()
 		d.updateEnd = node.Now() + d.update
@@ -179,7 +191,7 @@ func (w *errorWindow) add(value Clock, time Clock) {
 }
 
 // min returns the minimum error value.
-func (w *errorWindow) min() Clock {
+func (w *errorWindow) minimum() Clock {
 	if w.start != w.end {
 		return w.ring[w.start].value
 	}
@@ -200,6 +212,14 @@ func (w *errorWindow) prior(index int) int {
 		return index - 1
 	}
 	return len(w.ring) - 1
+}
+
+// length returns the number of elements in the ring.
+func (w *errorWindow) length() int {
+	if w.end >= w.start {
+		return w.end - w.start
+	}
+	return len(w.ring) - (w.start - w.end)
 }
 
 // errorAt contains a value for the errorWindow.
