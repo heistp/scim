@@ -40,7 +40,7 @@ var FlowSchedule = []FlowAt{
 
 // Delay: path delays for each flow
 var FlowDelay = []Clock{
-	Clock(0 * time.Millisecond),
+	Clock(20 * time.Millisecond),
 	Clock(20 * time.Millisecond),
 	Clock(20 * time.Millisecond),
 	Clock(20 * time.Millisecond),
@@ -54,7 +54,7 @@ var FlowDelay = []Clock{
 const (
 	PlotSojourn     = true
 	PlotMarks       = false
-	PlotQueueLength = true
+	PlotQueueLength = false
 )
 
 // Sender: plots
