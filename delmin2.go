@@ -119,15 +119,16 @@ func (d *Delmin2) Dequeue(node Node) (pkt Packet) {
 	d.oscillator += Clock(d.nsScaledMul(d.accumulator, dt) * d.resonance)
 	if d.oscillator > Clock(time.Second) {
 		d.oscillator -= Clock(time.Second)
-		if pkt.SCECapable {
-			pkt.SCE = true
-		}
 		d.sceAcc++
-		if d.sceAcc == SCE_MD_Factor {
-			if !pkt.SCECapable {
-				pkt.CE = true
-			}
+		if d.oscillator > Clock(time.Second) {
+			pkt.CE = true
 			d.sceAcc = 0
+			d.accumulator /= 2
+		} else if d.sceAcc >= SCE_MD_Factor && !pkt.SCECapable {
+			pkt.CE = true
+			d.sceAcc = 0
+		} else if pkt.SCECapable {
+			pkt.SCE = true
 		}
 	}
 
