@@ -98,6 +98,8 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet) {
 			d.priorMin = 0
 		}
 		d.accumulator += ((delta + sigma) * d.resonance)
+		//node.Logf("delta:%d sigma:%d accum:%d osc:%d", delta, sigma,
+		//	d.accumulator, d.oscillator)
 		if d.accumulator <= 0 {
 			d.accumulator = 0
 			d.oscillator = 0
