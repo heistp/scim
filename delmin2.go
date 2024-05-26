@@ -29,7 +29,6 @@ type Delmin2 struct {
 	idleTime    Clock
 	updateStart Clock
 	updateEnd   Clock
-	congLen     Bytes
 	// SCE-MD variables
 	sceAcc int
 }
@@ -50,7 +49,6 @@ func NewDelmin2(burst, update Clock) *Delmin2 {
 		0,
 		0,
 		0,
-		0,
 	}
 }
 
@@ -58,8 +56,6 @@ func NewDelmin2(burst, update Clock) *Delmin2 {
 func (d *Delmin2) Enqueue(pkt Packet, node Node) {
 	if len(d.queue) == 0 {
 		d.idleTime += node.Now() - d.priorTime
-	} else {
-		d.congLen += pkt.Len
 	}
 	d.queue = append(d.queue, pkt)
 }

@@ -12,7 +12,7 @@ import (
 //
 
 // Sender: test duration
-const Duration = 20 * time.Second
+const Duration = 30 * time.Second
 
 // IFace: rate and rate schedule
 var Rate = 1 * Mbps
@@ -22,7 +22,7 @@ var RateSchedule = []RateAt{
 
 // Iface: AQM config
 // var UseAQM = NewDelmin1(Clock(5 * time.Millisecond))
-var UseAQM = NewDelmin2(Clock(25000*time.Microsecond),
+var UseAQM = NewDelmin2(Clock(24000*time.Microsecond),
 	Clock(500*time.Microsecond))
 
 // var UseAQM = NewRamp()
