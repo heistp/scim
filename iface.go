@@ -64,7 +64,7 @@ func NewIface(rate Bitrate, schedule []RateAt, aqm AQM) *Iface {
 				Label: "Time (S)",
 			},
 			Y: Axis{
-				Type:  "unsigned",
+				Type:  "double",
 				Label: "Queue Length",
 			},
 		},
@@ -120,14 +120,22 @@ func (i *Iface) Ding(data any, node Node) error {
 	node.Send(p)
 	i.qlen--
 	if PlotQueueLength {
-		i.qlenPlot.Dot(node.Now(), strconv.Itoa(i.qlen), 0)
+		c := 0
+		if i.qlen == 0 {
+			c = 2
+		}
+		i.qlenPlot.Dot(node.Now(), strconv.Itoa(i.qlen), c)
 	}
 	if i.qlen > 0 {
 		i.timer(node)
 	}
 	if PlotSojourn {
 		s := node.Now() - p.Now
-		i.sojourn.Dot(node.Now(), s.StringMS(), 0)
+		c := 0
+		if i.qlen == 0 {
+			c = 2
+		}
+		i.sojourn.Dot(node.Now(), s.StringMS(), c)
 	}
 	if PlotMarks {
 		if p.CE {
