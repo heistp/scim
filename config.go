@@ -9,7 +9,7 @@ import (
 
 // Sender
 const (
-	Duration      = 30 * time.Second
+	Duration      = 20 * time.Second
 	CE_MD         = 0.5
 	SCE_MD_Factor = 64
 
@@ -24,7 +24,7 @@ const (
 
 var Flows = []Flow{
 	AddFlow(true),
-	AddFlow(true),
+	//AddFlow(true),
 }
 
 // Iface

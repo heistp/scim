@@ -137,6 +137,7 @@ type Flow struct {
 
 	cwnd       Bytes
 	inFlight   Bytes
+	acked      Bytes
 	priorCEMD  Clock
 	priorSCEMD Clock
 	esceCtr    int
@@ -151,6 +152,7 @@ func NewFlow(id int, sce bool) Flow {
 		false,
 		0,
 		IW,
+		0,
 		0,
 		0,
 		0,
@@ -227,12 +229,11 @@ func (f *Flow) receive(pkt Packet, node Node) {
 		if !f.congAvoid {
 			f.cwnd += MSS
 		} else {
-			// TODO fix growth algo to see if high bandwidths work better
-			g := MSS * MSS / f.cwnd
-			if g == 0 {
-				g = 1
+			f.acked += pkt.Len
+			if f.acked >= f.cwnd {
+				f.cwnd += MSS
+				f.acked = 0
 			}
-			f.cwnd += g
 		}
 	}
 }
