@@ -13,6 +13,7 @@ type Iface struct {
 	aqm      AQM
 	sojourn  Xplot
 	marks    Xplot
+	qlenPlot Xplot
 	ceTotal  int
 	sceTotal int
 	qlen     int
@@ -56,6 +57,17 @@ func NewIface(rate Bitrate, schedule []RateAt, aqm AQM) *Iface {
 				Label: "Total Marks (CE/SCE)",
 			},
 		},
+		Xplot{
+			Title: "SCE-MD Queue Length",
+			X: Axis{
+				Type:  "double",
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Type:  "unsigned",
+				Label: "Queue Length",
+			},
+		},
 		0,
 		0,
 		0,
@@ -74,6 +86,11 @@ func (i *Iface) Start(node Node) (err error) {
 			return
 		}
 	}
+	if PlotQueueLength {
+		if err = i.qlenPlot.Open("qlen.xpl"); err != nil {
+			return
+		}
+	}
 	for _, r := range i.schedule {
 		node.Timer(r.At, r.Rate)
 	}
@@ -84,6 +101,9 @@ func (i *Iface) Start(node Node) (err error) {
 func (i *Iface) Handle(pkt Packet, node Node) error {
 	i.aqm.Enqueue(pkt, node)
 	i.qlen++
+	if PlotQueueLength {
+		i.qlenPlot.Dot(node.Now(), strconv.Itoa(i.qlen), 0)
+	}
 	if i.qlen == 1 {
 		i.timer(node)
 	}
@@ -99,6 +119,9 @@ func (i *Iface) Ding(data any, node Node) error {
 	p := i.aqm.Dequeue(node)
 	node.Send(p)
 	i.qlen--
+	if PlotQueueLength {
+		i.qlenPlot.Dot(node.Now(), strconv.Itoa(i.qlen), 0)
+	}
 	if i.qlen > 0 {
 		i.timer(node)
 	}
@@ -133,6 +156,9 @@ func (i *Iface) Stop(node Node) error {
 	}
 	if PlotMarks {
 		i.marks.Close()
+	}
+	if PlotQueueLength {
+		i.qlenPlot.Close()
 	}
 	return nil
 }

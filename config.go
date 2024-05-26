@@ -12,7 +12,7 @@ import (
 //
 
 // Sender: test duration
-const Duration = 20 * time.Second
+const Duration = 10 * time.Second
 
 // IFace: rate and rate schedule
 var Rate = 100 * Mbps
@@ -40,7 +40,7 @@ var FlowSchedule = []FlowAt{
 
 // Delay: path delays for each flow
 var FlowDelay = []Clock{
-	Clock(20 * time.Millisecond),
+	Clock(0 * time.Millisecond),
 	Clock(20 * time.Millisecond),
 	Clock(20 * time.Millisecond),
 	Clock(20 * time.Millisecond),
@@ -52,8 +52,9 @@ var FlowDelay = []Clock{
 
 // Iface: plots
 const (
-	PlotSojourn = true
-	PlotMarks   = false
+	PlotSojourn     = true
+	PlotMarks       = false
+	PlotQueueLength = true
 )
 
 // Sender: plots
