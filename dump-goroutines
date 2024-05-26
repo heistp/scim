@@ -1,0 +1,9 @@
+#!/bin/bash
+
+p=$(pidof scemd)
+
+if [[ $p ]]; then
+    /bin/kill --verbose -s IOT $p
+else
+    echo "scemd not running"
+fi

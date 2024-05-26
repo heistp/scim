@@ -1,0 +1,21 @@
+# vim
+*.swp
+.tags
+.exrc
+
+# scemd binary and profiling output
+scemd
+*.prof
+
+# plots
+*.xpl
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+nohup.out
