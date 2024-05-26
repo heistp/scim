@@ -9,6 +9,7 @@ import (
 
 type Iface struct {
 	rate     Bitrate
+	schedule []RateAt
 	aqm      AQM
 	sojourn  Xplot
 	marks    Xplot
@@ -17,15 +18,21 @@ type Iface struct {
 	qlen     int
 }
 
+type RateAt struct {
+	Delay Clock
+	Rate  Bitrate
+}
+
 type AQM interface {
 	Enqueue(Packet, Node)
 	Dequeue(Node) Packet
 	Peek(Node) Packet
 }
 
-func NewIface(rate Bitrate, aqm AQM) *Iface {
+func NewIface(rate Bitrate, schedule []RateAt, aqm AQM) *Iface {
 	return &Iface{
 		rate,
+		schedule,
 		aqm,
 		Xplot{
 			Title: "SCE-MD Queue Sojourn Time",
@@ -67,6 +74,9 @@ func (i *Iface) Start(node Node) (err error) {
 			return
 		}
 	}
+	for _, r := range i.schedule {
+		node.Timer(r.Delay, r.Rate)
+	}
 	return nil
 }
 
@@ -82,6 +92,10 @@ func (i *Iface) Handle(pkt Packet, node Node) error {
 
 // Ding implements Dinger.
 func (i *Iface) Ding(data any, node Node) error {
+	if r, ok := data.(Bitrate); ok {
+		i.rate = r
+		return nil
+	}
 	p := i.aqm.Dequeue(node)
 	node.Send(p)
 	i.qlen--

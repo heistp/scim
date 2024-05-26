@@ -7,46 +7,58 @@ import (
 	"time"
 )
 
-// Sender
+// Sender: test duration
+const Duration = 20 * time.Second
+
+// Sender: SCE-MD params
 const (
-	Duration      = 60 * time.Second
 	CE_MD         = 0.5
 	SCE_MD_Factor = 64
+)
 
-	PlotInFlight = false
-	PlotCwnd     = true
-	PlotRTT      = false
-
+// Sender: TCP params
+const (
 	MSS      = 1500
 	IW       = 10 * MSS
 	RTTAlpha = float64(0.1)
 )
 
+// Sender: plots
+const (
+	PlotInFlight = false
+	PlotCwnd     = true
+	PlotRTT      = false
+)
+
+// Sender: flows
 var Flows = []Flow{
 	AddFlow(true),
 	//AddFlow(true),
 }
 
-// Iface
+// Iface: plots
 const (
-	Rate = 2 * Mbps
-
 	PlotSojourn = true
 	PlotMarks   = false
 )
 
-// Delmin
+// IFace: rate and rate schedule
+var Rate = 100 * Mbps
+var RateSchedule = []RateAt{
+	//RateAt{Clock(10 * time.Second), 200 * Mbps},
+}
+
+// Iface: AQM config
 // var UseAQM = NewDelmin1(Clock(5 * time.Millisecond))
 var UseAQM = NewDelmin2(Clock(5000*time.Microsecond),
 	Clock(100*time.Microsecond))
 
-// Ramp
 // var UseAQM = NewRamp()
 var SCERampMin = Clock(TransferTime(Rate, Bytes(MSS))) * 1
 
 const SCERampMax = Clock(100 * time.Millisecond)
 
-// Delay
+// Delay: delays for each flow
 var FlowDelay = []Clock{
 	Clock(20 * time.Millisecond),
 	Clock(20 * time.Millisecond),
