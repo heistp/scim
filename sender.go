@@ -35,33 +35,27 @@ func NewSender(schedule []FlowAt) *Sender {
 		Xplot{
 			Title: "SCE-MD data in-flight",
 			X: Axis{
-				Type:  "double",
 				Label: "Time (S)",
 			},
 			Y: Axis{
-				Type:  "unsigned",
 				Label: "In-flight (bytes)",
 			},
 		},
 		Xplot{
 			Title: "SCE-MD CWND",
 			X: Axis{
-				Type:  "double",
 				Label: "Time (S)",
 			},
 			Y: Axis{
-				Type:  "unsigned",
 				Label: "CWND (bytes)",
 			},
 		},
 		Xplot{
 			Title: "SCE-MD RTT",
 			X: Axis{
-				Type:  "double",
 				Label: "Time (S)",
 			},
 			Y: Axis{
-				Type:  "double",
 				Label: "RTT (ms)",
 			},
 			NonzeroAxis: true,

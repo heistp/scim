@@ -10,7 +10,7 @@ import (
 	"text/template"
 )
 
-const xplotHeader = `{{.X.Type}} {{.Y.Type}}
+const xplotHeader = `double double
 title
 {{.Title}}
 {{if .X.Label -}}
@@ -35,7 +35,6 @@ invisible 0 0
 `
 
 type Axis struct {
-	Type  string
 	Label string
 	Units string
 }

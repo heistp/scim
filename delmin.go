@@ -12,6 +12,29 @@ import (
 // Delmin implements DelTiC with the sojourn time taken as the minimum sojourn
 // time down to one packet, within a given burst.  A running minimum window is
 // used to add a sub-burst update time for a faster reaction.
+//
+// An outstanding problem to figure out with this is that when the path RTT is
+// less than burst, it takes a very long time for the queue depths to converge
+// to the minimum, so there can be inflated queue sojourn times relative to
+// the RTT.
+//
+// burst = 5ms, sojourn times after 0.5 seconds at a range of path RTTs:
+//
+//	5ms: 1.36 ms
+//	4ms: 2.00 ms
+//	3ms: 2.64 ms
+//	2ms: 3.28 ms
+//	1ms: 4.04 ms
+//	250us: 4.67 ms
+//
+// burst = 5ms, sojourn times after 10 seconds at a range of path RTTs:
+//
+//	5ms: 40 us
+//	4ms: 200 us
+//	3ms: 600 us
+//	2ms: 1.12 ms
+//	1ms: 1.76 ms
+//	250us: 2.27 ms
 type Delmin struct {
 	queue []Packet
 
@@ -98,8 +121,9 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet) {
 			d.priorMin = 0
 		}
 		d.accumulator += ((delta + sigma) * d.resonance)
-		//node.Logf("delta:%d sigma:%d accum:%d osc:%d", delta, sigma,
-		//	d.accumulator, d.oscillator)
+		//node.Logf("min:%d res:%d delta:%d sigma:%d accum:%d osc:%d",
+		//	d.win.minimum(), d.resonance, delta, sigma, d.accumulator,
+		//	d.oscillator)
 		if d.accumulator <= 0 {
 			d.accumulator = 0
 			d.oscillator = 0
@@ -126,6 +150,7 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet) {
 			pkt.CE = true
 			d.sceAcc = 0
 			d.accumulator /= 2
+			//node.Logf("oscillator overflow %d", d.oscillator)
 		} else if d.sceAcc >= SCE_MD_Factor && !pkt.SCECapable {
 			pkt.CE = true
 			d.sceAcc = 0

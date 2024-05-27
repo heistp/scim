@@ -54,7 +54,7 @@ var FlowDelay = []Clock{
 const (
 	PlotSojourn     = true
 	PlotMarks       = false
-	PlotQueueLength = false
+	PlotQueueLength = true
 )
 
 // Sender: plots

@@ -21,11 +21,9 @@ func NewReceiver() *Receiver {
 		Xplot{
 			Title: "SCE-MD Goodput",
 			X: Axis{
-				Type:  "double",
 				Label: "Time (S)",
 			},
 			Y: Axis{
-				Type:  "double",
 				Label: "Goodput (Mbps)",
 			},
 		},

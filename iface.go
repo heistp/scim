@@ -38,33 +38,27 @@ func NewIface(rate Bitrate, schedule []RateAt, aqm AQM) *Iface {
 		Xplot{
 			Title: "SCE-MD Queue Sojourn Time",
 			X: Axis{
-				Type:  "double",
 				Label: "Time (S)",
 			},
 			Y: Axis{
-				Type:  "double",
 				Label: "Sojourn time (ms)",
 			},
 		},
 		Xplot{
 			Title: "SCE-MD Total Congestion Marks",
 			X: Axis{
-				Type:  "double",
 				Label: "Time (S)",
 			},
 			Y: Axis{
-				Type:  "unsigned",
 				Label: "Total Marks (CE/SCE)",
 			},
 		},
 		Xplot{
 			Title: "SCE-MD Queue Length",
 			X: Axis{
-				Type:  "double",
 				Label: "Time (S)",
 			},
 			Y: Axis{
-				Type:  "double",
 				Label: "Queue Length",
 			},
 		},
@@ -87,7 +81,7 @@ func (i *Iface) Start(node Node) (err error) {
 		}
 	}
 	if PlotQueueLength {
-		if err = i.qlenPlot.Open("qlen.xpl"); err != nil {
+		if err = i.qlenPlot.Open("queue-length.xpl"); err != nil {
 			return
 		}
 	}
