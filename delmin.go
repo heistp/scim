@@ -92,7 +92,7 @@ func NewDelmin(burst, update Clock) *Delmin {
 // Start implements Starter.
 func (d *Delmin) Start(node Node) (err error) {
 	if PlotDelminMarks {
-		if err = d.marksPlot.Open("delmin-marks.xpl"); err != nil {
+		if err = d.marksPlot.Open("marks-delmin.xpl"); err != nil {
 			return
 		}
 	}
