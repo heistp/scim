@@ -160,7 +160,6 @@ type Flow struct {
 	acked      Bytes
 	priorCEMD  Clock
 	priorSCEMD Clock
-	esceCtr    int
 }
 
 type SCECapable bool
@@ -180,7 +179,6 @@ func NewFlow(id FlowID, sce SCECapable, active bool) Flow {
 		false,
 		0,
 		IW,
-		0,
 		0,
 		0,
 		0,
@@ -235,11 +233,10 @@ func (f *Flow) receive(pkt Packet, node Node) {
 			f.priorCEMD = node.Now()
 		}
 	} else if pkt.ESCE {
-		f.esceCtr++
 		var b bool
 		if f.congAvoid {
 			b = (node.Now() - f.priorSCEMD) > (f.rtt / SCE_MD_Factor)
-		} else if f.esceCtr >= SCE_MD_Factor/2 {
+		} else {
 			f.congAvoid = true
 			b = true
 		}
