@@ -10,16 +10,20 @@ import (
 
 type Receiver struct {
 	count      []Bytes
+	countAll   Bytes
 	countStart []Clock
 	total      []Bytes
+	maxRTTFlow FlowID
 	goodput    Xplot
 }
 
 func NewReceiver() *Receiver {
 	return &Receiver{
 		make([]Bytes, len(Flows)),
+		0,
 		make([]Clock, len(Flows)),
 		make([]Bytes, len(Flows)),
+		0,
 		Xplot{
 			Title: "SCE-MD Goodput",
 			X: Axis{
@@ -35,6 +39,13 @@ func NewReceiver() *Receiver {
 // Start implements Starter.
 func (r *Receiver) Start(node Node) (err error) {
 	if PlotGoodput {
+		var m Clock
+		for i, d := range FlowDelay {
+			if d > m {
+				m = d
+				r.maxRTTFlow = FlowID(i)
+			}
+		}
 		if err = r.goodput.Open("goodput.xpl"); err != nil {
 			return
 		}
@@ -63,8 +74,9 @@ func (r *Receiver) Handle(pkt Packet, node Node) error {
 
 func (r *Receiver) updateGoodput(pkt Packet, node Node) {
 	r.count[pkt.Flow] += pkt.Len
+	r.countAll += pkt.Len
 	e := node.Now() - r.countStart[pkt.Flow]
-	if e > FlowDelay[pkt.Flow] {
+	if e > 4*FlowDelay[pkt.Flow] {
 		g := CalcBitrate(r.count[pkt.Flow], time.Duration(e))
 		r.goodput.Dot(
 			node.Now(),
@@ -72,6 +84,15 @@ func (r *Receiver) updateGoodput(pkt Packet, node Node) {
 			int(pkt.Flow))
 		r.count[pkt.Flow] = 0
 		r.countStart[pkt.Flow] = node.Now()
+
+		if pkt.Flow == r.maxRTTFlow {
+			g := CalcBitrate(r.countAll, time.Duration(e))
+			r.goodput.PlotX(
+				node.Now(),
+				strconv.FormatFloat(g.Mbps(), 'f', -1, 64),
+				len(Flows))
+			r.countAll = 0
+		}
 	}
 }
 
