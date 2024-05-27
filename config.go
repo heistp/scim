@@ -31,11 +31,11 @@ const SCERampMax = Clock(100 * time.Millisecond)
 
 // Sender: flows
 var Flows = []Flow{
-	AddFlow(SCE, true),
 	AddFlow(NoSCE, true),
+	AddFlow(SCE, true),
 }
 var FlowSchedule = []FlowAt{
-	FlowAt{1, Clock(10 * time.Second), true},
+	//FlowAt{1, Clock(10 * time.Second), true},
 }
 
 // Delay: path delays for each flow

@@ -54,9 +54,9 @@ type Delmin struct {
 	updateStart Clock
 	updateEnd   Clock
 	// SCE-MD variables
-	sceAcc int
+	marks int
 	// Plots
-	marks     Xplot
+	marksPlot Xplot
 	marksNone int
 }
 
@@ -92,7 +92,7 @@ func NewDelmin(burst, update Clock) *Delmin {
 // Start implements Starter.
 func (d *Delmin) Start(node Node) (err error) {
 	if PlotDelminMarks {
-		if err = d.marks.Open("delmin-marks.xpl"); err != nil {
+		if err = d.marksPlot.Open("delmin-marks.xpl"); err != nil {
 			return
 		}
 	}
@@ -169,31 +169,36 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet) {
 	d.oscillator += Clock(d.nsScaledMul(d.accumulator, dt) * d.resonance)
 	if d.oscillator > Clock(time.Second) {
 		d.oscillator -= Clock(time.Second)
-		d.sceAcc++
-		var p float64
-		if PlotDelminMarks {
-			p = 1.0 - float64(d.marksNone)/float64(d.marksNone+1)
+		// do marking
+		if pkt.SCECapable {
+			pkt.SCE = true
 		}
+		d.marks++
+		if d.marks == SCE_MD_Factor {
+			if !pkt.SCECapable {
+				pkt.CE = true
+			}
+			d.marks = 0
+		}
+		// handle oscillator overload
 		if d.oscillator > Clock(time.Second) {
 			pkt.CE = true
-			d.sceAcc = 0
 			d.accumulator /= 2
-			if PlotDelminMarks {
-				d.marks.PlotX(node.Now(), strconv.FormatFloat(p, 'f', -1, 64), 2)
-			}
-		} else if d.sceAcc >= SCE_MD_Factor && !pkt.SCECapable {
-			pkt.CE = true
-			d.sceAcc = 0
-			if PlotDelminMarks {
-				d.marks.PlotX(node.Now(), strconv.FormatFloat(p, 'f', -1, 64), 4)
-			}
-		} else if pkt.SCECapable {
-			pkt.SCE = true
-			if PlotDelminMarks {
-				d.marks.Dot(node.Now(), strconv.FormatFloat(p, 'f', -1, 64), 0)
-			}
 		}
+
+		// plot marks
 		if PlotDelminMarks {
+			p := 1.0 - float64(d.marksNone)/float64(d.marksNone+1)
+			ps := strconv.FormatFloat(p, 'f', -1, 64)
+			if pkt.SCE {
+				d.marksPlot.Dot(node.Now(), ps, 0)
+			} else if pkt.CE {
+				c := 4
+				if d.oscillator > Clock(time.Second) {
+					c = 2
+				}
+				d.marksPlot.PlotX(node.Now(), ps, c)
+			}
 			d.marksNone = 0
 		}
 	} else if PlotDelminMarks {
@@ -205,7 +210,7 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet) {
 // Stop implements Stopper.
 func (d *Delmin) Stop(node Node) error {
 	if PlotDelminMarks {
-		d.marks.Close()
+		d.marksPlot.Close()
 	}
 	return nil
 }

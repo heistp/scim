@@ -11,6 +11,7 @@ import (
 type Receiver struct {
 	count      []Bytes
 	countStart []Clock
+	total      []Bytes
 	goodput    Xplot
 }
 
@@ -18,6 +19,7 @@ func NewReceiver() *Receiver {
 	return &Receiver{
 		make([]Bytes, len(Flows)),
 		make([]Clock, len(Flows)),
+		make([]Bytes, len(Flows)),
 		Xplot{
 			Title: "SCE-MD Goodput",
 			X: Axis{
@@ -54,6 +56,7 @@ func (r *Receiver) Handle(pkt Packet, node Node) error {
 	node.Send(pkt)
 	if PlotGoodput {
 		r.updateGoodput(pkt, node)
+		r.total[pkt.Flow] += pkt.Len
 	}
 	return nil
 }
@@ -75,6 +78,9 @@ func (r *Receiver) updateGoodput(pkt Packet, node Node) {
 func (r *Receiver) Stop(node Node) error {
 	if PlotGoodput {
 		r.goodput.Close()
+		for i, t := range r.total {
+			node.Logf("flow %d bytes %d", i, t)
+		}
 	}
 	return nil
 }
