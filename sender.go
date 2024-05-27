@@ -110,7 +110,6 @@ func (s *Sender) Handle(pkt Packet, node Node) error {
 // Ding implements Dinger.
 func (s *Sender) Ding(data any, node Node) error {
 	a := data.(FlowAt)
-	node.Logf("ding %d %t %t", a.ID, s.flow[a.ID].active, a.Active)
 	s.flow[a.ID].active = a.Active
 	return nil
 }

@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"strconv"
 	"time"
 )
 
@@ -54,6 +55,9 @@ type Delmin struct {
 	updateEnd   Clock
 	// SCE-MD variables
 	sceAcc int
+	// Plots
+	marks     Xplot
+	marksNone int
 }
 
 func NewDelmin(burst, update Clock) *Delmin {
@@ -72,7 +76,27 @@ func NewDelmin(burst, update Clock) *Delmin {
 		0,
 		0,
 		0,
+		Xplot{
+			Title: "SCE-MD Marks - SCE:white, CE:yellow, overflow CE:red",
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Proportion",
+			},
+		},
+		0,
 	}
+}
+
+// Start implements Starter.
+func (d *Delmin) Start(node Node) (err error) {
+	if PlotDelminMarks {
+		if err = d.marks.Open("delmin-marks.xpl"); err != nil {
+			return
+		}
+	}
+	return nil
 }
 
 // Enqueue implements AQM.
@@ -146,22 +170,47 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet) {
 	if d.oscillator > Clock(time.Second) {
 		d.oscillator -= Clock(time.Second)
 		d.sceAcc++
+		var p float64
+		if PlotDelminMarks {
+			p = 1.0 - float64(d.marksNone)/float64(d.marksNone+1)
+		}
 		if d.oscillator > Clock(time.Second) {
 			pkt.CE = true
 			d.sceAcc = 0
 			d.accumulator /= 2
-			//node.Logf("oscillator overflow %d", d.oscillator)
+			if PlotDelminMarks {
+				d.marks.PlotX(node.Now(), strconv.FormatFloat(p, 'f', -1, 64), 2)
+			}
 		} else if d.sceAcc >= SCE_MD_Factor && !pkt.SCECapable {
 			pkt.CE = true
 			d.sceAcc = 0
+			if PlotDelminMarks {
+				d.marks.PlotX(node.Now(), strconv.FormatFloat(p, 'f', -1, 64), 4)
+			}
 		} else if pkt.SCECapable {
 			pkt.SCE = true
+			if PlotDelminMarks {
+				d.marks.Dot(node.Now(), strconv.FormatFloat(p, 'f', -1, 64), 0)
+			}
 		}
+		if PlotDelminMarks {
+			d.marksNone = 0
+		}
+	} else if PlotDelminMarks {
+		d.marksNone++
 	}
-
 	return
 }
 
+// Stop implements Stopper.
+func (d *Delmin) Stop(node Node) error {
+	if PlotDelminMarks {
+		d.marks.Close()
+	}
+	return nil
+}
+
+// nsScaledMul multiplies two Clock values, scaled to time.Second.
 func (d *Delmin) nsScaledMul(a, b Clock) Clock {
 	return a * b / Clock(time.Second)
 }

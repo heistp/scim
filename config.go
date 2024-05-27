@@ -12,7 +12,7 @@ import (
 //
 
 // Sender: test duration
-const Duration = 10 * time.Second
+const Duration = 20 * time.Second
 
 // IFace: rate and rate schedule
 var Rate = 100 * Mbps
@@ -32,10 +32,10 @@ const SCERampMax = Clock(100 * time.Millisecond)
 // Sender: flows
 var Flows = []Flow{
 	AddFlow(SCE, true),
-	//AddFlow(SCE, true),
+	AddFlow(NoSCE, true),
 }
 var FlowSchedule = []FlowAt{
-	//FlowAt{1, Clock(10 * time.Second), false},
+	FlowAt{1, Clock(10 * time.Second), true},
 }
 
 // Delay: path delays for each flow
@@ -50,18 +50,22 @@ var FlowDelay = []Clock{
 // Plots
 //
 
-// Iface: plots
-const (
-	PlotSojourn     = true
-	PlotMarks       = false
-	PlotQueueLength = true
-)
-
 // Sender: plots
 const (
 	PlotInFlight = false
 	PlotCwnd     = true
 	PlotRTT      = false
+)
+
+// Iface: plots
+const (
+	PlotSojourn     = true
+	PlotQueueLength = true
+)
+
+// Delmin: plots
+const (
+	PlotDelminMarks = true
 )
 
 // Receiver: plots

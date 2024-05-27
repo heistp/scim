@@ -12,7 +12,6 @@ type Iface struct {
 	schedule []RateAt
 	aqm      AQM
 	sojourn  Xplot
-	marks    Xplot
 	qlenPlot Xplot
 	ceTotal  int
 	sceTotal int
@@ -45,15 +44,6 @@ func NewIface(rate Bitrate, schedule []RateAt, aqm AQM) *Iface {
 			},
 		},
 		Xplot{
-			Title: "SCE-MD Total Congestion Marks",
-			X: Axis{
-				Label: "Time (S)",
-			},
-			Y: Axis{
-				Label: "Total Marks (CE/SCE)",
-			},
-		},
-		Xplot{
 			Title: "SCE-MD Queue Length",
 			X: Axis{
 				Label: "Time (S)",
@@ -75,13 +65,13 @@ func (i *Iface) Start(node Node) (err error) {
 			return
 		}
 	}
-	if PlotMarks {
-		if err = i.marks.Open("marks.xpl"); err != nil {
+	if PlotQueueLength {
+		if err = i.qlenPlot.Open("queue-length.xpl"); err != nil {
 			return
 		}
 	}
-	if PlotQueueLength {
-		if err = i.qlenPlot.Open("queue-length.xpl"); err != nil {
+	if s, ok := i.aqm.(Starter); ok {
+		if err = s.Start(node); err != nil {
 			return
 		}
 	}
@@ -131,16 +121,6 @@ func (i *Iface) Ding(data any, node Node) error {
 		}
 		i.sojourn.Dot(node.Now(), s.StringMS(), c)
 	}
-	if PlotMarks {
-		if p.CE {
-			i.ceTotal++
-		}
-		if p.SCE {
-			i.sceTotal++
-		}
-		i.marks.Dot(node.Now(), strconv.Itoa(i.sceTotal), 1)
-		i.marks.Dot(node.Now(), strconv.Itoa(i.ceTotal), 2)
-	}
 	return nil
 }
 
@@ -152,15 +132,17 @@ func (i *Iface) timer(node Node) {
 }
 
 // Stop implements Stopper.
-func (i *Iface) Stop(node Node) error {
+func (i *Iface) Stop(node Node) (err error) {
 	if PlotSojourn {
 		i.sojourn.Close()
-	}
-	if PlotMarks {
-		i.marks.Close()
 	}
 	if PlotQueueLength {
 		i.qlenPlot.Close()
 	}
-	return nil
+	if s, ok := i.aqm.(Stopper); ok {
+		if err = s.Stop(node); err != nil {
+			return
+		}
+	}
+	return
 }
