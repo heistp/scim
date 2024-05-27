@@ -60,7 +60,7 @@ const (
 // Iface: plots
 const (
 	PlotSojourn     = true
-	PlotQueueLength = true
+	PlotQueueLength = false
 )
 
 // Delmin: plots

@@ -76,7 +76,7 @@ func (r *Receiver) updateGoodput(pkt Packet, node Node) {
 	r.count[pkt.Flow] += pkt.Len
 	r.countAll += pkt.Len
 	e := node.Now() - r.countStart[pkt.Flow]
-	if e > 4*FlowDelay[pkt.Flow] {
+	if e > 2*FlowDelay[pkt.Flow] {
 		g := CalcBitrate(r.count[pkt.Flow], time.Duration(e))
 		r.goodput.Dot(
 			node.Now(),
