@@ -100,7 +100,8 @@ func (r *Receiver) Stop(node Node) error {
 	if PlotGoodput {
 		r.goodput.Close()
 		for i, t := range r.total {
-			node.Logf("flow %d bytes %d", i, t)
+			r := CalcBitrate(t, time.Duration(node.Now()))
+			node.Logf("flow %d bytes %d rate %f Mbps", i, t, r.Mbps())
 		}
 	}
 	return nil
