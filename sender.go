@@ -155,11 +155,12 @@ type Flow struct {
 	congAvoid bool
 	rtt       Clock
 
-	cwnd       Bytes
-	inFlight   Bytes
-	acked      Bytes
-	priorCEMD  Clock
-	priorSCEMD Clock
+	cwnd        Bytes
+	inFlight    Bytes
+	acked       Bytes
+	priorGrowth Clock
+	priorCEMD   Clock
+	priorSCEMD  Clock
 }
 
 type SCECapable bool
@@ -179,6 +180,7 @@ func NewFlow(id FlowID, sce SCECapable, active bool) Flow {
 		false,
 		0,
 		IW,
+		0,
 		0,
 		0,
 		0,
@@ -253,9 +255,10 @@ func (f *Flow) receive(pkt Packet, node Node) {
 			f.cwnd += MSS
 		} else {
 			f.acked += pkt.Len
-			if f.acked >= f.cwnd {
+			if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.rtt {
 				f.cwnd += MSS
 				f.acked = 0
+				f.priorGrowth = node.Now()
 			}
 		}
 	}
