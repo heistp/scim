@@ -182,8 +182,10 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet) {
 		}
 		// handle oscillator overload
 		if d.oscillator > Clock(time.Second) {
+			pkt.SCE = false
 			pkt.CE = true
-			d.accumulator /= 2
+			// TODO remove below hack with proper CE and drop frequencies
+			d.accumulator = d.accumulator >> 8
 		}
 
 		// plot marks
