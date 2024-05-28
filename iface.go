@@ -25,7 +25,7 @@ type RateAt struct {
 
 type AQM interface {
 	Enqueue(Packet, Node)
-	Dequeue(Node) Packet
+	Dequeue(Node) (pkt Packet, ok bool)
 	Peek(Node) Packet
 }
 
@@ -96,13 +96,21 @@ func (i *Iface) Handle(pkt Packet, node Node) error {
 
 // Ding implements Dinger.
 func (i *Iface) Ding(data any, node Node) error {
+	// first handle Bitrate
 	if r, ok := data.(Bitrate); ok {
 		i.rate = r
 		return nil
 	}
-	p := i.aqm.Dequeue(node)
+	// if not a Bitrate, dequeue until we get a packet then send
+	var p Packet
+	var ok bool
+	for !ok {
+		p, ok = i.aqm.Dequeue(node)
+		if i.qlen--; i.qlen == 0 && !ok {
+			return nil
+		}
+	}
 	node.Send(p)
-	i.qlen--
 	if PlotQueueLength {
 		c := 0
 		if i.qlen == 0 {

@@ -10,6 +10,16 @@ import (
 	"time"
 )
 
+type mark int
+
+const (
+	markNone mark = iota
+	markSCE
+	markCE
+	markCEForce
+	markDrop
+)
+
 // Delmin implements DelTiC with the sojourn time taken as the minimum sojourn
 // time down to one packet, within a given burst.  A running minimum window is
 // used to add a sub-burst update time for a faster reaction.
@@ -77,7 +87,7 @@ func NewDelmin(burst, update Clock) *Delmin {
 		0,
 		0,
 		Xplot{
-			Title: "SCE-MD Marks - SCE:white, CE:yellow, overflow CE:red",
+			Title: "SCE-MD Marks - SCE:white, CE:yellow, force CE:orange, drop:red",
 			X: Axis{
 				Label: "Time (S)",
 			},
@@ -108,7 +118,7 @@ func (d *Delmin) Enqueue(pkt Packet, node Node) {
 }
 
 // Dequeue implements AQM.
-func (d *Delmin) Dequeue(node Node) (pkt Packet) {
+func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
 	// pop from head
 	pkt, d.queue = d.queue[0], d.queue[1:]
 
@@ -167,45 +177,65 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet) {
 	}
 	d.priorTime = node.Now()
 	d.oscillator += Clock(d.nsScaledMul(d.accumulator, dt) * d.resonance)
+	var m mark
 	if d.oscillator > Clock(time.Second) {
 		d.oscillator -= Clock(time.Second)
 		// do marking
 		if pkt.SCECapable {
-			pkt.SCE = true
+			m = markSCE
 		}
 		d.marks++
 		if d.marks == SCE_MD_Factor {
 			if !pkt.SCECapable {
-				pkt.CE = true
+				m = markCE
 			}
 			d.marks = 0
 		}
 		// handle oscillator overload
 		if d.oscillator > Clock(time.Second) {
-			pkt.SCE = false
-			pkt.CE = true
-			// TODO replace below hack with proper CE and drop frequencies
-			//d.accumulator = d.accumulator >> 8
+			m = markCEForce
+			d.oscillator -= Clock(time.Second)
+			if d.oscillator > Clock(time.Second) {
+				m = markDrop
+				d.oscillator -= Clock(time.Second)
+			}
 		}
 
 		// plot marks
 		if PlotDelminMarks {
 			p := 1.0 - float64(d.marksNone)/float64(d.marksNone+1)
 			ps := strconv.FormatFloat(p, 'f', -1, 64)
-			if pkt.SCE {
+			switch m {
+			case markSCE:
 				d.marksPlot.Dot(node.Now(), ps, 0)
-			} else if pkt.CE {
-				c := 4
-				if d.oscillator > Clock(time.Second) {
-					c = 2
-				}
-				d.marksPlot.PlotX(node.Now(), ps, c)
+			case markCE:
+				d.marksPlot.PlotX(node.Now(), ps, 4)
+			case markCEForce:
+				d.marksPlot.PlotX(node.Now(), ps, 6)
+			case markDrop:
+				d.marksPlot.PlotX(node.Now(), ps, 2)
 			}
 			d.marksNone = 0
 		}
 	} else if PlotDelminMarks {
 		d.marksNone++
 	}
+
+	// take action on mark
+	ok = true
+	switch m {
+	case markSCE:
+		pkt.SCE = true
+	case markCE:
+		pkt.CE = true
+	case markCEForce:
+		pkt.CE = true
+	case markDrop:
+		// NOTE sender drop logic doesn't work yet
+		//ok = false
+		pkt.CE = true
+	}
+
 	return
 }
 

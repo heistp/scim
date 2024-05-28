@@ -152,6 +152,7 @@ type Flow struct {
 	sce    SCECapable
 
 	seq       int
+	priorSeq  int
 	congAvoid bool
 	rtt       Clock
 
@@ -159,7 +160,7 @@ type Flow struct {
 	inFlight    Bytes
 	acked       Bytes
 	priorGrowth Clock
-	priorCEMD   Clock
+	priorMD     Clock
 	priorSCEMD  Clock
 }
 
@@ -177,6 +178,7 @@ func NewFlow(id FlowID, sce SCECapable, active bool) Flow {
 		active,
 		sce,
 		0,
+		-1,
 		false,
 		0,
 		IW,
@@ -216,14 +218,15 @@ func (f *Flow) sendMSS(node Node) bool {
 }
 
 // receive handles an incoming packet.
+// NOTE all packets considered ACKs for now
 func (f *Flow) receive(pkt Packet, node Node) {
 	f.inFlight -= pkt.Len
 	f.updateRTT(pkt, node)
-	// react to congestion marks
-	if pkt.ECE {
+	// react to drops and marks (TODO drop logic not working, leads to deadlock)
+	if pkt.ECE || pkt.Seq != f.priorSeq+1 {
 		var b bool
 		if f.congAvoid {
-			b = (node.Now() - f.priorCEMD) > f.rtt
+			b = (node.Now() - f.priorMD) > f.rtt
 		} else {
 			f.congAvoid = true
 			b = true
@@ -232,7 +235,7 @@ func (f *Flow) receive(pkt Packet, node Node) {
 			if f.cwnd = Bytes(float64(f.cwnd) * CE_MD); f.cwnd < MSS {
 				f.cwnd = MSS
 			}
-			f.priorCEMD = node.Now()
+			f.priorMD = node.Now()
 		}
 	} else if pkt.ESCE {
 		var b bool
@@ -250,18 +253,17 @@ func (f *Flow) receive(pkt Packet, node Node) {
 		}
 	}
 	// Reno-linear growth
-	if pkt.ACK {
-		if !f.congAvoid {
+	if !f.congAvoid {
+		f.cwnd += MSS
+	} else {
+		f.acked += pkt.Len
+		if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.rtt {
 			f.cwnd += MSS
-		} else {
-			f.acked += pkt.Len
-			if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.rtt {
-				f.cwnd += MSS
-				f.acked = 0
-				f.priorGrowth = node.Now()
-			}
+			f.acked = 0
+			f.priorGrowth = node.Now()
 		}
 	}
+	f.priorSeq = pkt.Seq
 }
 
 // updateRTT updates the rtt from the given packet.
