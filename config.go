@@ -39,11 +39,17 @@ var FlowSchedule = []FlowAt{
 }
 
 // Delay: path delays for each flow
+const DefaultRTT = 20 * time.Millisecond
+
 var FlowDelay = []Clock{
-	Clock(20 * time.Millisecond),
-	Clock(20 * time.Millisecond),
-	Clock(20 * time.Millisecond),
-	Clock(20 * time.Millisecond),
+	Clock(DefaultRTT),
+	Clock(DefaultRTT),
+	Clock(DefaultRTT),
+	Clock(DefaultRTT),
+	Clock(DefaultRTT),
+	Clock(DefaultRTT),
+	Clock(DefaultRTT),
+	Clock(DefaultRTT),
 }
 
 //
