@@ -12,6 +12,7 @@ type Receiver struct {
 	count      []Bytes
 	countAll   Bytes
 	countStart []Clock
+	packets    int
 	total      []Bytes
 	maxRTTFlow FlowID
 	goodput    Xplot
@@ -22,6 +23,7 @@ func NewReceiver() *Receiver {
 		make([]Bytes, len(Flows)),
 		0,
 		make([]Clock, len(Flows)),
+		0,
 		make([]Bytes, len(Flows)),
 		0,
 		Xplot{
@@ -65,6 +67,7 @@ func (r *Receiver) Handle(pkt Packet, node Node) error {
 		pkt.SCE = false
 	}
 	node.Send(pkt)
+	r.packets++
 	if PlotGoodput {
 		r.updateGoodput(pkt, node)
 		r.total[pkt.Flow] += pkt.Len
@@ -104,5 +107,7 @@ func (r *Receiver) Stop(node Node) error {
 			node.Logf("flow %d bytes %d rate %f Mbps", i, t, r.Mbps())
 		}
 	}
+	s := time.Duration(node.Now()).Seconds()
+	node.Logf("%.1f packets/sec", (float64(r.packets) / float64(s)))
 	return nil
 }
