@@ -12,6 +12,7 @@ type Receiver struct {
 	count      []Bytes
 	countAll   Bytes
 	countStart []Clock
+	start      time.Time
 	packets    int
 	total      []Bytes
 	maxRTTFlow FlowID
@@ -23,6 +24,7 @@ func NewReceiver() *Receiver {
 		make([]Bytes, len(Flows)),
 		0,
 		make([]Clock, len(Flows)),
+		time.Time{},
 		0,
 		make([]Bytes, len(Flows)),
 		0,
@@ -52,6 +54,7 @@ func (r *Receiver) Start(node Node) (err error) {
 			return
 		}
 	}
+	r.start = time.Now()
 	return nil
 }
 
@@ -107,7 +110,7 @@ func (r *Receiver) Stop(node Node) error {
 			node.Logf("flow %d bytes %d rate %f Mbps", i, t, r.Mbps())
 		}
 	}
-	s := time.Duration(node.Now()).Seconds()
-	node.Logf("%.1f packets/sec", (float64(r.packets) / float64(s)))
+	d := time.Since(r.start)
+	node.Logf("%.0f packets/sec", (float64(r.packets) / d.Seconds()))
 	return nil
 }
