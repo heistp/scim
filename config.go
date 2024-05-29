@@ -17,7 +17,7 @@ const Duration = 20 * time.Second
 // IFace: rate and rate schedule
 var Rate = 100 * Mbps
 var RateSchedule = []RateAt{
-	//RateAt{Clock(20 * time.Second), 10 * Mbps},
+	//RateAt{Clock(10 * time.Second), 10 * Mbps},
 }
 
 // Iface: AQM config
@@ -42,6 +42,14 @@ var FlowSchedule = []FlowAt{
 const DefaultRTT = 20 * time.Millisecond
 
 var FlowDelay = []Clock{
+	Clock(DefaultRTT),
+	Clock(DefaultRTT),
+	Clock(DefaultRTT),
+	Clock(DefaultRTT),
+	Clock(DefaultRTT),
+	Clock(DefaultRTT),
+	Clock(DefaultRTT),
+	Clock(DefaultRTT),
 	Clock(DefaultRTT),
 	Clock(DefaultRTT),
 	Clock(DefaultRTT),
