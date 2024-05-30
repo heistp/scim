@@ -66,8 +66,9 @@ type Delmin struct {
 	// SCE-MD variables
 	marks int
 	// Plots
-	marksPlot Xplot
-	marksNone int
+	marksPlot    Xplot
+	marksNone    int
+	emitMarksCtr int
 }
 
 func NewDelmin(burst, update Clock) *Delmin {
@@ -95,6 +96,7 @@ func NewDelmin(burst, update Clock) *Delmin {
 				Label: "Proportion",
 			},
 		},
+		0,
 		0,
 	}
 }
@@ -236,6 +238,10 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
 		pkt.CE = true
 	}
 
+	if EmitMarks {
+		d.emitMarks(m)
+	}
+
 	return
 }
 
@@ -244,12 +250,37 @@ func (d *Delmin) Stop(node Node) error {
 	if PlotDelminMarks {
 		d.marksPlot.Close()
 	}
+	if EmitMarks && d.emitMarksCtr != 0 {
+		fmt.Println()
+	}
 	return nil
 }
 
 // nsScaledMul multiplies two Clock values, scaled to time.Second.
 func (d *Delmin) nsScaledMul(a, b Clock) Clock {
 	return a * b / Clock(time.Second)
+}
+
+// emitMarks prints marks as characters.
+func (d *Delmin) emitMarks(m mark) {
+	// emit marks as characters
+	switch m {
+	case markSCE:
+		fmt.Print("s")
+	case markCE:
+		fmt.Print("c")
+	case markCEForce:
+		fmt.Print("C")
+	case markDrop:
+		fmt.Print("D")
+	default:
+		return
+	}
+	d.emitMarksCtr++
+	if d.emitMarksCtr == 64 {
+		fmt.Println()
+		d.emitMarksCtr = 0
+	}
 }
 
 // Peek implements AQM.
