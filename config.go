@@ -67,7 +67,7 @@ var FlowDelay = []Clock{
 // Sender: plots
 const (
 	PlotInFlight = false
-	PlotCwnd     = true
+	PlotCwnd     = false
 	PlotRTT      = false
 )
 
@@ -80,11 +80,13 @@ const (
 // Delmin: plots
 const (
 	PlotDelminMarks = true
+	EmitMarks       = false
 )
 
 // Receiver: plots
 const (
-	PlotGoodput = true
+	PlotGoodput       = true
+	PlotGoodputPerRTT = 2
 )
 
 //
