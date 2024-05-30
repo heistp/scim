@@ -23,7 +23,7 @@ func main() {
 	h := []Handler{
 		NewSender(FlowSchedule),
 		NewIface(Rate, RateSchedule, UseAQM),
-		Delay(FlowDelay),
+		NewDelay(FlowDelay),
 		NewReceiver(),
 	}
 	s := NewSim(h)
