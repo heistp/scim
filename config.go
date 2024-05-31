@@ -12,7 +12,22 @@ import (
 //
 
 // Sender: test duration
-const Duration = 20 * time.Second
+const Duration = 30 * time.Second
+
+// Sender and Delay: flows
+var (
+	Flows = []Flow{
+		AddFlow(SCE, true),
+		AddFlow(NoSCE, true),
+	}
+	FlowSchedule = []FlowAt{
+		//FlowAt{1, Clock(10 * time.Second), true},
+	}
+	FlowDelay = []Clock{
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+	}
+)
 
 // IFace: rate and rate schedule
 var Rate = 100 * Mbps
@@ -20,45 +35,16 @@ var RateSchedule = []RateAt{
 	//RateAt{Clock(10 * time.Second), 10 * Mbps},
 }
 
-// Iface: AQM config
+// Iface: Delmin AQM config
 var UseAQM = NewDelmin(Clock(5000*time.Microsecond),
 	Clock(10*time.Microsecond))
 
-// var UseAQM = NewRamp()
-var SCERampMin = Clock(TransferTime(Rate, Bytes(MSS))) * 1
-
-const SCERampMax = Clock(100 * time.Millisecond)
-
-// Sender: flows
-var Flows = []Flow{
-	AddFlow(NoSCE, true),
-	AddFlow(SCE, true),
-}
-var FlowSchedule = []FlowAt{
-	//FlowAt{1, Clock(10 * time.Second), true},
-}
-
-// Delay: path delays for each flow
-const DefaultRTT = 20 * time.Millisecond
-
-var FlowDelay = []Clock{
-	Clock(DefaultRTT),
-	Clock(DefaultRTT),
-	Clock(DefaultRTT),
-	Clock(DefaultRTT),
-	Clock(DefaultRTT),
-	Clock(DefaultRTT),
-	Clock(DefaultRTT),
-	Clock(DefaultRTT),
-	Clock(DefaultRTT),
-	Clock(DefaultRTT),
-	Clock(DefaultRTT),
-	Clock(DefaultRTT),
-	Clock(DefaultRTT),
-	Clock(DefaultRTT),
-	Clock(DefaultRTT),
-	Clock(DefaultRTT),
-}
+// Iface: Ramp AQM config
+var (
+	//UseAQM     = NewRamp()
+	SCERampMin = Clock(TransferTime(Rate, Bytes(MSS))) * 1
+	SCERampMax = Clock(100 * time.Millisecond)
+)
 
 //
 // Plots
@@ -67,7 +53,7 @@ var FlowDelay = []Clock{
 // Sender: plots
 const (
 	PlotInFlight = false
-	PlotCwnd     = false
+	PlotCwnd     = true
 	PlotRTT      = false
 )
 
@@ -86,7 +72,7 @@ const (
 // Receiver: plots
 const (
 	PlotGoodput       = true
-	PlotGoodputPerRTT = 2
+	PlotGoodputPerRTT = 8
 )
 
 //
@@ -95,7 +81,7 @@ const (
 
 // Sender: SCE-MD params
 const (
-	CE_MD         = 0.5
+	CE_MD         = 0.8
 	SCE_MD_Factor = 64
 )
 
