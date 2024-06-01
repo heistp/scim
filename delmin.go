@@ -57,10 +57,6 @@ type Delmin struct {
 	osc       Clock
 	priorTime Clock
 	priorMin  Clock
-	accCE     Clock
-	oscCE     Clock
-	accDrop   Clock
-	oscDrop   Clock
 	// error window variables
 	win         *errorWindow
 	minDelay    Clock
@@ -81,10 +77,6 @@ func NewDelmin(burst, update Clock) *Delmin {
 		burst,
 		update,
 		Clock(time.Second) / burst,
-		0,
-		0,
-		0,
-		0,
 		0,
 		0,
 		0,
