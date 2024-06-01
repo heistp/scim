@@ -53,10 +53,14 @@ type Delmin struct {
 	update    Clock
 	resonance Clock
 	// DelTiC variables
-	accumulator Clock
-	oscillator  Clock
-	priorTime   Clock
-	priorMin    Clock
+	acc       Clock
+	osc       Clock
+	priorTime Clock
+	priorMin  Clock
+	accCE     Clock
+	oscCE     Clock
+	accDrop   Clock
+	oscDrop   Clock
 	// error window variables
 	win         *errorWindow
 	minDelay    Clock
@@ -77,6 +81,10 @@ func NewDelmin(burst, update Clock) *Delmin {
 		burst,
 		update,
 		Clock(time.Second) / burst,
+		0,
+		0,
+		0,
+		0,
 		0,
 		0,
 		0,
@@ -156,13 +164,13 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
 			//sigma = d.nsScaledMul(-d.idleTime, d.idleTime)
 			d.priorMin = 0
 		}
-		d.accumulator += ((delta + sigma) * d.resonance)
+		d.acc += ((delta + sigma) * d.resonance)
 		//node.Logf("min:%d res:%d delta:%d sigma:%d accum:%d osc:%d",
 		//	d.win.minimum(), d.resonance, delta, sigma, d.accumulator,
 		//	d.oscillator)
-		if d.accumulator <= 0 {
-			d.accumulator = 0
-			d.oscillator = 0
+		if d.acc <= 0 {
+			d.acc = 0
+			d.osc = 0
 		}
 
 		// reset update state
@@ -178,10 +186,10 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
 		dt = Clock(time.Second)
 	}
 	d.priorTime = node.Now()
-	d.oscillator += Clock(d.nsScaledMul(d.accumulator, dt) * d.resonance)
+	d.osc += Clock(d.nsScaledMul(d.acc, dt) * d.resonance)
 	var m mark
-	if d.oscillator > Clock(time.Second) {
-		d.oscillator -= Clock(time.Second)
+	if d.osc >= Clock(time.Second) {
+		d.osc -= Clock(time.Second)
 		// do marking
 		if pkt.SCECapable {
 			m = markSCE
@@ -194,12 +202,12 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
 			d.marks = 0
 		}
 		// handle oscillator overload
-		if d.oscillator > Clock(time.Second) {
+		if d.osc >= Clock(time.Second) {
 			m = markCEForce
-			d.oscillator -= Clock(time.Second)
-			if d.oscillator > Clock(time.Second) {
+			d.osc -= Clock(time.Second)
+			if d.osc >= Clock(time.Second) {
 				m = markDrop
-				d.oscillator -= Clock(time.Second)
+				d.osc -= Clock(time.Second)
 			}
 		}
 
