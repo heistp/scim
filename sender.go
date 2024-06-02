@@ -7,7 +7,7 @@ import (
 	"math"
 )
 
-var SCE_MD = math.Pow(CE_MD, float64(1)/SCE_MD_Factor)
+var SCE_MD = math.Pow(CE_MD, float64(1)/SCE_MD_Scale)
 
 type FlowID int
 
@@ -240,7 +240,7 @@ func (f *Flow) receive(pkt Packet, node Node) {
 	} else if pkt.ESCE {
 		var b bool
 		if f.congAvoid {
-			b = (node.Now() - f.priorSCEMD) > (f.rtt / SCE_MD_Factor)
+			b = (node.Now() - f.priorSCEMD) > (f.rtt / SCE_MD_Scale)
 		} else {
 			f.congAvoid = true
 			b = true

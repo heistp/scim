@@ -15,7 +15,7 @@ func NewRamp() *Ramp {
 	return &Ramp{
 		make([]Packet, 0),
 		rand.New(rand.NewSource(9)),
-		SCE_MD_Factor / 2,
+		SCE_MD_Scale / 2,
 	}
 }
 
@@ -43,7 +43,7 @@ func (r *Ramp) Dequeue(node Node) (pkt Packet) {
 			pkt.SCE = true
 		}
 		r.sceAcc++
-		if r.sceAcc == SCE_MD_Factor {
+		if r.sceAcc == SCE_MD_Scale {
 			if !pkt.SCECapable {
 				pkt.CE = true
 			}

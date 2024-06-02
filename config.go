@@ -21,19 +21,32 @@ var (
 		AddFlow(NoSCE, true),
 	}
 	FlowSchedule = []FlowAt{
-		//FlowAt{1, Clock(10 * time.Second), true},
+		//FlowAt{0, Clock(20 * time.Second), false},
 	}
 	FlowDelay = []Clock{
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
 		Clock(20 * time.Millisecond),
 		Clock(20 * time.Millisecond),
 	}
 )
 
 // IFace: rate and rate schedule
-var Rate = 100 * Mbps
+var InitialRate = 100 * Mbps
 var RateSchedule = []RateAt{
 	//RateAt{Clock(10 * time.Second), 10 * Mbps},
 }
+
+//func init() {
+//	for t := 5 * Clock(time.Second); t < 100*Clock(time.Second); t += 5 * Clock(time.Second) {
+//		RateSchedule = append(RateSchedule, RateAt{t,
+//			Bitrate(2*time.Duration(t).Seconds()) * Mbps})
+//	}
+//}
 
 // Iface: Delmin AQM config
 var UseAQM = NewDelmin(Clock(5000*time.Microsecond),
@@ -42,7 +55,7 @@ var UseAQM = NewDelmin(Clock(5000*time.Microsecond),
 // Iface: Ramp AQM config
 var (
 	//UseAQM     = NewRamp()
-	SCERampMin = Clock(TransferTime(Rate, Bytes(MSS))) * 1
+	SCERampMin = Clock(TransferTime(InitialRate, Bytes(MSS))) * 1
 	SCERampMax = Clock(100 * time.Millisecond)
 )
 
@@ -72,7 +85,7 @@ const (
 // Receiver: plots
 const (
 	PlotGoodput       = true
-	PlotGoodputPerRTT = 8
+	PlotGoodputPerRTT = 2
 )
 
 //
@@ -81,8 +94,8 @@ const (
 
 // Sender: SCE-MD params
 const (
-	CE_MD         = 0.8
-	SCE_MD_Factor = 64
+	CE_MD        = 0.8
+	SCE_MD_Scale = 64
 )
 
 // Sender: TCP params

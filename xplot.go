@@ -61,16 +61,20 @@ func (p *Xplot) Open(name string) (err error) {
 	return
 }
 
-func (p *Xplot) Dot(x any, y any, color int) {
+func (p *Xplot) Dot(x, y any, color int) {
 	fmt.Fprintf(p.writer, "dot %s %s %d\n", x, y, color)
 }
 
-func (p *Xplot) Plus(x any, y any, color int) {
+func (p *Xplot) Plus(x, y any, color int) {
 	fmt.Fprintf(p.writer, "+ %s %s %d\n", x, y, color)
 }
 
-func (p *Xplot) PlotX(x any, y any, color int) {
+func (p *Xplot) PlotX(x, y any, color int) {
 	fmt.Fprintf(p.writer, "x %s %s %d\n", x, y, color)
+}
+
+func (p *Xplot) Line(x0, y0, x1, y1 any, color int) {
+	fmt.Fprintf(p.writer, "line %s %s %s %s %d\n", x0, y0, x1, y1, color)
 }
 
 func (p *Xplot) Close() error {

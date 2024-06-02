@@ -16,7 +16,6 @@ const (
 	markNone mark = iota
 	markSCE
 	markCE
-	markCEForce
 	markDrop
 )
 
@@ -64,7 +63,11 @@ type Delmin struct {
 	updateStart Clock
 	updateEnd   Clock
 	// SCE-MD variables
-	marks int
+	sceOps  int
+	ceMode  bool
+	noMark  int
+	sceWait Clock
+	ceWait  Clock
 	// Plots
 	marksPlot    Xplot
 	marksNone    int
@@ -84,6 +87,10 @@ func NewDelmin(burst, update Clock) *Delmin {
 		newErrorWindow(int(burst/update)+2, burst),
 		math.MaxInt64,
 		0,
+		0,
+		0,
+		0,
+		false,
 		0,
 		0,
 		0,
@@ -181,56 +188,81 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
 	d.osc += Clock(d.nsScaledMul(d.acc, dt) * d.resonance)
 	var m mark
 	if d.osc >= Clock(time.Second) {
+		//node.Logf("acc:%d noMark:%d", d.acc, d.noMark)
 		d.osc -= Clock(time.Second)
-		// do marking
-		if pkt.SCECapable {
-			m = markSCE
-		}
-		d.marks++
-		if d.marks == SCE_MD_Factor {
-			if !pkt.SCECapable {
-				m = markCE
+		if !d.ceMode {
+			if pkt.SCECapable {
+				m = markSCE
 			}
-			d.marks = 0
-		}
-		// handle oscillator overload
-		if d.osc >= Clock(time.Second) {
-			m = markCEForce
-			d.osc -= Clock(time.Second)
+			d.sceOps++
+			if d.sceOps == SCE_MD_Scale {
+				if !pkt.SCECapable {
+					m = markCE
+				}
+				d.sceOps = 0
+			}
+			if d.osc >= Clock(time.Second) {
+				if d.ceWait == 0 {
+					d.ceWait = node.Now()
+				} else if node.Now()-d.ceWait > Clock(time.Second) {
+					d.ceMode = true
+					d.sceWait = 0
+					d.acc /= SCE_MD_Scale
+					node.Logf("CE mode")
+					if PlotDelminMarks {
+						d.marksPlot.Line(node.Now(), "0", node.Now(), "1", 4)
+					}
+				}
+			} else {
+				d.ceWait = 0
+			}
+		} else {
+			m = markCE
 			if d.osc >= Clock(time.Second) {
 				m = markDrop
-				d.osc -= Clock(time.Second)
+				//d.osc -= d.osc >> 4 // arbitrary
+			}
+			if d.noMark > SCE_MD_Scale {
+				if d.sceWait == 0 {
+					d.sceWait = node.Now()
+				} else if node.Now()-d.sceWait > Clock(time.Second) {
+					d.ceMode = false
+					d.ceWait = 0
+					d.acc *= SCE_MD_Scale
+					node.Logf("SCE mode")
+					if PlotDelminMarks {
+						d.marksPlot.Line(node.Now(), "0", node.Now(), "1", 0)
+					}
+				}
+			} else {
+				d.sceWait = 0
 			}
 		}
 
 		// plot marks
 		if PlotDelminMarks {
-			p := 1.0 - float64(d.marksNone)/float64(d.marksNone+1)
+			p := 1.0 / float64(d.noMark+1)
 			ps := strconv.FormatFloat(p, 'f', -1, 64)
 			switch m {
 			case markSCE:
 				d.marksPlot.Dot(node.Now(), ps, 0)
 			case markCE:
 				d.marksPlot.PlotX(node.Now(), ps, 4)
-			case markCEForce:
-				d.marksPlot.PlotX(node.Now(), ps, 6)
 			case markDrop:
 				d.marksPlot.PlotX(node.Now(), ps, 2)
 			}
-			d.marksNone = 0
 		}
-	} else if PlotDelminMarks {
-		d.marksNone++
+		d.noMark = 0
+	} else {
+		d.noMark++
 	}
 
-	// take action on mark
+	// do marking
 	ok = true
 	switch m {
 	case markSCE:
 		pkt.SCE = true
 	case markCE:
-		pkt.CE = true
-	case markCEForce:
 		pkt.CE = true
 	case markDrop:
 		// NOTE sender drop logic doesn't work yet
@@ -269,8 +301,6 @@ func (d *Delmin) emitMarks(m mark) {
 		fmt.Print("s")
 	case markCE:
 		fmt.Print("c")
-	case markCEForce:
-		fmt.Print("C")
 	case markDrop:
 		fmt.Print("D")
 	default:
