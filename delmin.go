@@ -22,29 +22,6 @@ const (
 // Delmin implements DelTiC with the sojourn time taken as the minimum sojourn
 // time down to one packet, within a given burst.  A running minimum window is
 // used to add a sub-burst update time for a faster reaction.
-//
-// An outstanding problem to figure out with this is that when the path RTT is
-// less than burst, it takes a very long time for the queue depths to converge
-// to the minimum, so there can be inflated queue sojourn times relative to
-// the RTT.
-//
-// burst = 5ms, sojourn times after 0.5 seconds at a range of path RTTs:
-//
-//	5ms: 1.36 ms
-//	4ms: 2.00 ms
-//	3ms: 2.64 ms
-//	2ms: 3.28 ms
-//	1ms: 4.04 ms
-//	250us: 4.67 ms
-//
-// burst = 5ms, sojourn times after 10 seconds at a range of path RTTs:
-//
-//	5ms: 40 us
-//	4ms: 200 us
-//	3ms: 600 us
-//	2ms: 1.12 ms
-//	1ms: 1.76 ms
-//	250us: 2.27 ms
 type Delmin struct {
 	queue []Packet
 
@@ -141,45 +118,70 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
 		d.minDelay = 0
 	}
 
-	// run DelTiC after update time using minimum delay from window
+	// run DelTiC control loop after update time
 	if node.Now() > d.updateEnd {
-		// add min delay to error window
-		d.win.add(d.minDelay, node.Now())
-
-		// do delta-sigma
-		t := node.Now() - d.updateStart
-		if t > Clock(time.Second) {
-			t = Clock(time.Second)
-		}
-		var delta, sigma Clock
-		if d.idleTime == 0 {
-			m := d.win.minimum()
-			delta = m - d.priorMin
-			sigma = d.nsScaledMul(m, t)
-			d.priorMin = m
-		} else {
-			delta = -d.idleTime
-			// sigma term doesn't do much and doesn't make much sense
-			//sigma = d.nsScaledMul(-d.idleTime, d.idleTime)
-			d.priorMin = 0
-		}
-		d.acc += ((delta + sigma) * d.resonance)
-		//node.Logf("min:%d res:%d delta:%d sigma:%d accum:%d osc:%d",
-		//	d.win.minimum(), d.resonance, delta, sigma, d.accumulator,
-		//	d.oscillator)
-		if d.acc <= 0 {
-			d.acc = 0
-			d.osc = 0
-		}
-
-		// reset update state
-		d.minDelay = math.MaxInt64
-		d.idleTime = 0
-		d.updateStart = node.Now()
-		d.updateEnd = node.Now() + d.update
+		d.control(node.Now())
 	}
 
 	// advance oscillator and possibly mark
+	m := d.oscillate(node, pkt)
+
+	// do marking
+	ok = true
+	switch m {
+	case markSCE:
+		pkt.SCE = true
+	case markCE:
+		pkt.CE = true
+	case markDrop:
+		// NOTE sender drop logic doesn't work yet so we do a CE
+		//ok = false
+		pkt.CE = true
+	}
+
+	return
+}
+
+// control is the DelTiC control function.
+func (d *Delmin) control(now Clock) {
+	// add min delay to error window
+	d.win.add(d.minDelay, now)
+
+	// do delta-sigma
+	t := now - d.updateStart
+	if t > Clock(time.Second) {
+		t = Clock(time.Second)
+	}
+	var delta, sigma Clock
+	if d.idleTime == 0 {
+		m := d.win.minimum()
+		delta = m - d.priorMin
+		sigma = d.nsScaledMul(m, t)
+		d.priorMin = m
+	} else {
+		delta = -d.idleTime
+		// sigma term doesn't do much and doesn't make much sense
+		//sigma = d.nsScaledMul(-d.idleTime, d.idleTime)
+		d.priorMin = 0
+	}
+	d.acc += ((delta + sigma) * d.resonance)
+	//node.Logf("min:%d res:%d delta:%d sigma:%d accum:%d osc:%d",
+	//	d.win.minimum(), d.resonance, delta, sigma, d.accumulator,
+	//	d.oscillator)
+	if d.acc <= 0 {
+		d.acc = 0
+		d.osc = 0
+	}
+
+	// reset update state
+	d.minDelay = math.MaxInt64
+	d.idleTime = 0
+	d.updateStart = now
+	d.updateEnd = now + d.update
+}
+
+// oscillate increments the oscillator and returns any resulting mark.
+func (d *Delmin) oscillate(node Node, pkt Packet) mark {
 	dt := node.Now() - d.priorTime
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
@@ -257,24 +259,11 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
 		d.noMark++
 	}
 
-	// do marking
-	ok = true
-	switch m {
-	case markSCE:
-		pkt.SCE = true
-	case markCE:
-		pkt.CE = true
-	case markDrop:
-		// NOTE sender drop logic doesn't work yet
-		//ok = false
-		pkt.CE = true
-	}
-
 	if EmitMarks {
 		d.emitMarks(m)
 	}
 
-	return
+	return m
 }
 
 // Stop implements Stopper.
