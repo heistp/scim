@@ -118,9 +118,17 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
 		d.minDelay = 0
 	}
 
-	// run DelTiC control loop after update time
+	// update after update time
 	if node.Now() > d.updateEnd {
-		d.control(node.Now())
+		// add min delay to window
+		d.win.add(d.minDelay, node.Now())
+		// do DelTiC control loop
+		d.control(node.Now() - d.updateStart)
+		// reset update state
+		d.minDelay = math.MaxInt64
+		d.idleTime = 0
+		d.updateStart = node.Now()
+		d.updateEnd = node.Now() + d.update
 	}
 
 	// advance oscillator and possibly mark
@@ -143,20 +151,16 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
 }
 
 // control is the DelTiC control function.
-func (d *Delmin) control(now Clock) {
-	// add min delay to error window
-	d.win.add(d.minDelay, now)
-
+func (d *Delmin) control(dt Clock) {
 	// do delta-sigma
-	t := now - d.updateStart
-	if t > Clock(time.Second) {
-		t = Clock(time.Second)
+	if dt > Clock(time.Second) {
+		dt = Clock(time.Second)
 	}
 	var delta, sigma Clock
 	if d.idleTime == 0 {
 		m := d.win.minimum()
 		delta = m - d.priorMin
-		sigma = d.nsScaledMul(m, t)
+		sigma = d.nsScaledMul(m, dt)
 		d.priorMin = m
 	} else {
 		delta = -d.idleTime
@@ -172,12 +176,6 @@ func (d *Delmin) control(now Clock) {
 		d.acc = 0
 		d.osc = 0
 	}
-
-	// reset update state
-	d.minDelay = math.MaxInt64
-	d.idleTime = 0
-	d.updateStart = now
-	d.updateEnd = now + d.update
 }
 
 // oscillate increments the oscillator and returns any resulting mark.
