@@ -35,8 +35,8 @@ var (
 	}
 )
 
-// IFace: rate and rate schedule
-var InitialRate = 100 * Mbps
+// IFace: initial rate and rate schedule
+var RateInit = 100 * Mbps
 var RateSchedule = []RateAt{
 	//RateAt{Clock(10 * time.Second), 10 * Mbps},
 }
@@ -55,7 +55,7 @@ var UseAQM = NewDelmin(Clock(5000*time.Microsecond),
 // Iface: Ramp AQM config
 var (
 	//UseAQM     = NewRamp()
-	SCERampMin = Clock(TransferTime(InitialRate, Bytes(MSS))) * 1
+	SCERampMin = Clock(TransferTime(RateInit, Bytes(MSS))) * 1
 	SCERampMax = Clock(100 * time.Millisecond)
 )
 
