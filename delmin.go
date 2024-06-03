@@ -29,10 +29,10 @@ type Delmin struct {
 	update    Clock
 	resonance Clock
 	// DelTiC variables
-	acc       Clock
-	osc       Clock
-	priorTime Clock
-	priorMin  Clock
+	acc        Clock
+	osc        Clock
+	priorTime  Clock
+	priorError Clock
 	// error window variables
 	win         *errorWindow
 	minDelay    Clock
@@ -122,8 +122,8 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
 	if node.Now() > d.updateEnd {
 		// add min delay to window
 		d.win.add(d.minDelay, node.Now())
-		// do DelTiC control loop
-		d.control(node.Now() - d.updateStart)
+		// run control loop
+		d.deltic(node.Now() - d.updateStart)
 		// reset update state
 		d.minDelay = math.MaxInt64
 		d.idleTime = 0
@@ -150,28 +150,22 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
 	return
 }
 
-// control is the DelTiC control function.
-func (d *Delmin) control(dt Clock) {
-	// do delta-sigma
+// deltic is the delta-sigma control function, with idle time modification.
+func (d *Delmin) deltic(dt Clock) {
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
 	}
 	var delta, sigma Clock
 	if d.idleTime == 0 {
 		m := d.win.minimum()
-		delta = m - d.priorMin
+		delta = m - d.priorError
 		sigma = m.MultiplyScaled(dt)
-		d.priorMin = m
+		d.priorError = m
 	} else {
 		delta = -d.idleTime
-		// sigma term doesn't do much and doesn't make much sense
-		//sigma = d.nsScaledMul(-d.idleTime, d.idleTime)
-		d.priorMin = 0
+		d.priorError = 0
 	}
 	d.acc += ((delta + sigma) * d.resonance)
-	//node.Logf("min:%d res:%d delta:%d sigma:%d accum:%d osc:%d",
-	//	d.win.minimum(), d.resonance, delta, sigma, d.accumulator,
-	//	d.oscillator)
 	if d.acc <= 0 {
 		d.acc = 0
 		d.osc = 0
