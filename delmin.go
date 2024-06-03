@@ -220,7 +220,7 @@ func (d *Delmin) oscillate(dt Clock, node Node, pkt Packet) mark {
 		if d.osc >= Clock(time.Second) {
 			m = markDrop
 		}
-		if d.noMark > SCE_MD_Scale {
+		if d.noMark > SCE_MD_Scale*2 {
 			if d.sceWait == 0 {
 				d.sceWait = node.Now()
 			} else if node.Now()-d.sceWait > Clock(time.Second) {
