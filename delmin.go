@@ -124,11 +124,6 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
 		d.win.add(d.minDelay, node.Now())
 		// run control loop
 		d.deltic(node.Now() - d.updateStart)
-		// clamp accumulator
-		if d.acc <= 0 {
-			d.acc = 0
-			d.osc = 0
-		}
 		// reset update state
 		d.minDelay = math.MaxInt64
 		d.idleTime = 0
@@ -173,6 +168,10 @@ func (d *Delmin) deltic(dt Clock) {
 		d.priorError = 0
 	}
 	d.acc += ((delta + sigma) * d.resonance)
+	if d.acc <= 0 {
+		d.acc = 0
+		d.osc = 0
+	}
 }
 
 // oscillate increments the oscillator and returns any resulting mark.
