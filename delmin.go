@@ -124,6 +124,11 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
 		d.win.add(d.minDelay, node.Now())
 		// run control loop
 		d.deltic(node.Now() - d.updateStart)
+		// clamp accumulator
+		if d.acc <= 0 {
+			d.acc = 0
+			d.osc = 0
+		}
 		// reset update state
 		d.minDelay = math.MaxInt64
 		d.idleTime = 0
@@ -132,7 +137,9 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
 	}
 
 	// advance oscillator and possibly mark
-	m := d.oscillate(node, pkt)
+	dt := node.Now() - d.priorTime
+	m := d.oscillate(dt, node, pkt)
+	d.priorTime = node.Now()
 
 	// do marking
 	ok = true
@@ -166,94 +173,87 @@ func (d *Delmin) deltic(dt Clock) {
 		d.priorError = 0
 	}
 	d.acc += ((delta + sigma) * d.resonance)
-	if d.acc <= 0 {
-		d.acc = 0
-		d.osc = 0
-	}
 }
 
 // oscillate increments the oscillator and returns any resulting mark.
-func (d *Delmin) oscillate(node Node, pkt Packet) mark {
-	dt := node.Now() - d.priorTime
+func (d *Delmin) oscillate(dt Clock, node Node, pkt Packet) mark {
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
 	}
-	d.priorTime = node.Now()
+	// increment oscillator and return if not time to mark
 	d.osc += d.acc.MultiplyScaled(dt) * d.resonance
+	if d.osc < Clock(time.Second) {
+		d.noMark++
+		return markNone
+	}
+	// time to mark
+	d.osc -= Clock(time.Second)
 	var m mark
-	if d.osc >= Clock(time.Second) {
-		//node.Logf("acc:%d noMark:%d", d.acc, d.noMark)
-		d.osc -= Clock(time.Second)
-		if !d.ceMode {
-			if pkt.SCECapable {
-				m = markSCE
+	if !d.ceMode {
+		if pkt.SCECapable {
+			m = markSCE
+		}
+		d.sceOps++
+		if d.sceOps == SCE_MD_Scale {
+			if !pkt.SCECapable {
+				m = markCE
 			}
-			d.sceOps++
-			if d.sceOps == SCE_MD_Scale {
-				if !pkt.SCECapable {
-					m = markCE
+			d.sceOps = 0
+		}
+		if d.osc >= Clock(time.Second) {
+			if d.ceWait == 0 {
+				d.ceWait = node.Now()
+			} else if node.Now()-d.ceWait > Clock(time.Second) {
+				d.ceMode = true
+				d.sceWait = 0
+				d.acc /= SCE_MD_Scale
+				node.Logf("CE mode")
+				if PlotDelminMarks {
+					d.marksPlot.Line(node.Now(), "0", node.Now(), "1", 4)
 				}
-				d.sceOps = 0
-			}
-			if d.osc >= Clock(time.Second) {
-				if d.ceWait == 0 {
-					d.ceWait = node.Now()
-				} else if node.Now()-d.ceWait > Clock(time.Second) {
-					d.ceMode = true
-					d.sceWait = 0
-					d.acc /= SCE_MD_Scale
-					node.Logf("CE mode")
-					if PlotDelminMarks {
-						d.marksPlot.Line(node.Now(), "0", node.Now(), "1", 4)
-					}
-				}
-			} else {
-				d.ceWait = 0
 			}
 		} else {
-			m = markCE
-			if d.osc >= Clock(time.Second) {
-				m = markDrop
-				//d.osc -= d.osc >> 4 // arbitrary
-			}
-			if d.noMark > SCE_MD_Scale {
-				if d.sceWait == 0 {
-					d.sceWait = node.Now()
-				} else if node.Now()-d.sceWait > Clock(time.Second) {
-					d.ceMode = false
-					d.ceWait = 0
-					d.acc *= SCE_MD_Scale
-					node.Logf("SCE mode")
-					if PlotDelminMarks {
-						d.marksPlot.Line(node.Now(), "0", node.Now(), "1", 0)
-					}
-				}
-			} else {
-				d.sceWait = 0
-			}
+			d.ceWait = 0
 		}
-
-		// plot marks
-		if PlotDelminMarks {
-			p := 1.0 / float64(d.noMark+1)
-			ps := strconv.FormatFloat(p, 'f', -1, 64)
-			switch m {
-			case markSCE:
-				d.marksPlot.Dot(node.Now(), ps, 0)
-			case markCE:
-				d.marksPlot.PlotX(node.Now(), ps, 4)
-			case markDrop:
-				d.marksPlot.PlotX(node.Now(), ps, 2)
-			}
-		}
-		d.noMark = 0
 	} else {
-		d.noMark++
+		m = markCE
+		if d.osc >= Clock(time.Second) {
+			m = markDrop
+		}
+		if d.noMark > SCE_MD_Scale {
+			if d.sceWait == 0 {
+				d.sceWait = node.Now()
+			} else if node.Now()-d.sceWait > Clock(time.Second) {
+				d.ceMode = false
+				d.ceWait = 0
+				d.acc *= SCE_MD_Scale
+				node.Logf("SCE mode")
+				if PlotDelminMarks {
+					d.marksPlot.Line(node.Now(), "0", node.Now(), "1", 0)
+				}
+			}
+		} else {
+			d.sceWait = 0
+		}
 	}
 
+	// plot marks
+	if PlotDelminMarks {
+		p := 1.0 / float64(d.noMark+1)
+		ps := strconv.FormatFloat(p, 'f', -1, 64)
+		switch m {
+		case markSCE:
+			d.marksPlot.Dot(node.Now(), ps, 0)
+		case markCE:
+			d.marksPlot.PlotX(node.Now(), ps, 4)
+		case markDrop:
+			d.marksPlot.PlotX(node.Now(), ps, 2)
+		}
+	}
 	if EmitMarks {
 		d.emitMarks(m)
 	}
+	d.noMark = 0
 
 	return m
 }
