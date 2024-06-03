@@ -160,7 +160,7 @@ func (d *Delmin) control(dt Clock) {
 	if d.idleTime == 0 {
 		m := d.win.minimum()
 		delta = m - d.priorMin
-		sigma = d.nsScaledMul(m, dt)
+		sigma = m.MultiplyScaled(dt)
 		d.priorMin = m
 	} else {
 		delta = -d.idleTime
@@ -185,7 +185,7 @@ func (d *Delmin) oscillate(node Node, pkt Packet) mark {
 		dt = Clock(time.Second)
 	}
 	d.priorTime = node.Now()
-	d.osc += Clock(d.nsScaledMul(d.acc, dt) * d.resonance)
+	d.osc += d.acc.MultiplyScaled(dt) * d.resonance
 	var m mark
 	if d.osc >= Clock(time.Second) {
 		//node.Logf("acc:%d noMark:%d", d.acc, d.noMark)
@@ -273,11 +273,6 @@ func (d *Delmin) Stop(node Node) error {
 		fmt.Println()
 	}
 	return nil
-}
-
-// nsScaledMul multiplies two Clock values, scaled to time.Second.
-func (d *Delmin) nsScaledMul(a, b Clock) Clock {
-	return a * b / Clock(time.Second)
 }
 
 // emitMarks prints marks as characters.

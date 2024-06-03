@@ -18,6 +18,11 @@ type nodeID int
 // Clock represents the virtual simulation time.
 type Clock time.Duration
 
+// MultiplyScaled multiplies with the given Clock value, scaled to time.Second.
+func (c Clock) MultiplyScaled(c2 Clock) Clock {
+	return c * c2 / Clock(time.Second)
+}
+
 func (c Clock) StringMS() string {
 	return fmt.Sprintf("%f", time.Duration(c).Seconds()*1000)
 }
