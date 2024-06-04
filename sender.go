@@ -246,7 +246,13 @@ func (f *Flow) receive(pkt Packet, node Node) {
 			b = true
 		}
 		if b {
-			if f.cwnd = Bytes(float64(f.cwnd) * SCE_MD); f.cwnd < MSS {
+			md := SCE_MD
+			if RateFairness {
+				tau := float64(SCE_MD_Scale) * float64(f.rtt) * float64(f.rtt) /
+					float64(NominalRTT) / float64(NominalRTT)
+				md = math.Pow(CE_MD, float64(1)/tau)
+			}
+			if f.cwnd = Bytes(float64(f.cwnd) * md); f.cwnd < MSS {
 				f.cwnd = MSS
 			}
 			f.priorSCEMD = node.Now()

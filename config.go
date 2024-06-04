@@ -32,6 +32,10 @@ var (
 		Clock(20 * time.Millisecond),
 		Clock(20 * time.Millisecond),
 		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
 	}
 )
 
@@ -96,6 +100,8 @@ const (
 const (
 	CE_MD        = 0.8
 	SCE_MD_Scale = 64
+	NominalRTT   = 20 * time.Millisecond
+	RateFairness = false
 )
 
 // Sender: TCP params
