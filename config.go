@@ -18,6 +18,7 @@ const Duration = 30 * time.Second
 var (
 	Flows = []Flow{
 		AddFlow(SCE, true),
+		AddFlow(NoSCE, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{0, Clock(20 * time.Second), false},
@@ -39,7 +40,7 @@ var (
 )
 
 // IFace: initial rate and rate schedule
-var RateInit = 50 * Mbps
+var RateInit = 100 * Mbps
 var RateSchedule = []RateAt{
 	//RateAt{Clock(10 * time.Second), 50 * Mbps},
 }
