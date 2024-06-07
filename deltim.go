@@ -19,10 +19,10 @@ const (
 	markDrop
 )
 
-// Delmin implements DelTiC with the sojourn time taken as the minimum sojourn
+// Deltim implements DelTiC with the sojourn time taken as the minimum sojourn
 // time down to one packet, within a given burst.  A running minimum window is
 // used to add a sub-burst update time for a faster reaction.
-type Delmin struct {
+type Deltim struct {
 	queue []Packet
 
 	burst     Clock
@@ -40,19 +40,21 @@ type Delmin struct {
 	updateStart Clock
 	updateEnd   Clock
 	// SCE-MD variables
-	sceOps  int
-	ceMode  bool
-	noMark  int
-	sceWait Clock
-	ceWait  Clock
+	sceOps    int
+	ceMode    bool
+	noMark    int
+	sceWait   Clock
+	ceWait    Clock
+	priorMark Clock
+	counter   Bytes
 	// Plots
 	marksPlot    Xplot
 	marksNone    int
 	emitMarksCtr int
 }
 
-func NewDelmin(burst, update Clock) *Delmin {
-	return &Delmin{
+func NewDeltim(burst, update Clock) *Deltim {
+	return &Deltim{
 		make([]Packet, 0),
 		burst,
 		update,
@@ -71,6 +73,8 @@ func NewDelmin(burst, update Clock) *Delmin {
 		0,
 		0,
 		0,
+		0,
+		0,
 		Xplot{
 			Title: "SCE-MD Marks - SCE:white, CE:yellow, force CE:orange, drop:red",
 			X: Axis{
@@ -86,9 +90,9 @@ func NewDelmin(burst, update Clock) *Delmin {
 }
 
 // Start implements Starter.
-func (d *Delmin) Start(node Node) (err error) {
-	if PlotDelminMarks {
-		if err = d.marksPlot.Open("marks-delmin.xpl"); err != nil {
+func (d *Deltim) Start(node Node) (err error) {
+	if PlotDeltimMarks {
+		if err = d.marksPlot.Open("marks-deltim.xpl"); err != nil {
 			return
 		}
 	}
@@ -96,7 +100,7 @@ func (d *Delmin) Start(node Node) (err error) {
 }
 
 // Enqueue implements AQM.
-func (d *Delmin) Enqueue(pkt Packet, node Node) {
+func (d *Deltim) Enqueue(pkt Packet, node Node) {
 	if len(d.queue) == 0 {
 		d.idleTime += node.Now() - d.priorTime
 	}
@@ -104,7 +108,7 @@ func (d *Delmin) Enqueue(pkt Packet, node Node) {
 }
 
 // Dequeue implements AQM.
-func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
+func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 	// pop from head
 	pkt, d.queue = d.queue[0], d.queue[1:]
 
@@ -153,7 +157,7 @@ func (d *Delmin) Dequeue(node Node) (pkt Packet, ok bool) {
 }
 
 // deltic is the delta-sigma control function, with idle time modification.
-func (d *Delmin) deltic(dt Clock) {
+func (d *Deltim) deltic(dt Clock) {
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
 	}
@@ -175,10 +179,11 @@ func (d *Delmin) deltic(dt Clock) {
 }
 
 // oscillate increments the oscillator and returns any resulting mark.
-func (d *Delmin) oscillate(dt Clock, node Node, pkt Packet) mark {
+func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
 	}
+	d.counter += pkt.Len
 	// increment oscillator and return if not time to mark
 	d.osc += d.acc.MultiplyScaled(dt) * d.resonance
 	if d.osc < Clock(time.Second) {
@@ -207,7 +212,7 @@ func (d *Delmin) oscillate(dt Clock, node Node, pkt Packet) mark {
 				d.sceWait = 0
 				d.acc /= SCE_MD_Scale
 				node.Logf("CE mode")
-				if PlotDelminMarks {
+				if PlotDeltimMarks {
 					d.marksPlot.Line(node.Now(), "0", node.Now(), "1", 4)
 				}
 			}
@@ -227,7 +232,7 @@ func (d *Delmin) oscillate(dt Clock, node Node, pkt Packet) mark {
 				d.ceWait = 0
 				d.acc *= SCE_MD_Scale
 				node.Logf("SCE mode")
-				if PlotDelminMarks {
+				if PlotDeltimMarks {
 					d.marksPlot.Line(node.Now(), "0", node.Now(), "1", 0)
 				}
 			}
@@ -236,8 +241,14 @@ func (d *Delmin) oscillate(dt Clock, node Node, pkt Packet) mark {
 		}
 	}
 
+	mt := node.Now() - d.priorMark
+	mb := mt * mt / Clock(d.counter)
+	node.Logf("interval:%d ns^2/mark-bytes:%d", mt, mb)
+	d.priorMark = node.Now()
+	d.counter = 0
+
 	// plot marks
-	if PlotDelminMarks {
+	if PlotDeltimMarks {
 		p := 1.0 / float64(d.noMark+1)
 		ps := strconv.FormatFloat(p, 'f', -1, 64)
 		switch m {
@@ -258,8 +269,8 @@ func (d *Delmin) oscillate(dt Clock, node Node, pkt Packet) mark {
 }
 
 // Stop implements Stopper.
-func (d *Delmin) Stop(node Node) error {
-	if PlotDelminMarks {
+func (d *Deltim) Stop(node Node) error {
+	if PlotDeltimMarks {
 		d.marksPlot.Close()
 	}
 	if EmitMarks && d.emitMarksCtr != 0 {
@@ -269,7 +280,7 @@ func (d *Delmin) Stop(node Node) error {
 }
 
 // emitMarks prints marks as characters.
-func (d *Delmin) emitMarks(m mark) {
+func (d *Deltim) emitMarks(m mark) {
 	// emit marks as characters
 	switch m {
 	case markSCE:
@@ -289,7 +300,7 @@ func (d *Delmin) emitMarks(m mark) {
 }
 
 // Peek implements AQM.
-func (d *Delmin) Peek(node Node) (pkt Packet) {
+func (d *Deltim) Peek(node Node) (pkt Packet) {
 	if len(d.queue) == 0 {
 		return
 	}
