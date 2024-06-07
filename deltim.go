@@ -19,9 +19,10 @@ const (
 	markDrop
 )
 
-// Deltim implements DelTiC with the sojourn time taken as the minimum sojourn
-// time down to one packet, within a given burst.  A running minimum window is
-// used to add a sub-burst update time for a faster reaction.
+// DelTiM (Delay Time Minimization) implements DelTiC with the sojourn time
+// taken as the minimum sojourn time down to one packet, within a given burst.
+// The minimum is tracked using a sliding window over the burst, for sub-burst
+// update times.
 type Deltim struct {
 	queue []Packet
 
