@@ -41,11 +41,12 @@ type Deltim struct {
 	updateStart Clock
 	updateEnd   Clock
 	// SCE-MD variables
-	sceOps    int
-	ceMode    bool
-	noMark    int
-	sceWait   Clock
-	ceWait    Clock
+	sceOps  int
+	ceMode  bool
+	noMark  int
+	sceWait Clock
+	ceWait  Clock
+	// mark acceleration variables
 	priorMark Clock
 	counter   Bytes
 	// Plots
@@ -77,7 +78,7 @@ func NewDeltim(burst, update Clock) *Deltim {
 		0,
 		0,
 		Xplot{
-			Title: "SCE-MD Marks - SCE:white, CE:yellow, force CE:orange, drop:red",
+			Title: "SCE-MD Marks - SCE:white, CE:yellow, drop:red",
 			X: Axis{
 				Label: "Time (S)",
 			},
@@ -137,8 +138,8 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 	}
 
 	// advance oscillator and possibly mark
-	dt := node.Now() - d.priorTime
-	m := d.oscillate(dt, node, pkt)
+	m := d.oscillate(node.Now()-d.priorTime, node, pkt)
+	//m := d.markAccel(node, pkt)
 	d.priorTime = node.Now()
 
 	// do marking
@@ -184,7 +185,6 @@ func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
 	}
-	d.counter += pkt.Len
 	// increment oscillator and return if not time to mark
 	d.osc += d.acc.MultiplyScaled(dt) * d.resonance
 	if d.osc < Clock(time.Second) {
@@ -242,31 +242,65 @@ func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
 		}
 	}
 
-	mt := node.Now() - d.priorMark
-	mb := mt * mt / Clock(d.counter)
-	node.Logf("interval:%d ns^2/mark-bytes:%d", mt, mb)
-	d.priorMark = node.Now()
-	d.counter = 0
+	d.plotMark(m, node.Now())
+	d.noMark = 0
 
-	// plot marks
+	return m
+}
+
+// markAccel marks when bytes/sec^2 has reached the value of the accumulator
+// since the last mark.
+func (d *Deltim) markAccel(node Node, pkt Packet) mark {
+	d.counter += pkt.Len
+	i := node.Now() - d.priorMark
+	a := i * i / Clock(d.counter)
+	r := Clock(2*time.Second) - d.acc/2 // TODO work on 2 second magic number
+	if r < 0 {
+		r = 0
+	}
+	if a < r {
+		d.noMark++
+		return markNone
+	}
+	//node.Logf("r:%d i:%d a:%d", r, i, a)
+	var m mark
+	if pkt.SCECapable {
+		m = markSCE
+	}
+	d.sceOps++
+	if d.sceOps == SCE_MD_Scale {
+		if !pkt.SCECapable {
+			m = markCE
+		}
+		d.sceOps = 0
+	}
+	// TODO handle overload, if worth it
+
+	d.counter = 0
+	d.priorMark = node.Now()
+	d.plotMark(m, node.Now())
+	d.noMark = 0
+
+	return m
+}
+
+// plotMark plots and emits the given mark, if configured.
+func (d *Deltim) plotMark(m mark, now Clock) {
 	if PlotDeltimMarks {
 		p := 1.0 / float64(d.noMark+1)
 		ps := strconv.FormatFloat(p, 'f', -1, 64)
 		switch m {
 		case markSCE:
-			d.marksPlot.Dot(node.Now(), ps, 0)
+			d.marksPlot.Dot(now, ps, 0)
 		case markCE:
-			d.marksPlot.PlotX(node.Now(), ps, 4)
+			d.marksPlot.PlotX(now, ps, 4)
 		case markDrop:
-			d.marksPlot.PlotX(node.Now(), ps, 2)
+			d.marksPlot.PlotX(now, ps, 2)
 		}
 	}
 	if EmitMarks {
 		d.emitMarks(m)
 	}
-	d.noMark = 0
-
-	return m
 }
 
 // Stop implements Stopper.
