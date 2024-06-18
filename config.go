@@ -98,10 +98,10 @@ const (
 // Sender: SCE-AIMD params
 const (
 	CE_MD                  = 0.8
-	SCE_MD_Scale           = 64
-	NominalRTT             = 20 * time.Millisecond
+	Tau                    = 64 // SCE-MD scale factor
 	RateFairness           = false
-	SlowStartExitThreshold = 0 // SCE_MD_Scale
+	NominalRTT             = 20 * time.Millisecond
+	SlowStartExitThreshold = 0 // e.g. Tau or Tau / 2
 )
 
 // Sender: TCP params

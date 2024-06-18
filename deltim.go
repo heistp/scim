@@ -199,7 +199,7 @@ func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
 			m = markSCE
 		}
 		d.sceOps++
-		if d.sceOps == SCE_MD_Scale {
+		if d.sceOps == Tau {
 			if !pkt.SCECapable {
 				m = markCE
 			}
@@ -211,7 +211,7 @@ func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
 			} else if node.Now()-d.ceWait > Clock(time.Second) {
 				d.ceMode = true
 				d.sceWait = 0
-				d.acc /= SCE_MD_Scale
+				d.acc /= Tau
 				node.Logf("CE mode")
 				if PlotDeltimMarks {
 					d.marksPlot.Line(node.Now(), "0", node.Now(), "1", 4)
@@ -225,13 +225,13 @@ func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
 		if d.osc >= Clock(time.Second) {
 			m = markDrop
 		}
-		if d.noMark > SCE_MD_Scale*2 {
+		if d.noMark > Tau*2 {
 			if d.sceWait == 0 {
 				d.sceWait = node.Now()
 			} else if node.Now()-d.sceWait > Clock(time.Second) {
 				d.ceMode = false
 				d.ceWait = 0
-				d.acc *= SCE_MD_Scale
+				d.acc *= Tau
 				node.Logf("SCE mode")
 				if PlotDeltimMarks {
 					d.marksPlot.Line(node.Now(), "0", node.Now(), "1", 0)
@@ -268,7 +268,7 @@ func (d *Deltim) markAccel(node Node, pkt Packet) mark {
 		m = markSCE
 	}
 	d.sceOps++
-	if d.sceOps == SCE_MD_Scale {
+	if d.sceOps == Tau {
 		if !pkt.SCECapable {
 			m = markCE
 		}

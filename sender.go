@@ -7,7 +7,7 @@ import (
 	"math"
 )
 
-var SCE_MD = math.Pow(CE_MD, float64(1)/SCE_MD_Scale)
+var SCE_MD = math.Pow(CE_MD, float64(1)/Tau)
 
 type FlowID int
 
@@ -240,7 +240,7 @@ func (f *Flow) receive(pkt Packet, node Node) {
 			f.priorMD = node.Now()
 		}
 	} else if pkt.ESCE {
-		b := (node.Now() - f.priorSCEMD) > (f.rtt / SCE_MD_Scale)
+		b := (node.Now() - f.priorSCEMD) > (f.rtt / Tau)
 		if !f.congAvoid && b {
 			f.ssSCECtr++
 			if f.ssSCECtr > SlowStartExitThreshold {
@@ -250,7 +250,7 @@ func (f *Flow) receive(pkt Packet, node Node) {
 		if b {
 			md := SCE_MD
 			if RateFairness {
-				tau := float64(SCE_MD_Scale) * float64(f.rtt) * float64(f.rtt) /
+				tau := float64(Tau) * float64(f.rtt) * float64(f.rtt) /
 					float64(NominalRTT) / float64(NominalRTT)
 				md = math.Pow(CE_MD, float64(1)/tau)
 			}
