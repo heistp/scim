@@ -29,7 +29,7 @@ func NewReceiver() *Receiver {
 		make([]Bytes, len(Flows)),
 		0,
 		Xplot{
-			Title: "SCE-MD Goodput",
+			Title: "SCE-AIMD Goodput",
 			X: Axis{
 				Label: "Time (S)",
 			},

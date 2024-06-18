@@ -40,7 +40,7 @@ type Deltim struct {
 	idleTime    Clock
 	updateStart Clock
 	updateEnd   Clock
-	// SCE-MD variables
+	// SCE-AIMD variables
 	sceOps  int
 	ceMode  bool
 	noMark  int
@@ -78,7 +78,7 @@ func NewDeltim(burst, update Clock) *Deltim {
 		0,
 		0,
 		Xplot{
-			Title: "SCE-MD Marks - SCE:white, CE:yellow, drop:red",
+			Title: "SCE-AIMD Marks - SCE:white, CE:yellow, drop:red",
 			X: Axis{
 				Label: "Time (S)",
 			},

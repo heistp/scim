@@ -33,7 +33,7 @@ func NewSender(schedule []FlowAt) *Sender {
 		Flows,
 		schedule,
 		Xplot{
-			Title: "SCE-MD data in-flight",
+			Title: "SCE-AIMD data in-flight",
 			X: Axis{
 				Label: "Time (S)",
 			},
@@ -42,7 +42,7 @@ func NewSender(schedule []FlowAt) *Sender {
 			},
 		},
 		Xplot{
-			Title: "SCE-MD CWND",
+			Title: "SCE-AIMD CWND",
 			X: Axis{
 				Label: "Time (S)",
 			},
@@ -51,7 +51,7 @@ func NewSender(schedule []FlowAt) *Sender {
 			},
 		},
 		Xplot{
-			Title: "SCE-MD RTT",
+			Title: "SCE-AIMD RTT",
 			X: Axis{
 				Label: "Time (S)",
 			},
@@ -162,6 +162,7 @@ type Flow struct {
 	priorGrowth Clock
 	priorMD     Clock
 	priorSCEMD  Clock
+	ssSCECtr    int
 }
 
 type SCECapable bool
@@ -182,6 +183,7 @@ func NewFlow(id FlowID, sce SCECapable, active bool) Flow {
 		false,
 		0,
 		IW,
+		0,
 		0,
 		0,
 		0,
@@ -238,12 +240,12 @@ func (f *Flow) receive(pkt Packet, node Node) {
 			f.priorMD = node.Now()
 		}
 	} else if pkt.ESCE {
-		var b bool
-		if f.congAvoid {
-			b = (node.Now() - f.priorSCEMD) > (f.rtt / SCE_MD_Scale)
-		} else {
-			f.congAvoid = true
-			b = true
+		b := (node.Now() - f.priorSCEMD) > (f.rtt / SCE_MD_Scale)
+		if !f.congAvoid && b {
+			f.ssSCECtr++
+			if f.ssSCECtr > SlowStartExitThreshold {
+				f.congAvoid = true
+			}
 		}
 		if b {
 			md := SCE_MD

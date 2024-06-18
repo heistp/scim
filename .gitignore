@@ -3,8 +3,8 @@
 .tags
 .exrc
 
-# scemd binary and profiling output
-scemd
+# sceaimd binary and profiling output
+sceaimd
 *.prof
 
 # plots

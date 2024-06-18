@@ -18,7 +18,6 @@ const Duration = 30 * time.Second
 var (
 	Flows = []Flow{
 		AddFlow(SCE, true),
-		AddFlow(NoSCE, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{0, Clock(20 * time.Second), false},
@@ -42,7 +41,7 @@ var (
 // IFace: initial rate and rate schedule
 var RateInit = 100 * Mbps
 var RateSchedule = []RateAt{
-	//RateAt{Clock(10 * time.Second), 50 * Mbps},
+	//RateAt{Clock(10 * time.Second), 100 * Mbps},
 }
 
 //func init() {
@@ -96,12 +95,13 @@ const (
 // Less Common Settings
 //
 
-// Sender: SCE-MD params
+// Sender: SCE-AIMD params
 const (
-	CE_MD        = 0.8
-	SCE_MD_Scale = 64
-	NominalRTT   = 20 * time.Millisecond
-	RateFairness = false
+	CE_MD                  = 0.8
+	SCE_MD_Scale           = 64
+	NominalRTT             = 20 * time.Millisecond
+	RateFairness           = false
+	SlowStartExitThreshold = 0 // SCE_MD_Scale
 )
 
 // Sender: TCP params
