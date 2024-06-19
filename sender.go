@@ -201,8 +201,8 @@ func AddFlow(sce SCECapable, active bool) (flow Flow) {
 
 var flowID FlowID = 0
 
-// sendMSS sends MSS sized packets while staying within cwnd.  It returns true
-// if it's possible to send more MSS sized packets.
+// sendMSS sends MSS sized packets.  It returns false if it wasn't possible to
+// send because cwnd would be exceeded.
 func (f *Flow) sendMSS(node Node) bool {
 	if f.inFlight+MSS > f.cwnd {
 		return false
@@ -216,7 +216,7 @@ func (f *Flow) sendMSS(node Node) bool {
 	})
 	f.inFlight += MSS
 	f.seq++
-	return f.inFlight+MSS <= f.cwnd
+	return true
 }
 
 // receive handles an incoming packet.
