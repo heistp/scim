@@ -106,7 +106,7 @@ const (
 
 // Sender: TCP params
 const (
-	MSS      = 1500
+	MSS      = Bytes(1500)
 	IW       = 10 * MSS
 	RTTAlpha = float64(0.1)
 )
