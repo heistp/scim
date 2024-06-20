@@ -119,9 +119,9 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 
 	// update minimum delay from next packet, or 0 if no next packet
 	if len(d.queue) > 0 {
-		m := node.Now() - d.queue[0].Now
-		if m < d.minDelay {
-			d.minDelay = m
+		s := node.Now() - d.queue[0].Now
+		if s < d.minDelay {
+			d.minDelay = s
 		}
 	} else {
 		d.minDelay = 0
