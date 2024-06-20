@@ -17,7 +17,7 @@ const Duration = 30 * time.Second
 // Sender and Delay: flows
 var (
 	Flows = []Flow{
-		AddFlow(SCE, true),
+		AddFlow(SCE, NoPacing, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{0, Clock(20 * time.Second), false},
@@ -109,6 +109,12 @@ const (
 	MSS      = Bytes(1500)
 	IW       = 10 * MSS
 	RTTAlpha = float64(0.1)
+)
+
+// Sender: pacing params
+const (
+	PacingSSRatio = float64(100)
+	PacingCARatio = float64(100)
 )
 
 // main

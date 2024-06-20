@@ -111,6 +111,9 @@ func (d *Deltim) Enqueue(pkt Packet, node Node) {
 
 // Dequeue implements AQM.
 func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
+	if len(d.queue) == 0 {
+		return
+	}
 	// pop from head
 	pkt, d.queue = d.queue[0], d.queue[1:]
 
@@ -335,12 +338,18 @@ func (d *Deltim) emitMarks(m mark) {
 }
 
 // Peek implements AQM.
-func (d *Deltim) Peek(node Node) (pkt Packet) {
+func (d *Deltim) Peek(node Node) (pkt Packet, ok bool) {
 	if len(d.queue) == 0 {
 		return
 	}
+	ok = true
 	pkt = d.queue[0]
 	return
+}
+
+// Len implements AQM.
+func (d *Deltim) Len() int {
+	return len(d.queue)
 }
 
 // errorWindow keeps track of a running minimum error in a ring buffer.
