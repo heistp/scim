@@ -10,7 +10,7 @@ import (
 // node is the node implementation.
 type node struct {
 	handler  Handler
-	in       chan input
+	in       chan inputNow
 	out      chan output
 	t0       Clock
 	now      Clock
@@ -19,7 +19,7 @@ type node struct {
 }
 
 // newNode returns a new node.
-func newNode(handler Handler, in chan input, out chan output, t0 Clock,
+func newNode(handler Handler, in chan inputNow, out chan output, t0 Clock,
 	id nodeID) *node {
 	return &node{
 		handler,
@@ -46,8 +46,8 @@ func (n *node) run() {
 	}
 	n.out <- wait{}
 	for i := range n.in {
-		n.now = i.now()
-		if err = i.handleNode(n); err != nil {
+		n.now = i.now
+		if err = i.input.handleNode(n); err != nil {
 			return
 		}
 		if n.shutdown {
@@ -88,7 +88,12 @@ func (n *node) Shutdown() {
 // An input is sent to a node.
 type input interface {
 	handleNode(node *node) error
-	now() Clock
+}
+
+// inputNow combines an input and the current clock for passing to a node.
+type inputNow struct {
+	input input
+	now   Clock
 }
 
 // Node provides an API for node implementations.
@@ -102,8 +107,7 @@ type Node interface {
 
 // ding is sent by the simulator to a node after a timer has completed.
 type ding struct {
-	data   any
-	nowVal Clock
+	data any
 }
 
 // handleNode implements input.
@@ -115,11 +119,6 @@ func (d ding) handleNode(node *node) (err error) {
 			node.id)
 	}
 	return
-}
-
-// now implements input.
-func (d ding) now() Clock {
-	return d.nowVal
 }
 
 // A Starter runs in a node at the start of the simulation.

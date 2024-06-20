@@ -35,7 +35,7 @@ func (c Clock) String() string {
 type Sim struct {
 	handler []Handler
 	now     Clock
-	in      []chan input
+	in      []chan inputNow
 	out     []chan output
 	timer   []timer
 	table
@@ -44,10 +44,10 @@ type Sim struct {
 
 // NewSim returns a new Sim.
 func NewSim(handler []Handler) *Sim {
-	var i []chan input
+	var i []chan inputNow
 	var o []chan output
 	for range handler {
-		i = append(i, make(chan input))
+		i = append(i, make(chan inputNow))
 		o = append(o, make(chan output))
 	}
 	return &Sim{
@@ -112,8 +112,10 @@ func (s *Sim) Run() (err error) {
 			}
 			var t timer
 			t, s.timer = s.timer[0], s.timer[1:]
+			//inc := t.at - s.now
+			//fmt.Printf("inc:%s\n", inc)
 			s.now = t.at
-			s.in[t.from] <- ding{t.data, s.now}
+			s.in[t.from] <- inputNow{ding{t.data}, s.now}
 			s.setState(t.from, Running)
 		}
 
@@ -218,10 +220,20 @@ type timer struct {
 }
 
 // handle implements output.
+//
+// TODO optimize handleSim timer insert search
 func (t timer) handleSim(sim *Sim, from nodeID) (error, bool) {
 	i := sort.Search(len(sim.timer), func(i int) bool {
-		return sim.timer[i].at >= t.at
+		return sim.timer[i].at > t.at
 	})
+	/*
+		i := 0
+		for i = 0; i < len(sim.timer); i++ {
+			if sim.timer[i].at > t.at {
+				break
+			}
+		}
+	*/
 	if len(sim.timer) == i {
 		sim.timer = append(sim.timer, t)
 		return nil, true

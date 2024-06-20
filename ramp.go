@@ -21,13 +21,14 @@ func NewRamp() *Ramp {
 
 // Enqueue implements AQM.
 func (r *Ramp) Enqueue(pkt Packet, node Node) {
+	pkt.Enqueue = node.Now()
 	r.queue = append(r.queue, pkt)
 }
 
 // Dequeue implements AQM.
 func (r *Ramp) Dequeue(node Node) (pkt Packet) {
 	pkt, r.queue = r.queue[0], r.queue[1:]
-	s := node.Now() - pkt.Now
+	s := node.Now() - pkt.Enqueue
 	var m bool
 	if s > SCERampMax {
 		m = true

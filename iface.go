@@ -3,7 +3,9 @@
 
 package main
 
-import "strconv"
+import (
+	"strconv"
+)
 
 type Iface struct {
 	rate     Bitrate
@@ -116,7 +118,7 @@ func (i *Iface) Ding(data any, node Node) error {
 		i.qlen.Dot(node.Now(), strconv.Itoa(i.aqm.Len()), c)
 	}
 	if PlotSojourn {
-		s := node.Now() - p.Now
+		s := node.Now() - p.Enqueue
 		c := 0
 		if i.empty {
 			c = 2

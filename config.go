@@ -24,6 +24,7 @@ var (
 	}
 	FlowDelay = []Clock{
 		Clock(20 * time.Millisecond),
+		//Clock(100 * 120 * time.Microsecond),
 		Clock(20 * time.Millisecond),
 		Clock(20 * time.Millisecond),
 		Clock(20 * time.Millisecond),
