@@ -167,7 +167,7 @@ type Flow struct {
 
 	seq         Seq
 	receiveNext Seq
-	congAvoid   bool
+	state       FlowState
 	srtt        Clock
 
 	cwnd        Bytes
@@ -180,6 +180,14 @@ type Flow struct {
 
 	pacingWait bool
 }
+
+type FlowState int
+
+const (
+	FlowStateSS  = iota // slow start
+	FlowStateCSS        // conservative slow start (HyStart++)
+	FlowStateCA         // congestion avoidance
+)
 
 type Seq int64
 
@@ -206,7 +214,7 @@ func NewFlow(id FlowID, sce SCECapable, pacing PacingEnabled, active bool) Flow 
 		sce,
 		0,
 		0,
-		false,
+		FlowStateSS,
 		0,
 		IW,
 		0,
@@ -294,10 +302,13 @@ func (f *Flow) pacingDelay(size Bytes) Clock {
 		return 0
 	}
 	r := float64(f.cwnd) / float64(f.srtt)
-	if f.congAvoid {
-		r *= PacingCARatio / 100.0
-	} else {
+	switch f.state {
+	case FlowStateSS:
 		r *= PacingSSRatio / 100.0
+	case FlowStateCSS:
+		r *= PacingCSSRatio / 100.0
+	case FlowStateCA:
+		r *= PacingCARatio / 100.0
 	}
 	/*
 		if r > 0.0125 {
@@ -321,11 +332,14 @@ func (f *Flow) receive(pkt Packet, node Node) {
 	// react to drops and marks (TODO drop logic not working, leads to deadlock)
 	if pkt.ECE {
 		var b bool
-		if f.congAvoid {
-			b = (node.Now() - f.priorMD) > f.srtt
-		} else {
-			f.congAvoid = true
+		switch f.state {
+		case FlowStateSS:
+			fallthrough
+		case FlowStateCSS:
+			f.state = FlowStateCA
 			b = true
+		case FlowStateCA:
+			b = (node.Now() - f.priorMD) > f.srtt
 		}
 		if b {
 			if f.cwnd = Bytes(float64(f.cwnd) * CE_MD); f.cwnd < MSS {
@@ -335,11 +349,18 @@ func (f *Flow) receive(pkt Packet, node Node) {
 		}
 	} else if pkt.ESCE {
 		b := (node.Now() - f.priorSCEMD) > (f.srtt / Tau)
-		if !f.congAvoid && b {
-			f.ssSCECtr++
-			if f.ssSCECtr > SlowStartExitThreshold {
-				f.congAvoid = true
+		switch f.state {
+		case FlowStateSS:
+			fallthrough
+		case FlowStateCSS:
+			if b {
+				f.ssSCECtr++
+				if f.ssSCECtr > SlowStartExitThreshold {
+					f.state = FlowStateCA
+				}
 			}
+		case FlowStateCA:
+			// nothing to do, will react to SCE if it's time
 		}
 		if b {
 			md := SCE_MD
@@ -355,9 +376,12 @@ func (f *Flow) receive(pkt Packet, node Node) {
 		}
 	}
 	// Reno-linear growth
-	if !f.congAvoid {
+	switch f.state {
+	case FlowStateSS:
 		f.cwnd += MSS
-	} else {
+	case FlowStateCSS:
+		f.cwnd += MSS
+	case FlowStateCA:
 		f.acked += acked
 		if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
 			f.cwnd += MSS
