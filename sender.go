@@ -168,6 +168,7 @@ type Flow struct {
 
 	seq         Seq // SND.NXT
 	receiveNext Seq // RCV.NXT
+	latestAcked Seq
 	state       FlowState
 	rtt         Clock
 	srtt        Clock
@@ -185,8 +186,10 @@ type Flow struct {
 	// HyStart++
 	lastRoundMinRTT    Clock
 	currentRoundMinRTT Clock
+	cssBaselineMinRTT  Clock
 	windowEnd          Seq
 	rttSampleCount     int
+	cssRounds          int
 }
 
 type FlowState int
@@ -231,6 +234,7 @@ func NewFlow(id FlowID, sce SCECapable, pacing PacingEnabled,
 		sce,           // sce
 		0,             // seq
 		0,             // receiveNext
+		-1,            // latestAcked
 		FlowStateSS,   // state
 		ClockInfinity, // rtt
 		0,             // srtt
@@ -244,8 +248,10 @@ func NewFlow(id FlowID, sce SCECapable, pacing PacingEnabled,
 		false,         // pacingWait
 		ClockInfinity, // lastRoundMinRTT
 		ClockInfinity, // currentRoundMinRTT
+		ClockInfinity, // cssBaselineMinRTT
 		0,             // windowEnd
 		0,             // rttSampleCount
+		0,             // cssRounds
 	}
 }
 
@@ -357,6 +363,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	f.receiveNext = pkt.ACKNum + 1
 	f.inFlight -= acked
 	f.updateRTT(pkt, node)
+	f.latestAcked = pkt.ACKNum
 	// react to drops and marks (TODO drop logic not working, leads to deadlock)
 	if pkt.ECE {
 		var b bool
@@ -401,12 +408,40 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			f.priorSCEMD = node.Now()
 		}
 	}
-	// Reno-linear growth
+	// grow cwnd and do HyStart++, if enabled
 	switch f.state {
 	case FlowStateSS:
 		f.cwnd += f.ssCwndIncrement(acked)
-	case FlowStateCSS:
+		if f.hystart == HyStart { // HyStart++
+			f.hystartRound(node)
+			if f.rttSampleCount >= HyNRTTSample &&
+				f.currentRoundMinRTT != ClockInfinity &&
+				f.lastRoundMinRTT != ClockInfinity {
+				t := max(HyMinRTTThresh,
+					min(f.lastRoundMinRTT/HyMinRTTDivisor, HyMaxRTTThresh))
+				if f.currentRoundMinRTT >= f.lastRoundMinRTT+t {
+					node.Logf("HyStart: CSS")
+					f.cssBaselineMinRTT = f.currentRoundMinRTT
+					f.state = FlowStateCSS
+					f.cssRounds = 0
+				}
+			}
+		}
+	case FlowStateCSS: // HyStart++ only
 		f.cwnd += f.ssCwndIncrement(acked)
+		if f.hystartRound(node) {
+			f.cssRounds++
+			node.Logf("HyStart: CSS rounds %d", f.cssRounds)
+		}
+		if f.rttSampleCount >= HyNRTTSample &&
+			f.currentRoundMinRTT < f.cssBaselineMinRTT {
+			node.Logf("HyStart: back to SS")
+			f.cssBaselineMinRTT = ClockInfinity
+			f.state = FlowStateSS
+		} else if f.cssRounds >= HyCSSRounds {
+			node.Logf("HyStart: CA")
+			f.state = FlowStateCA
+		}
 	case FlowStateCA:
 		f.acked += acked
 		if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
@@ -417,16 +452,30 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	}
 }
 
+// hystartRound checks if the current round has ended and if so, starts the next
+// round.
+func (f *Flow) hystartRound(node Node) (end bool) {
+	if f.latestAcked > f.windowEnd {
+		f.lastRoundMinRTT = f.currentRoundMinRTT
+		f.currentRoundMinRTT = ClockInfinity
+		f.rttSampleCount = 0
+		f.windowEnd = f.seq
+		end = true
+	}
+	if f.rtt < f.currentRoundMinRTT {
+		f.currentRoundMinRTT = f.rtt
+	}
+	f.rttSampleCount++
+	return
+}
+
 // ssCwndIncrement returns the cwnd increment in the SS and CSS states.
 func (f *Flow) ssCwndIncrement(acked Bytes) Bytes {
-	m := acked
 	s := MSS
 	if f.hystart == HyStart && f.pacing == NoPacing {
 		s = HyStartLNoPacing * MSS
 	}
-	if s < m {
-		m = s
-	}
+	m := min(acked, s)
 	if f.state == FlowStateCSS {
 		m /= HyCSSGrowthDivisor
 	}

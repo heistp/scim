@@ -12,7 +12,7 @@ import (
 //
 
 // Sender: test duration
-const Duration = 30 * time.Second
+const Duration = 60 * time.Second
 
 // Sender and Delay: flows
 var (
@@ -98,8 +98,8 @@ const (
 // "Advanced" ACK handling and quick ACK changes in SCE or CE state.  Only
 // applies when delayed ACKs are enabled.
 const (
-	//DelayedACKTime = Clock(40 * time.Millisecond)
-	DelayedACKTime = Clock(0)
+	DelayedACKTime = Clock(40 * time.Millisecond)
+	//DelayedACKTime = Clock(0)
 	QuickACKSignal = true
 )
 
@@ -113,7 +113,7 @@ const (
 	Tau                    = 64 // SCE-MD scale factor
 	RateFairness           = false
 	NominalRTT             = 20 * time.Millisecond
-	SlowStartExitThreshold = 0 // e.g. Tau or Tau / 2
+	SlowStartExitThreshold = Tau // e.g. Tau or Tau / 2
 )
 
 // Sender: TCP params
@@ -132,14 +132,13 @@ const (
 
 // Sender: HyStart++ (RFC 9406)
 const (
-	HyStartPP          = true
-	HyMinRTTThresh     = Clock(4 * time.Millisecond)
-	HyMaxRTTThresh     = Clock(16 * time.Millisecond)
-	HyMinRTTDivisor    = 8
-	HyNRTTSample       = 8
-	HyCSSGrowthDivisor = 4
-	HyCSSRounds        = 5
-	HyStartLNoPacing   = 8
+	HyMinRTTThresh     = Clock(2 * time.Millisecond) // default 4ms
+	HyMaxRTTThresh     = Clock(8 * time.Millisecond) // default 16ms
+	HyMinRTTDivisor    = 16                          // default 8
+	HyNRTTSample       = 4                           // default 8
+	HyCSSGrowthDivisor = 4                           // default 4
+	HyCSSRounds        = 3                           // default 5
+	HyStartLNoPacing   = 8                           // default 8
 )
 
 // main
