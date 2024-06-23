@@ -181,6 +181,12 @@ type Flow struct {
 	ssSCECtr    int
 
 	pacingWait bool
+
+	// HyStart++
+	lastRoundMinRTT    Clock
+	currentRoundMinRTT Clock
+	windowEnd          Seq
+	rttSampleCount     int
 }
 
 type FlowState int
@@ -218,24 +224,28 @@ const (
 func NewFlow(id FlowID, sce SCECapable, pacing PacingEnabled,
 	hystart HyStartEnabled, active bool) Flow {
 	return Flow{
-		id,          // id
-		active,      // active
-		pacing,      // pacing
-		hystart,     // hystart
-		sce,         // sce
-		0,           // seq
-		0,           // receiveNext
-		FlowStateSS, // state
-		0,           // rtt
-		0,           // srtt
-		IW,          // cwnd
-		0,           // inFlight
-		0,           // acked
-		0,           // priorGrowth
-		0,           // priorMD
-		0,           // priorSCEMD
-		0,           // ssSCECtr
-		false,       // pacingWait
+		id,            // id
+		active,        // active
+		pacing,        // pacing
+		hystart,       // hystart
+		sce,           // sce
+		0,             // seq
+		0,             // receiveNext
+		FlowStateSS,   // state
+		ClockInfinity, // rtt
+		0,             // srtt
+		IW,            // cwnd
+		0,             // inFlight
+		0,             // acked
+		0,             // priorGrowth
+		0,             // priorMD
+		0,             // priorSCEMD
+		0,             // ssSCECtr
+		false,         // pacingWait
+		ClockInfinity, // lastRoundMinRTT
+		ClockInfinity, // currentRoundMinRTT
+		0,             // windowEnd
+		0,             // rttSampleCount
 	}
 }
 
@@ -366,19 +376,17 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			f.priorMD = node.Now()
 		}
 	} else if pkt.ESCE {
-		b := (node.Now() - f.priorSCEMD) > (f.srtt / Tau)
+		var b bool
 		switch f.state {
 		case FlowStateSS:
 			fallthrough
 		case FlowStateCSS:
-			if b {
-				f.ssSCECtr++
-				if f.ssSCECtr > SlowStartExitThreshold {
-					f.state = FlowStateCA
-				}
+			f.ssSCECtr++
+			if f.ssSCECtr > SlowStartExitThreshold {
+				f.state = FlowStateCA
 			}
 		case FlowStateCA:
-			// nothing to do, will react to SCE if it's time
+			b = (node.Now() - f.priorSCEMD) > (f.srtt / Tau)
 		}
 		if b {
 			md := SCE_MD
@@ -411,14 +419,18 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 
 // ssCwndIncrement returns the cwnd increment in the SS and CSS states.
 func (f *Flow) ssCwndIncrement(acked Bytes) Bytes {
+	m := acked
 	s := MSS
 	if f.hystart == HyStart && f.pacing == NoPacing {
 		s = HyStartLNoPacing * MSS
 	}
-	if acked < s {
-		return acked
+	if s < m {
+		m = s
 	}
-	return s
+	if f.state == FlowStateCSS {
+		m /= HyCSSGrowthDivisor
+	}
+	return m
 }
 
 // updateRTT updates the rtt from the given packet.
