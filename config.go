@@ -92,6 +92,17 @@ const (
 	PlotGoodputPerRTT = 2
 )
 
+// Receiver: delayed ACKs (>0 enables delayed ACKs)
+//
+// QuickACKSignal: if true, always ACK SCE or CE immediately, otherwise use
+// "Advanced" ACK handling and quick ACK changes in SCE or CE state.  Only
+// applies when delayed ACKs are enabled.
+const (
+	//DelayedACKTime = Clock(40 * time.Millisecond)
+	DelayedACKTime = Clock(0)
+	QuickACKSignal = true
+)
+
 //
 // Less Common Settings
 //

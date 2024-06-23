@@ -9,14 +9,19 @@ import (
 )
 
 type Receiver struct {
-	count      []Bytes
-	countAll   Bytes
-	countStart []Clock
-	start      time.Time
-	packets    int
-	total      []Bytes
-	maxRTTFlow FlowID
-	goodput    Xplot
+	count           []Bytes
+	countAll        Bytes
+	countStart      []Clock
+	start           time.Time
+	receivedPackets int
+	ackedPackets    int
+	total           []Bytes
+	maxRTTFlow      FlowID
+	goodput         Xplot
+	delayAck        bool
+	priorSeqAcked   Seq
+	priorECE        bool
+	priorESCE       bool
 }
 
 func NewReceiver() *Receiver {
@@ -25,6 +30,7 @@ func NewReceiver() *Receiver {
 		0,
 		make([]Clock, len(Flows)),
 		time.Time{},
+		0,
 		0,
 		make([]Bytes, len(Flows)),
 		0,
@@ -37,6 +43,10 @@ func NewReceiver() *Receiver {
 				Label: "Goodput (Mbps)",
 			},
 		},
+		true,
+		-1,
+		false,
+		false,
 	}
 }
 
@@ -60,7 +70,55 @@ func (r *Receiver) Start(node Node) (err error) {
 
 // Handle implements Handler.
 func (r *Receiver) Handle(pkt Packet, node Node) error {
+	r.receive(pkt, node)
+	r.receivedPackets++
+	if PlotGoodput {
+		r.updateGoodput(pkt, node)
+		r.total[pkt.Flow] += pkt.Len
+	}
+	return nil
+}
+
+// receive receives in incoming Packet.
+func (r *Receiver) receive(pkt Packet, node Node) {
+	if pkt.ACK {
+		panic("receiver: ACK receive not implemented")
+	}
+	// delayed ACKs disabled
+	if DelayedACKTime == 0 {
+		r.sendAck(pkt, node)
+		return
+	}
+	// delayed ACKs enabled
+	// "Advanced" ACK handling, always immediately ACK state change, then
+	// proceed to the normal delayed ACK logic
+	if (QuickACKSignal && (pkt.CE || pkt.SCE)) ||
+		pkt.SCE != r.priorESCE || pkt.CE != r.priorECE {
+		r.sendAck(pkt, node)
+		r.delayAck = true
+		return
+	}
+	if !r.delayAck {
+		r.sendAck(pkt, node)
+	} else {
+		r.scheduleAck(pkt, node)
+	}
+	r.delayAck = !r.delayAck
+}
+
+// Ding implements Dinger.
+func (r *Receiver) Ding(data any, node Node) error {
+	p := data.(Packet)
+	if r.priorSeqAcked < p.Seq {
+		r.sendAck(p, node)
+	}
+	return nil
+}
+
+// sendAck sends an ack for the given Packet.
+func (r *Receiver) sendAck(pkt Packet, node Node) {
 	pkt.ACK = true
+	pkt.ACKNum = pkt.Seq + Seq(pkt.Len) - 1
 	if pkt.CE {
 		pkt.ECE = true
 		pkt.CE = false
@@ -69,13 +127,16 @@ func (r *Receiver) Handle(pkt Packet, node Node) error {
 		pkt.ESCE = true
 		pkt.SCE = false
 	}
+	r.priorECE = pkt.ECE
+	r.priorESCE = pkt.ESCE
+	r.priorSeqAcked = pkt.Seq
+	r.ackedPackets++
 	node.Send(pkt)
-	r.packets++
-	if PlotGoodput {
-		r.updateGoodput(pkt, node)
-		r.total[pkt.Flow] += pkt.Len
-	}
-	return nil
+}
+
+// scheduleAck schedules a delayed acknowledgement.
+func (r *Receiver) scheduleAck(pkt Packet, node Node) {
+	node.Timer(DelayedACKTime, pkt)
 }
 
 func (r *Receiver) updateGoodput(pkt Packet, node Node) {
@@ -102,6 +163,11 @@ func (r *Receiver) updateGoodput(pkt Packet, node Node) {
 	}
 }
 
+// ackRatio returns the ratio of ACKs to received packets.
+func (r *Receiver) ackRatio() float64 {
+	return float64(r.ackedPackets) / float64(r.receivedPackets)
+}
+
 func (r *Receiver) Stop(node Node) error {
 	if PlotGoodput {
 		r.goodput.Close()
@@ -111,6 +177,7 @@ func (r *Receiver) Stop(node Node) error {
 		}
 	}
 	d := time.Since(r.start)
-	node.Logf("%.0f packets/sec", (float64(r.packets) / d.Seconds()))
+	node.Logf("received: %.0f packets/sec, ACK ratio: %f",
+		(float64(r.receivedPackets) / d.Seconds()), r.ackRatio())
 	return nil
 }

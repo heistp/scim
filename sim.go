@@ -117,9 +117,10 @@ func (s *Sim) Run() (err error) {
 			s.now = t.at
 			s.in[t.from] <- inputNow{ding{t.data}, s.now}
 			s.setState(t.from, Running)
+			n = t.from
+		} else {
+			n = s.next(n)
 		}
-
-		n = s.next(n)
 	}
 
 	// drain nodes so they exit

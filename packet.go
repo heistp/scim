@@ -5,9 +5,10 @@ package main
 
 // Packet represents a network packet in the simulation.
 type Packet struct {
-	Flow FlowID
-	Seq  int
-	Len  Bytes
+	Flow   FlowID
+	Seq    Seq
+	ACKNum Seq
+	Len    Bytes
 
 	ACK        bool
 	CE         bool

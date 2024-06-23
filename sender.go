@@ -165,10 +165,10 @@ type Flow struct {
 	pacing PacingEnabled
 	sce    SCECapable
 
-	seq       int
-	priorSeq  int
-	congAvoid bool
-	srtt      Clock
+	seq         Seq
+	receiveNext Seq
+	congAvoid   bool
+	srtt        Clock
 
 	cwnd        Bytes
 	inFlight    Bytes
@@ -180,6 +180,8 @@ type Flow struct {
 
 	pacingWait bool
 }
+
+type Seq int64
 
 type SCECapable bool
 
@@ -203,7 +205,7 @@ func NewFlow(id FlowID, sce SCECapable, pacing PacingEnabled, active bool) Flow 
 		pacing,
 		sce,
 		0,
-		-1,
+		0,
 		false,
 		0,
 		IW,
@@ -244,7 +246,7 @@ func (f *Flow) send(node Node) {
 	}
 	// no pacing
 	if !f.pacing {
-		for b := true; b; b = f.sendMSS(node) {
+		for b := true; b; b = f.sendPacket(MSS, node) {
 		}
 		return
 	}
@@ -252,12 +254,12 @@ func (f *Flow) send(node Node) {
 	if f.pacingWait {
 		return
 	}
-	if !f.sendMSS(node) {
+	if !f.sendPacket(MSS, node) {
 		return
 	}
 	d := f.pacingDelay(MSS)
 	if d == 0 {
-		for b := true; b; b = f.sendMSS(node) {
+		for b := true; b; b = f.sendPacket(MSS, node) {
 		}
 		return
 	}
@@ -268,21 +270,21 @@ func (f *Flow) send(node Node) {
 // FlowSend is used as timer data for pacing.
 type FlowSend FlowID
 
-// sendMSS sends an MSS sized packet.  It returns false if it wasn't possible to
-// send because cwnd would be exceeded.
-func (f *Flow) sendMSS(node Node) bool {
-	if f.inFlight+MSS > f.cwnd {
+// sendPacket sends a packet with the given length.  It returns false if it
+// wasn't possible to send because cwnd would be exceeded.
+func (f *Flow) sendPacket(pktLen Bytes, node Node) bool {
+	if f.inFlight+pktLen > f.cwnd {
 		return false
 	}
 	node.Send(Packet{
 		Flow:       f.id,
 		Seq:        f.seq,
-		Len:        MSS,
+		Len:        pktLen,
 		SCECapable: f.sce,
 		Sent:       node.Now(),
 	})
-	f.inFlight += MSS
-	f.seq++
+	f.inFlight += pktLen
+	f.seq += Seq(pktLen)
 	return true
 }
 
@@ -309,10 +311,15 @@ func (f *Flow) pacingDelay(size Bytes) Clock {
 // receive handles an incoming packet.
 // NOTE all packets considered ACKs for now
 func (f *Flow) receive(pkt Packet, node Node) {
-	f.inFlight -= pkt.Len
+	if !pkt.ACK {
+		panic("sender: non-ACK receive not implemented")
+	}
+	acked := Bytes(pkt.ACKNum - f.receiveNext + 1)
+	f.receiveNext = pkt.ACKNum + 1
+	f.inFlight -= acked
 	f.updateRTT(pkt, node)
 	// react to drops and marks (TODO drop logic not working, leads to deadlock)
-	if pkt.ECE || pkt.Seq != f.priorSeq+1 {
+	if pkt.ECE {
 		var b bool
 		if f.congAvoid {
 			b = (node.Now() - f.priorMD) > f.srtt
@@ -351,14 +358,13 @@ func (f *Flow) receive(pkt Packet, node Node) {
 	if !f.congAvoid {
 		f.cwnd += MSS
 	} else {
-		f.acked += pkt.Len
+		f.acked += acked
 		if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
 			f.cwnd += MSS
 			f.acked = 0
 			f.priorGrowth = node.Now()
 		}
 	}
-	f.priorSeq = pkt.Seq
 }
 
 // updateRTT updates the rtt from the given packet.
