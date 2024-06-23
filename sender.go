@@ -166,9 +166,10 @@ type Flow struct {
 	hystart HyStartEnabled
 	sce     SCECapable
 
-	seq         Seq
-	receiveNext Seq
+	seq         Seq // SND.NXT
+	receiveNext Seq // RCV.NXT
 	state       FlowState
+	rtt         Clock
 	srtt        Clock
 
 	cwnd        Bytes
@@ -217,23 +218,24 @@ const (
 func NewFlow(id FlowID, sce SCECapable, pacing PacingEnabled,
 	hystart HyStartEnabled, active bool) Flow {
 	return Flow{
-		id,
-		active,
-		pacing,
-		hystart,
-		sce,
-		0,
-		0,
-		FlowStateSS,
-		0,
-		IW,
-		0,
-		0,
-		0,
-		0,
-		0,
-		0,
-		false,
+		id,          // id
+		active,      // active
+		pacing,      // pacing
+		hystart,     // hystart
+		sce,         // sce
+		0,           // seq
+		0,           // receiveNext
+		FlowStateSS, // state
+		0,           // rtt
+		0,           // srtt
+		IW,          // cwnd
+		0,           // inFlight
+		0,           // acked
+		0,           // priorGrowth
+		0,           // priorMD
+		0,           // priorSCEMD
+		0,           // ssSCECtr
+		false,       // pacingWait
 	}
 }
 
@@ -421,10 +423,10 @@ func (f *Flow) ssCwndIncrement(acked Bytes) Bytes {
 
 // updateRTT updates the rtt from the given packet.
 func (f *Flow) updateRTT(pkt Packet, node Node) {
-	r := node.Now() - pkt.Sent
+	f.rtt = node.Now() - pkt.Sent
 	if f.srtt == 0 {
-		f.srtt = r
+		f.srtt = f.rtt
 	} else {
-		f.srtt = Clock(RTTAlpha*float64(r) + (1-RTTAlpha)*float64(f.srtt))
+		f.srtt = Clock(RTTAlpha*float64(f.rtt) + (1-RTTAlpha)*float64(f.srtt))
 	}
 }
