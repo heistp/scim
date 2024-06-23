@@ -17,7 +17,7 @@ const Duration = 30 * time.Second
 // Sender and Delay: flows
 var (
 	Flows = []Flow{
-		AddFlow(SCE, NoPacing, true),
+		AddFlow(SCE, NoPacing, HyStart, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{0, Clock(20 * time.Second), false},
@@ -125,8 +125,21 @@ const (
 
 // Sender: pacing params
 const (
-	PacingSSRatio = float64(100)
-	PacingCARatio = float64(100)
+	PacingSSRatio  = float64(100)
+	PacingCSSRatio = float64(100)
+	PacingCARatio  = float64(100)
+)
+
+// Sender: HyStart++ (RFC 9406)
+const (
+	HyStartPP          = true
+	HyMinRTTThresh     = Clock(4 * time.Millisecond)
+	HyMaxRTTThresh     = Clock(16 * time.Millisecond)
+	HyMinRTTDivisor    = 8
+	HyNRTTSample       = 8
+	HyCSSGrowthDivisor = 4
+	HyCSSRounds        = 5
+	HyStartLNoPacing   = 8
 )
 
 // main

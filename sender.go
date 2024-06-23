@@ -160,10 +160,11 @@ func (s *Sender) Stop(node Node) error {
 
 // Flow represents the state for a single Flow.
 type Flow struct {
-	id     FlowID
-	active bool
-	pacing PacingEnabled
-	sce    SCECapable
+	id      FlowID
+	active  bool
+	pacing  PacingEnabled
+	hystart HyStartEnabled
+	sce     SCECapable
 
 	seq         Seq
 	receiveNext Seq
@@ -205,12 +206,21 @@ const (
 	NoPacing               = false
 )
 
+type HyStartEnabled bool
+
+const (
+	HyStart   HyStartEnabled = true
+	NoHyStart                = false
+)
+
 // NewFlow returns a new flow.
-func NewFlow(id FlowID, sce SCECapable, pacing PacingEnabled, active bool) Flow {
+func NewFlow(id FlowID, sce SCECapable, pacing PacingEnabled,
+	hystart HyStartEnabled, active bool) Flow {
 	return Flow{
 		id,
 		active,
 		pacing,
+		hystart,
 		sce,
 		0,
 		0,
@@ -228,10 +238,11 @@ func NewFlow(id FlowID, sce SCECapable, pacing PacingEnabled, active bool) Flow 
 }
 
 // AddFlow adds a flow with an ID from the global flowID.
-func AddFlow(sce SCECapable, pacing PacingEnabled, active bool) (flow Flow) {
+func AddFlow(sce SCECapable, pacing PacingEnabled, hystart HyStartEnabled,
+	active bool) (flow Flow) {
 	i := flowID
 	flowID++
-	return NewFlow(i, sce, pacing, active)
+	return NewFlow(i, sce, pacing, hystart, active)
 }
 
 var flowID FlowID = 0
@@ -320,11 +331,16 @@ func (f *Flow) pacingDelay(size Bytes) Clock {
 }
 
 // receive handles an incoming packet.
-// NOTE all packets considered ACKs for now
 func (f *Flow) receive(pkt Packet, node Node) {
 	if !pkt.ACK {
 		panic("sender: non-ACK receive not implemented")
 	}
+	f.handleAck(pkt, node)
+}
+
+// receive handles an incoming packet.
+// NOTE all packets considered ACKs for now
+func (f *Flow) handleAck(pkt Packet, node Node) {
 	acked := Bytes(pkt.ACKNum - f.receiveNext + 1)
 	f.receiveNext = pkt.ACKNum + 1
 	f.inFlight -= acked
@@ -378,9 +394,9 @@ func (f *Flow) receive(pkt Packet, node Node) {
 	// Reno-linear growth
 	switch f.state {
 	case FlowStateSS:
-		f.cwnd += MSS
+		f.cwnd += f.ssCwndIncrement(acked)
 	case FlowStateCSS:
-		f.cwnd += MSS
+		f.cwnd += f.ssCwndIncrement(acked)
 	case FlowStateCA:
 		f.acked += acked
 		if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
@@ -389,6 +405,18 @@ func (f *Flow) receive(pkt Packet, node Node) {
 			f.priorGrowth = node.Now()
 		}
 	}
+}
+
+// ssCwndIncrement returns the cwnd increment in the SS and CSS states.
+func (f *Flow) ssCwndIncrement(acked Bytes) Bytes {
+	s := MSS
+	if f.hystart == HyStart && f.pacing == NoPacing {
+		s = HyStartLNoPacing * MSS
+	}
+	if acked < s {
+		return acked
+	}
+	return s
 }
 
 // updateRTT updates the rtt from the given packet.
