@@ -17,25 +17,25 @@ const Duration = 60 * time.Second
 // Sender and Delay: flows
 var (
 	Flows = []Flow{
-		AddFlow(SCE, NoPacing, HyStart, true),
+		AddFlow(ECN, SCE, Pacing, HyStart, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{0, Clock(20 * time.Second), false},
 	}
 	FlowDelay = []Clock{
 		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
 		//Clock(100 * 120 * time.Microsecond),
-		Clock(20 * time.Millisecond),
-		Clock(20 * time.Millisecond),
-		Clock(20 * time.Millisecond),
-		Clock(20 * time.Millisecond),
-		Clock(20 * time.Millisecond),
-		Clock(20 * time.Millisecond),
-		Clock(20 * time.Millisecond),
-		Clock(20 * time.Millisecond),
-		Clock(20 * time.Millisecond),
-		Clock(20 * time.Millisecond),
-		Clock(20 * time.Millisecond),
 	}
 )
 
@@ -109,11 +109,11 @@ const (
 
 // Sender: SCE-AIMD params
 const (
-	CE_MD                  = 0.8
-	Tau                    = 64 // SCE-MD scale factor
+	BaseMD                 = 0.5 // CE and drop
+	Tau                    = 64  // SCE-MD scale factor
 	RateFairness           = false
 	NominalRTT             = 20 * time.Millisecond
-	SlowStartExitThreshold = Tau // e.g. Tau or Tau / 2
+	SlowStartExitThreshold = Tau // e.g. 0, Tau or Tau / 2
 )
 
 // Sender: TCP params
