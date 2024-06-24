@@ -175,11 +175,11 @@ func (d *Deltim) deltic(dt Clock) {
 		d.priorError = 0
 	}
 	d.acc += ((delta + sigma) * d.resonance)
+	// clamp, and maintain oscillator coupling
 	if d.acc <= 0 {
 		d.acc = 0
-		// alternative clamping method that maintains oscillator coupling
-		//d.ceOsc -= d.sceOsc / Tau
-		//d.sceOsc = 0
+		d.ceOsc -= d.sceOsc / Tau
+		d.sceOsc = 0
 	}
 }
 
