@@ -178,7 +178,6 @@ type Flow struct {
 	acked       Bytes
 	priorGrowth Clock
 	priorMD     Clock
-	priorSCEMD  Clock
 	ssSCECtr    int
 
 	pacingWait bool
@@ -243,7 +242,6 @@ func NewFlow(id FlowID, sce SCECapable, pacing PacingEnabled,
 		0,             // acked
 		0,             // priorGrowth
 		0,             // priorMD
-		0,             // priorSCEMD
 		0,             // ssSCECtr
 		false,         // pacingWait
 		ClockInfinity, // lastRoundMinRTT
@@ -383,7 +381,6 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			f.priorMD = node.Now()
 		}
 	} else if pkt.ESCE {
-		var b bool
 		switch f.state {
 		case FlowStateSS:
 			fallthrough
@@ -392,20 +389,15 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			if f.ssSCECtr > SlowStartExitThreshold {
 				f.state = FlowStateCA
 			}
-		case FlowStateCA:
-			b = (node.Now() - f.priorSCEMD) > (f.srtt / Tau)
 		}
-		if b {
-			md := SCE_MD
-			if RateFairness {
-				tau := float64(Tau) * float64(f.srtt) * float64(f.srtt) /
-					float64(NominalRTT) / float64(NominalRTT)
-				md = math.Pow(CE_MD, float64(1)/tau)
-			}
-			if f.cwnd = Bytes(float64(f.cwnd) * md); f.cwnd < MSS {
-				f.cwnd = MSS
-			}
-			f.priorSCEMD = node.Now()
+		md := SCE_MD
+		if RateFairness {
+			tau := float64(Tau) * float64(f.srtt) * float64(f.srtt) /
+				float64(NominalRTT) / float64(NominalRTT)
+			md = math.Pow(CE_MD, float64(1)/tau)
+		}
+		if f.cwnd = Bytes(float64(f.cwnd) * md); f.cwnd < MSS {
+			f.cwnd = MSS
 		}
 	}
 	// grow cwnd and do HyStart++, if enabled
