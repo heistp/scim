@@ -180,10 +180,14 @@ func (r *Receiver) ackRatio() float64 {
 func (r *Receiver) Stop(node Node) error {
 	if PlotGoodput {
 		r.goodput.Close()
+		var a Bytes
 		for i, t := range r.total {
+			a += t
 			r := CalcBitrate(t, time.Duration(node.Now()))
 			node.Logf("flow %d bytes %d rate %f Mbps", i, t, r.Mbps())
 		}
+		ar := CalcBitrate(a, time.Duration(node.Now()))
+		node.Logf("total  bytes %d rate %f Mbps", a, ar.Mbps())
 	}
 	d := time.Since(r.start)
 	node.Logf("received: %.0f packets/sec, ACK ratio: %f",
