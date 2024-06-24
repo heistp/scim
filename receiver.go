@@ -18,13 +18,21 @@ type Receiver struct {
 	total           []Bytes
 	maxRTTFlow      FlowID
 	goodput         Xplot
-	delayAck        bool
-	priorSeqAcked   Seq
-	priorECE        bool
-	priorESCE       bool
+	flow            []receiverFlow
+}
+
+type receiverFlow struct {
+	delayAck      bool
+	priorSeqAcked Seq
+	priorECE      bool
+	priorESCE     bool
 }
 
 func NewReceiver() *Receiver {
+	f := make([]receiverFlow, len(Flows))
+	for range Flows {
+		f = append(f, receiverFlow{true, -1, false, false})
+	}
 	return &Receiver{
 		make([]Bytes, len(Flows)),
 		0,
@@ -43,10 +51,7 @@ func NewReceiver() *Receiver {
 				Label: "Goodput (Mbps)",
 			},
 		},
-		true,
-		-1,
-		false,
-		false,
+		f,
 	}
 }
 
@@ -93,24 +98,26 @@ func (r *Receiver) receive(pkt Packet, node Node) {
 	// delayed ACKs enabled
 	// "Advanced" ACK handling, always immediately ACK state change, then
 	// proceed to the normal delayed ACK logic
+	f := &r.flow[pkt.Flow]
 	if (QuickACKSignal && (pkt.CE || pkt.SCE)) ||
-		pkt.SCE != r.priorESCE || pkt.CE != r.priorECE {
+		pkt.SCE != f.priorESCE || pkt.CE != f.priorECE {
 		r.sendAck(pkt, node)
-		r.delayAck = true
+		f.delayAck = true
 		return
 	}
-	if !r.delayAck {
+	if !f.delayAck {
 		r.sendAck(pkt, node)
 	} else {
 		r.scheduleAck(pkt, node)
 	}
-	r.delayAck = !r.delayAck
+	f.delayAck = !f.delayAck
 }
 
 // Ding implements Dinger.
 func (r *Receiver) Ding(data any, node Node) error {
 	p := data.(Packet)
-	if r.priorSeqAcked < p.Seq {
+	f := &r.flow[p.Flow]
+	if f.priorSeqAcked < p.Seq {
 		r.sendAck(p, node)
 	}
 	return nil
@@ -128,9 +135,10 @@ func (r *Receiver) sendAck(pkt Packet, node Node) {
 		pkt.ESCE = true
 		pkt.SCE = false
 	}
-	r.priorECE = pkt.ECE
-	r.priorESCE = pkt.ESCE
-	r.priorSeqAcked = pkt.Seq
+	f := &r.flow[pkt.Flow]
+	f.priorECE = pkt.ECE
+	f.priorESCE = pkt.ESCE
+	f.priorSeqAcked = pkt.Seq
 	r.ackedPackets++
 	node.Send(pkt)
 }
