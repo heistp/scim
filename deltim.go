@@ -26,12 +26,15 @@ const (
 type Deltim struct {
 	queue []Packet
 
-	burst     Clock
-	update    Clock
+	// parameters
+	burst  Clock
+	update Clock
+	// calculated values
 	resonance Clock
 	// DelTiC variables
 	acc        Clock
-	osc        Clock
+	sceOsc     Clock
+	ceOsc      Clock
 	priorTime  Clock
 	priorError Clock
 	// error window variables
@@ -40,43 +43,35 @@ type Deltim struct {
 	idleTime    Clock
 	updateStart Clock
 	updateEnd   Clock
-	// SCE-AIMD variables
-	sceOps  int
-	ceMode  bool
-	noMark  int
-	sceWait Clock
-	ceWait  Clock
 	// mark acceleration variables
 	priorMark Clock
 	counter   Bytes
 	// Plots
 	marksPlot    Xplot
-	marksNone    int
+	noSCE        int
+	noCE         int
+	noDrop       int
 	emitMarksCtr int
 }
 
 func NewDeltim(burst, update Clock) *Deltim {
 	return &Deltim{
-		make([]Packet, 0),
-		burst,
-		update,
-		Clock(time.Second) / burst,
-		0,
-		0,
-		0,
-		0,
-		newErrorWindow(int(burst/update)+2, burst),
-		math.MaxInt64,
-		0,
-		0,
-		0,
-		0,
-		false,
-		0,
-		0,
-		0,
-		0,
-		0,
+		make([]Packet, 0),          // queue
+		burst,                      // burst
+		update,                     // update
+		Clock(time.Second) / burst, // resonance
+		0,                          // acc
+		0,                          // sceOsc
+		0,                          // ceOsc
+		0,                          // priorTime
+		0,                          // priorError
+		newErrorWindow(int(burst/update)+2, burst), // win
+		math.MaxInt64, // minDelay
+		0,             // idleTime
+		0,             // updateStart
+		0,             // updateEnd
+		0,             // priorMark
+		0,             // counter
 		Xplot{
 			Title: "SCE-AIMD Marks - SCE:white, CE:yellow, drop:red",
 			X: Axis{
@@ -85,9 +80,11 @@ func NewDeltim(burst, update Clock) *Deltim {
 			Y: Axis{
 				Label: "Proportion",
 			},
-		},
-		0,
-		0,
+		}, // marksPlot
+		0, // noSCE
+		0, // noCE
+		0, // noDrop
+		0, // emitMarksCtr
 	}
 }
 
@@ -180,80 +177,67 @@ func (d *Deltim) deltic(dt Clock) {
 	d.acc += ((delta + sigma) * d.resonance)
 	if d.acc <= 0 {
 		d.acc = 0
-		d.osc = 0
+		d.ceOsc = 0
+		d.sceOsc = 0
 	}
 }
 
 // oscillate increments the oscillator and returns any resulting mark.
-func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
+func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) (mark mark) {
+	// clamp dt
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
 	}
-	// increment oscillator and return if not time to mark
-	d.osc += d.acc.MultiplyScaled(dt) * d.resonance
-	if d.osc < Clock(time.Second) {
-		d.noMark++
-		return markNone
-	}
-	// time to mark
-	d.osc -= Clock(time.Second)
-	var m mark
-	if !d.ceMode {
+
+	// base oscillator increment
+	i := d.acc.MultiplyScaled(dt) * d.resonance
+
+	// SCE-capable oscillator
+	d.sceOsc += i
+	switch o := d.sceOsc; {
+	case o < Clock(time.Second):
+	case o < 2*Clock(time.Second):
 		if pkt.SCECapable {
-			m = markSCE
+			mark = markSCE
 		}
-		d.sceOps++
-		if d.sceOps == Tau {
-			if !pkt.SCECapable {
-				m = markCE
-			}
-			d.sceOps = 0
+		d.sceOsc -= Clock(time.Second)
+	case o < Tau*Clock(time.Second):
+		if pkt.SCECapable {
+			mark = markCE
 		}
-		if d.osc >= Clock(time.Second) {
-			if d.ceWait == 0 {
-				d.ceWait = node.Now()
-			} else if node.Now()-d.ceWait > Clock(time.Second) {
-				d.ceMode = true
-				d.sceWait = 0
-				d.acc /= Tau
-				node.Logf("CE mode")
-				if PlotDeltimMarks {
-					d.marksPlot.Line(node.Now(), "0", node.Now(), "1", 4)
-				}
-			}
-		} else {
-			d.ceWait = 0
+		d.sceOsc -= Tau * Clock(time.Second)
+	default:
+		if pkt.SCECapable {
+			mark = markDrop
 		}
-	} else {
-		m = markCE
-		if d.osc >= Clock(time.Second) {
-			m = markDrop
-		}
-		if d.noMark > Tau*2 {
-			if d.sceWait == 0 {
-				d.sceWait = node.Now()
-			} else if node.Now()-d.sceWait > Clock(time.Second) {
-				d.ceMode = false
-				d.ceWait = 0
-				d.acc *= Tau
-				node.Logf("SCE mode")
-				if PlotDeltimMarks {
-					d.marksPlot.Line(node.Now(), "0", node.Now(), "1", 0)
-				}
-			}
-		} else {
-			d.sceWait = 0
-		}
+		d.sceOsc -= Tau * Clock(time.Second)
 	}
 
-	d.plotMark(m, node.Now())
-	d.noMark = 0
+	// CE-capable oscillator
+	d.ceOsc += i / Tau
+	switch o := d.ceOsc; {
+	case o < Clock(time.Second):
+	case o < 2*Clock(time.Second):
+		if !pkt.SCECapable {
+			mark = markCE
+		}
+		d.ceOsc -= Clock(time.Second)
+	default:
+		if !pkt.SCECapable {
+			mark = markDrop
+		}
+		d.ceOsc -= Clock(time.Second)
+	}
 
-	return m
+	d.plotMark(mark, node.Now())
+
+	return
 }
 
+/*
 // markAccel marks when bytes/sec^2 has reached the value of the accumulator
 // since the last mark.
+// TODO re-write markAccel after bi-modality removal
 func (d *Deltim) markAccel(node Node, pkt Packet) mark {
 	d.counter += pkt.Len
 	i := node.Now() - d.priorMark
@@ -287,19 +271,37 @@ func (d *Deltim) markAccel(node Node, pkt Packet) mark {
 
 	return m
 }
+*/
 
 // plotMark plots and emits the given mark, if configured.
 func (d *Deltim) plotMark(m mark, now Clock) {
 	if PlotDeltimMarks {
-		p := 1.0 / float64(d.noMark+1)
-		ps := strconv.FormatFloat(p, 'f', -1, 64)
 		switch m {
+		case markNone:
+			d.noSCE++
+			d.noCE++
+			d.noDrop++
 		case markSCE:
+			p := 1.0 / float64(d.noSCE+1)
+			ps := strconv.FormatFloat(p, 'f', -1, 64)
 			d.marksPlot.Dot(now, ps, 0)
+			d.noSCE = 0
+			d.noCE++
+			d.noDrop++
 		case markCE:
+			p := 1.0 / float64(d.noCE+1)
+			ps := strconv.FormatFloat(p, 'f', -1, 64)
 			d.marksPlot.PlotX(now, ps, 4)
+			d.noCE = 0
+			d.noSCE++
+			d.noDrop++
 		case markDrop:
+			p := 1.0 / float64(d.noDrop+1)
+			ps := strconv.FormatFloat(p, 'f', -1, 64)
 			d.marksPlot.PlotX(now, ps, 2)
+			d.noDrop = 0
+			d.noCE++
+			d.noSCE++
 		}
 	}
 	if EmitMarks {
