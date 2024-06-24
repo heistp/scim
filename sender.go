@@ -7,7 +7,7 @@ import (
 	"math"
 )
 
-var SCE_MD = math.Pow(CE_MD, float64(1)/Tau)
+var SCE_MD = math.Pow(BaseMD, float64(1)/Tau)
 
 type FlowID int
 
@@ -164,6 +164,7 @@ type Flow struct {
 	active  bool
 	pacing  PacingEnabled
 	hystart HyStartEnabled
+	ecn     ECNCapable
 	sce     SCECapable
 
 	seq         Seq // SND.NXT
@@ -179,6 +180,7 @@ type Flow struct {
 	priorGrowth Clock
 	priorMD     Clock
 	ssSCECtr    int
+	sceHistory  *clockRing
 
 	pacingWait bool
 
@@ -200,6 +202,13 @@ const (
 )
 
 type Seq int64
+
+type ECNCapable bool
+
+const (
+	ECN   ECNCapable = true
+	NoECN            = false
+)
 
 type SCECapable bool
 
@@ -223,42 +232,44 @@ const (
 )
 
 // NewFlow returns a new flow.
-func NewFlow(id FlowID, sce SCECapable, pacing PacingEnabled,
+func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, pacing PacingEnabled,
 	hystart HyStartEnabled, active bool) Flow {
 	return Flow{
-		id,            // id
-		active,        // active
-		pacing,        // pacing
-		hystart,       // hystart
-		sce,           // sce
-		0,             // seq
-		0,             // receiveNext
-		-1,            // latestAcked
-		FlowStateSS,   // state
-		ClockInfinity, // rtt
-		0,             // srtt
-		IW,            // cwnd
-		0,             // inFlight
-		0,             // acked
-		0,             // priorGrowth
-		0,             // priorMD
-		0,             // ssSCECtr
-		false,         // pacingWait
-		ClockInfinity, // lastRoundMinRTT
-		ClockInfinity, // currentRoundMinRTT
-		ClockInfinity, // cssBaselineMinRTT
-		0,             // windowEnd
-		0,             // rttSampleCount
-		0,             // cssRounds
+		id,                // id
+		active,            // active
+		pacing,            // pacing
+		hystart,           // hystart
+		ecn,               // ecn
+		sce,               // sce
+		0,                 // seq
+		0,                 // receiveNext
+		-1,                // latestAcked
+		FlowStateSS,       // state
+		ClockInfinity,     // rtt
+		0,                 // srtt
+		IW,                // cwnd
+		0,                 // inFlight
+		0,                 // acked
+		0,                 // priorGrowth
+		0,                 // priorMD
+		0,                 // ssSCECtr
+		newClockRing(Tau), // sceHistory
+		false,             // pacingWait
+		ClockInfinity,     // lastRoundMinRTT
+		ClockInfinity,     // currentRoundMinRTT
+		ClockInfinity,     // cssBaselineMinRTT
+		0,                 // windowEnd
+		0,                 // rttSampleCount
+		0,                 // cssRounds
 	}
 }
 
 // AddFlow adds a flow with an ID from the global flowID.
-func AddFlow(sce SCECapable, pacing PacingEnabled, hystart HyStartEnabled,
-	active bool) (flow Flow) {
+func AddFlow(ecn ECNCapable, sce SCECapable, pacing PacingEnabled,
+	hystart HyStartEnabled, active bool) (flow Flow) {
 	i := flowID
 	flowID++
-	return NewFlow(i, sce, pacing, hystart, active)
+	return NewFlow(i, ecn, sce, pacing, hystart, active)
 }
 
 var flowID FlowID = 0
@@ -315,6 +326,7 @@ func (f *Flow) sendPacket(pktLen Bytes, node Node) bool {
 		Flow:       f.id,
 		Seq:        f.seq,
 		Len:        pktLen,
+		ECNCapable: f.ecn,
 		SCECapable: f.sce,
 		Sent:       node.Now(),
 	})
@@ -337,12 +349,6 @@ func (f *Flow) pacingDelay(size Bytes) Clock {
 	case FlowStateCA:
 		r *= PacingCARatio / 100.0
 	}
-	/*
-		if r > 0.0125 {
-			f.cwnd = Bytes(float64(f.cwnd) * 0.125 / r)
-			r = 0.0125
-		}
-	*/
 	return Clock(float64(size) / r)
 }
 
@@ -375,7 +381,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			b = (node.Now() - f.priorMD) > f.srtt
 		}
 		if b {
-			if f.cwnd = Bytes(float64(f.cwnd) * CE_MD); f.cwnd < MSS {
+			if f.cwnd = Bytes(float64(f.cwnd) * BaseMD); f.cwnd < MSS {
 				f.cwnd = MSS
 			}
 			f.priorMD = node.Now()
@@ -390,14 +396,18 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 				f.state = FlowStateCA
 			}
 		}
-		md := SCE_MD
-		if RateFairness {
-			tau := float64(Tau) * float64(f.srtt) * float64(f.srtt) /
-				float64(NominalRTT) / float64(NominalRTT)
-			md = math.Pow(CE_MD, float64(1)/tau)
-		}
-		if f.cwnd = Bytes(float64(f.cwnd) * md); f.cwnd < MSS {
-			f.cwnd = MSS
+		if f.sceHistory.add(node.Now(), node.Now()-f.srtt) {
+			md := SCE_MD
+			if RateFairness {
+				tau := float64(Tau) * float64(f.srtt) * float64(f.srtt) /
+					float64(NominalRTT) / float64(NominalRTT)
+				md = math.Pow(BaseMD, float64(1)/tau)
+			}
+			if f.cwnd = Bytes(float64(f.cwnd) * md); f.cwnd < MSS {
+				f.cwnd = MSS
+			}
+		} else {
+			//node.Logf("ignore SCE")
 		}
 	}
 	// grow cwnd and do HyStart++, if enabled
@@ -421,18 +431,20 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 		}
 	case FlowStateCSS: // HyStart++ only
 		f.cwnd += f.ssCwndIncrement(acked)
-		if f.hystartRound(node) {
-			f.cssRounds++
-			node.Logf("HyStart: CSS rounds %d", f.cssRounds)
-		}
-		if f.rttSampleCount >= HyNRTTSample &&
-			f.currentRoundMinRTT < f.cssBaselineMinRTT {
-			node.Logf("HyStart: back to SS")
-			f.cssBaselineMinRTT = ClockInfinity
-			f.state = FlowStateSS
-		} else if f.cssRounds >= HyCSSRounds {
-			node.Logf("HyStart: CA")
-			f.state = FlowStateCA
+		if f.hystart == HyStart { // HyStart++
+			if f.hystartRound(node) {
+				f.cssRounds++
+				node.Logf("HyStart: CSS rounds %d", f.cssRounds)
+			}
+			if f.rttSampleCount >= HyNRTTSample &&
+				f.currentRoundMinRTT < f.cssBaselineMinRTT {
+				node.Logf("HyStart: back to SS")
+				f.cssBaselineMinRTT = ClockInfinity
+				f.state = FlowStateSS
+			} else if f.cssRounds >= HyCSSRounds {
+				node.Logf("HyStart: CA")
+				f.state = FlowStateCA
+			}
 		}
 	case FlowStateCA:
 		f.acked += acked
@@ -482,4 +494,65 @@ func (f *Flow) updateRTT(pkt Packet, node Node) {
 	} else {
 		f.srtt = Clock(RTTAlpha*float64(f.rtt) + (1-RTTAlpha)*float64(f.srtt))
 	}
+}
+
+// clockRing is a ring buffer of Clock values.
+type clockRing struct {
+	ring  []Clock
+	start int
+	end   int
+}
+
+// newClockRing returns a new ClockRing.
+func newClockRing(size int) *clockRing {
+	return &clockRing{
+		make([]Clock, size+1),
+		0,
+		0,
+	}
+}
+
+// add removes any values earlier than earliest, then adds the given value.
+// False is returned if the ring is full.
+func (r *clockRing) add(value, earliest Clock) bool {
+	// remove earlier values from the end
+	for r.start != r.end {
+		p := r.prior(r.end)
+		if r.ring[p] > earliest {
+			break
+		}
+		r.end = p
+	}
+	// add the value, or return false if full
+	var e int
+	if e = r.next(r.end); e == r.start {
+		return false
+	}
+	r.ring[r.end] = value
+	r.end = e
+	return true
+}
+
+// next returns the ring index after the given index.
+func (r *clockRing) next(index int) int {
+	if index >= len(r.ring)-1 {
+		return 0
+	}
+	return index + 1
+}
+
+// prior returns the ring index before the given index.
+func (r *clockRing) prior(index int) int {
+	if index > 0 {
+		return index - 1
+	}
+	return len(r.ring) - 1
+}
+
+// length returns the number of elements in the ring.
+func (r *clockRing) length() int {
+	if r.end >= r.start {
+		return r.end - r.start
+	}
+	return len(r.ring) - (r.start - r.end)
 }
