@@ -54,7 +54,8 @@ func NewReceiver() *Receiver {
 func (r *Receiver) Start(node Node) (err error) {
 	if PlotGoodput {
 		var m Clock
-		for i, d := range FlowDelay {
+		for i := range Flows {
+			d := FlowDelay[i]
 			if d > m {
 				m = d
 				r.maxRTTFlow = FlowID(i)
