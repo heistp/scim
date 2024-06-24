@@ -183,7 +183,7 @@ func (d *Deltim) deltic(dt Clock) {
 }
 
 // oscillate increments the oscillator and returns any resulting mark.
-func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) (mark mark) {
+func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
 	// clamp dt
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
@@ -192,46 +192,48 @@ func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) (mark mark) {
 	// base oscillator increment
 	i := d.acc.MultiplyScaled(dt) * d.resonance
 
-	// SCE-capable oscillator
+	// SCE oscillator
+	var s mark
 	d.sceOsc += i
 	switch o := d.sceOsc; {
 	case o < Clock(time.Second):
 	case o < 2*Clock(time.Second):
-		if pkt.SCECapable {
-			mark = markSCE
-		}
+		s = markSCE
 		d.sceOsc -= Clock(time.Second)
 	case o < Tau*Clock(time.Second):
-		if pkt.SCECapable {
-			mark = markCE
-		}
+		s = markCE
 		d.sceOsc -= Tau * Clock(time.Second)
 	default:
-		if pkt.SCECapable {
-			mark = markDrop
-		}
+		s = markDrop
 		d.sceOsc -= Tau * Clock(time.Second)
 	}
 
-	// CE-capable oscillator
+	// CE oscillator
+	var c mark
 	d.ceOsc += i / Tau
 	switch o := d.ceOsc; {
 	case o < Clock(time.Second):
 	case o < 2*Clock(time.Second):
-		if !pkt.SCECapable {
-			mark = markCE
-		}
+		c = markCE
 		d.ceOsc -= Clock(time.Second)
 	default:
-		if !pkt.SCECapable {
-			mark = markDrop
-		}
+		c = markDrop
 		d.ceOsc -= Clock(time.Second)
 	}
 
-	d.plotMark(mark, node.Now())
+	// assign mark
+	var m mark
+	if pkt.SCECapable {
+		m = s
+	} else if pkt.ECNCapable {
+		m = c
+	} else if m = c; m == markCE {
+		m = markDrop
+	}
 
-	return
+	d.plotMark(m, node.Now())
+
+	return m
 }
 
 /*
@@ -386,7 +388,7 @@ func (w *errorWindow) add(value Clock, time Clock) {
 	// add the value
 	w.ring[w.end] = errorAt{value, time}
 	if w.end = w.next(w.end); w.end == w.start {
-		panic(fmt.Sprintf("ring buffer overflow, len %d", len(w.ring)))
+		panic(fmt.Sprintf("errorWindow overflow, len %d", len(w.ring)))
 	}
 	// remove expired values from the start
 	t := time - w.duration
