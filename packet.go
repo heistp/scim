@@ -13,6 +13,7 @@ type Packet struct {
 	ACK        bool
 	CE         bool
 	ECE        bool
+	ECNCapable ECNCapable
 	SCECapable SCECapable
 	SCE        bool
 	ESCE       bool
