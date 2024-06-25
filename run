@@ -3,5 +3,5 @@ set -e
 
 rm -f *.xpl
 go build
-time ./sceaimd
+sudo chrt 10 time ./sceaimd
 xplot *.xpl
