@@ -436,7 +436,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			}
 		}
 	case FlowStateCSS: // HyStart++ only
-		f.cwnd += f.ssCwndIncrement(acked, 1)
+		f.cwnd += f.ssCwndIncrement(acked, f.ssSCECtr+1)
 		if f.hystart == HyStart { // HyStart++
 			if f.hystartRound(node) {
 				f.cssRounds++
