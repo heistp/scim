@@ -62,7 +62,7 @@ func NewDeltim(burst, update Clock) *Deltim {
 		Clock(time.Second) / burst, // resonance
 		0,                          // acc
 		0,                          // sceOsc
-		0,                          // ceOsc
+		Clock(time.Second) / 2,     // ceOsc
 		0,                          // priorTime
 		0,                          // priorError
 		newErrorWindow(int(burst/update)+2, burst), // win
@@ -101,7 +101,13 @@ func (d *Deltim) Start(node Node) (err error) {
 // Enqueue implements AQM.
 func (d *Deltim) Enqueue(pkt Packet, node Node) {
 	if len(d.queue) == 0 {
-		d.idleTime += node.Now() - d.priorTime
+		i := node.Now() - d.priorTime
+		// NOTE reset oscillators after 1 second of idle time- justify this
+		if i > Clock(time.Second) {
+			d.sceOsc = 0
+			d.ceOsc = Clock(time.Second) / 2
+		}
+		d.idleTime += i
 	}
 	pkt.Enqueue = node.Now()
 	d.queue = append(d.queue, pkt)
@@ -175,11 +181,18 @@ func (d *Deltim) deltic(dt Clock) {
 		d.priorError = 0
 	}
 	d.acc += ((delta + sigma) * d.resonance)
-	// clamp, and maintain oscillator coupling
 	if d.acc <= 0 {
 		d.acc = 0
-		d.ceOsc -= d.sceOsc / Tau
-		d.sceOsc = 0
+		/*
+			// clamp oscillators and maintain coupling, not found to help
+			if d.ceOsc > d.sceOsc {
+				d.sceOsc -= d.ceOsc * Tau
+				d.ceOsc = 0
+			} else {
+				d.ceOsc -= d.sceOsc / Tau
+				d.sceOsc = 0
+			}
+		*/
 	}
 }
 
