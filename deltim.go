@@ -101,14 +101,9 @@ func (d *Deltim) Start(node Node) (err error) {
 // Enqueue implements AQM.
 func (d *Deltim) Enqueue(pkt Packet, node Node) {
 	if len(d.queue) == 0 {
-		i := node.Now() - d.priorTime
-		// NOTE reset oscillators after 1 second of idle time- justify this
-		if i > Clock(time.Second) {
-			d.sceOsc = 0
-			d.ceOsc = Clock(time.Second) / 2
-		}
-		d.idleTime += i
+		pkt.Idle = node.Now() - d.priorTime
 	}
+	// NOTE enqueue time at head only needed for plotting sojourn
 	pkt.Enqueue = node.Now()
 	d.queue = append(d.queue, pkt)
 }
@@ -120,6 +115,16 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 	}
 	// pop from head
 	pkt, d.queue = d.queue[0], d.queue[1:]
+
+	// handle idle time
+	if pkt.Idle > 0 {
+		// NOTE reset oscillators after 1 second of idle time- justify this
+		if pkt.Idle > Clock(time.Second) {
+			d.sceOsc = 0
+			d.ceOsc = Clock(time.Second) / 2
+		}
+		d.idleTime += pkt.Idle
+	}
 
 	// update minimum delay from next packet, or 0 if no next packet
 	if len(d.queue) > 0 {
@@ -135,7 +140,7 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 	if node.Now() > d.updateEnd {
 		// add min delay to window
 		d.win.add(d.minDelay, node.Now())
-		// run control loop
+		// run control loop (note: idle not subtracted, not needed)
 		d.deltic(node.Now() - d.updateStart)
 		// reset update state
 		d.minDelay = math.MaxInt64
@@ -144,8 +149,8 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 		d.updateEnd = node.Now() + d.update
 	}
 
-	// advance oscillator and possibly mark
-	m := d.oscillate(node.Now()-d.priorTime, node, pkt)
+	// advance oscillator for any non-idle time, and possibly mark
+	m := d.oscillate(node.Now()-d.priorTime-pkt.Idle, node, pkt)
 	//m := d.markAccel(node, pkt)
 	d.priorTime = node.Now()
 
