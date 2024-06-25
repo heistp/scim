@@ -178,7 +178,7 @@ type Flow struct {
 	inFlight    Bytes
 	acked       Bytes
 	priorGrowth Clock
-	priorMD     Clock
+	priorCEMD   Clock
 	ssSCECtr    int
 	sceHistory  *clockRing
 
@@ -251,7 +251,7 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, pacing PacingEnabled,
 		0,                 // inFlight
 		0,                 // acked
 		0,                 // priorGrowth
-		0,                 // priorMD
+		0,                 // priorCEMD
 		0,                 // ssSCECtr
 		newClockRing(Tau), // sceHistory
 		false,             // pacingWait
@@ -378,13 +378,13 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			f.state = FlowStateCA
 			b = true
 		case FlowStateCA:
-			b = (node.Now() - f.priorMD) > f.srtt
+			b = (node.Now() - f.priorCEMD) > f.srtt
 		}
 		if b {
 			if f.cwnd = Bytes(float64(f.cwnd) * BaseMD); f.cwnd < MSS {
 				f.cwnd = MSS
 			}
-			f.priorMD = node.Now()
+			f.priorCEMD = node.Now()
 		}
 	} else if pkt.ESCE {
 		switch f.state {
@@ -392,28 +392,34 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			fallthrough
 		case FlowStateCSS:
 			f.ssSCECtr++
-			if f.ssSCECtr > SlowStartExitThreshold {
+			if f.ssSCECtr >= SlowStartExitThreshold {
 				f.state = FlowStateCA
+				if f.cwnd = Bytes(float64(f.cwnd) * BaseMD); f.cwnd < MSS {
+					f.cwnd = MSS
+				}
+				f.priorCEMD = node.Now()
 			}
-		}
-		if f.sceHistory.add(node.Now(), node.Now()-f.srtt) {
-			md := SCE_MD
-			if RateFairness {
-				tau := float64(Tau) * float64(f.srtt) * float64(f.srtt) /
-					float64(NominalRTT) / float64(NominalRTT)
-				md = math.Pow(BaseMD, float64(1)/tau)
+		case FlowStateCA:
+			if f.sceHistory.add(node.Now(), node.Now()-f.srtt) &&
+				(node.Now()-f.priorCEMD) > f.srtt {
+				md := SCE_MD
+				if RateFairness {
+					tau := float64(Tau) * float64(f.srtt) * float64(f.srtt) /
+						float64(NominalRTT) / float64(NominalRTT)
+					md = math.Pow(BaseMD, float64(1)/tau)
+				}
+				if f.cwnd = Bytes(float64(f.cwnd) * md); f.cwnd < MSS {
+					f.cwnd = MSS
+				}
+			} else {
+				//node.Logf("ignore SCE")
 			}
-			if f.cwnd = Bytes(float64(f.cwnd) * md); f.cwnd < MSS {
-				f.cwnd = MSS
-			}
-		} else {
-			//node.Logf("ignore SCE")
 		}
 	}
 	// grow cwnd and do HyStart++, if enabled
 	switch f.state {
 	case FlowStateSS:
-		f.cwnd += f.ssCwndIncrement(acked)
+		f.cwnd += f.ssCwndIncrement(acked, f.ssSCECtr+1)
 		if f.hystart == HyStart { // HyStart++
 			f.hystartRound(node)
 			if f.rttSampleCount >= HyNRTTSample &&
@@ -430,7 +436,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			}
 		}
 	case FlowStateCSS: // HyStart++ only
-		f.cwnd += f.ssCwndIncrement(acked)
+		f.cwnd += f.ssCwndIncrement(acked, 1)
 		if f.hystart == HyStart { // HyStart++
 			if f.hystartRound(node) {
 				f.cssRounds++
@@ -474,7 +480,7 @@ func (f *Flow) hystartRound(node Node) (end bool) {
 }
 
 // ssCwndIncrement returns the cwnd increment in the SS and CSS states.
-func (f *Flow) ssCwndIncrement(acked Bytes) Bytes {
+func (f *Flow) ssCwndIncrement(acked Bytes, divisor int) Bytes {
 	s := MSS
 	if f.hystart == HyStart && f.pacing == NoPacing {
 		s = HyStartLNoPacing * MSS
@@ -483,6 +489,7 @@ func (f *Flow) ssCwndIncrement(acked Bytes) Bytes {
 	if f.state == FlowStateCSS {
 		m /= HyCSSGrowthDivisor
 	}
+	m /= Bytes(divisor)
 	return m
 }
 

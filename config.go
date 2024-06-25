@@ -117,7 +117,7 @@ const (
 	Tau                    = 64  // SCE-MD scale factor
 	RateFairness           = false
 	NominalRTT             = 20 * time.Millisecond
-	SlowStartExitThreshold = Tau // e.g. 0, Tau or Tau / 2
+	SlowStartExitThreshold = Tau / 2 // e.g. 0, Tau or Tau / 2
 )
 
 // Sender: TCP params
