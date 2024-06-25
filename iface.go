@@ -103,13 +103,18 @@ func (i *Iface) Ding(data any, node Node) error {
 		return nil
 	}
 	// if not a Bitrate, dequeue and send if a Packet is available
-	var p Packet
+	var p, n Packet
 	var ok bool
 	if p, ok = i.aqm.Dequeue(node); !ok {
 		i.empty = true
 		return nil
 	}
 	node.Send(p)
+	if n, ok = i.aqm.Peek(node); ok {
+		i.timer(node, n)
+	} else {
+		i.empty = true
+	}
 	if PlotQueueLength {
 		c := 0
 		if i.aqm.Len() == 0 {
@@ -124,11 +129,6 @@ func (i *Iface) Ding(data any, node Node) error {
 			c = 2
 		}
 		i.sojourn.Dot(node.Now(), s.StringMS(), c)
-	}
-	if p, ok = i.aqm.Peek(node); ok {
-		i.timer(node, p)
-	} else {
-		i.empty = true
 	}
 	return nil
 }
