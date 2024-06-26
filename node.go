@@ -65,6 +65,11 @@ func (n *node) Timer(delay Clock, data any) {
 	n.out <- timer{n.id, n.now + delay, data}
 }
 
+// RemoveTimers implements Node.
+func (n *node) RemoveTimers(f func(at Clock, data any) bool) {
+	n.out <- removeTimers{n.id, f}
+}
+
 // Send implements Node.
 func (n *node) Send(p Packet) {
 	n.out <- p
@@ -99,6 +104,7 @@ type inputNow struct {
 // Node provides an API for node implementations.
 type Node interface {
 	Timer(delay Clock, data any)
+	RemoveTimers(func(at Clock, data any) bool) // return true to remove
 	Send(Packet)
 	Now() Clock
 	Logf(format string, a ...any)

@@ -247,3 +247,25 @@ func (t timer) handleSim(sim *Sim, from nodeID) (error, bool) {
 	sim.timer[i] = t
 	return nil, true
 }
+
+// removeTimers may be sent by a node to remove timers that match a nodeID and
+// comparator function.
+type removeTimers struct {
+	from nodeID
+	fn   func(at Clock, data any) bool
+}
+
+// handle implements output.
+func (v removeTimers) handleSim(sim *Sim, from nodeID) (error, bool) {
+	tt := sim.timer[:0]
+	i := 0
+	for _, t := range sim.timer {
+		if t.from != v.from || !v.fn(t.at, t.data) {
+			tt = append(tt, t)
+		} else {
+			i++
+		}
+	}
+	sim.timer = tt
+	return nil, true
+}
