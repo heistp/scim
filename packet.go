@@ -19,7 +19,6 @@ type Packet struct {
 	ESCE       bool
 
 	Enqueue Clock
-	Idle    Clock
 	Sent    Clock
 }
 

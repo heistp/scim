@@ -40,12 +40,10 @@ type Deltim struct {
 	// error window variables
 	win         *errorWindow
 	minDelay    Clock
-	idleTime    Clock
+	updateIdle  Clock
 	updateStart Clock
 	updateEnd   Clock
-	// mark acceleration variables
-	priorMark Clock
-	counter   Bytes
+	idleTime    Clock
 	// Plots
 	marksPlot    Xplot
 	noSCE        int
@@ -67,11 +65,10 @@ func NewDeltim(burst, update Clock) *Deltim {
 		0,                          // priorError
 		newErrorWindow(int(burst/update)+2, burst), // win
 		math.MaxInt64, // minDelay
-		0,             // idleTime
+		0,             // updateIdle
 		0,             // updateStart
 		0,             // updateEnd
-		0,             // priorMark
-		0,             // counter
+		0,             // idleTime
 		Xplot{
 			Title: "SCE-AIMD Marks - SCE:white, CE:yellow, drop:red",
 			X: Axis{
@@ -101,9 +98,8 @@ func (d *Deltim) Start(node Node) (err error) {
 // Enqueue implements AQM.
 func (d *Deltim) Enqueue(pkt Packet, node Node) {
 	if len(d.queue) == 0 {
-		pkt.Idle = node.Now() - d.priorTime
+		d.idleTime = node.Now() - d.priorTime
 	}
-	// NOTE enqueue time at head only needed for plotting sojourn
 	pkt.Enqueue = node.Now()
 	d.queue = append(d.queue, pkt)
 }
@@ -117,14 +113,7 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 	pkt, d.queue = d.queue[0], d.queue[1:]
 
 	// handle idle time
-	if pkt.Idle > 0 {
-		// NOTE reset oscillators after 1 second of idle time- justify this
-		if pkt.Idle > Clock(time.Second) {
-			d.sceOsc = 0
-			d.ceOsc = Clock(time.Second) / 2
-		}
-		d.idleTime += pkt.Idle
-	}
+	d.updateIdle += d.idleTime
 
 	// update minimum delay from next packet, or 0 if no next packet
 	if len(d.queue) > 0 {
@@ -144,15 +133,15 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 		d.deltic(node.Now() - d.updateStart)
 		// reset update state
 		d.minDelay = math.MaxInt64
-		d.idleTime = 0
+		d.updateIdle = 0
 		d.updateStart = node.Now()
 		d.updateEnd = node.Now() + d.update
 	}
 
 	// advance oscillator for any non-idle time, and possibly mark
-	m := d.oscillate(node.Now()-d.priorTime-pkt.Idle, node, pkt)
-	//m := d.markAccel(node, pkt)
+	m := d.oscillate(node.Now()-d.priorTime-d.idleTime, node, pkt)
 	d.priorTime = node.Now()
+	d.idleTime = 0
 
 	// do marking
 	ok = true
@@ -176,28 +165,19 @@ func (d *Deltim) deltic(dt Clock) {
 		dt = Clock(time.Second)
 	}
 	var delta, sigma Clock
-	if d.idleTime == 0 {
+	if d.updateIdle == 0 {
 		m := d.win.minimum()
 		delta = m - d.priorError
 		sigma = m.MultiplyScaled(dt)
 		d.priorError = m
 	} else {
-		delta = -d.idleTime
+		delta = -d.updateIdle
 		d.priorError = 0
 	}
-	d.acc += ((delta + sigma) * d.resonance)
-	if d.acc <= 0 {
+	if d.acc += ((delta + sigma) * d.resonance); d.acc <= 0 {
 		d.acc = 0
-		/*
-			// clamp oscillators and maintain coupling, not found to help
-			if d.ceOsc > d.sceOsc {
-				d.sceOsc -= d.ceOsc * Tau
-				d.ceOsc = 0
-			} else {
-				d.ceOsc -= d.sceOsc / Tau
-				d.sceOsc = 0
-			}
-		*/
+		// note: clamping oscillators not found to help, and if it's done, then
+		// the ratio between the SCE and CE oscillators needs to be maintained
 	}
 }
 
@@ -254,45 +234,6 @@ func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
 
 	return m
 }
-
-/*
-// markAccel marks when bytes/sec^2 has reached the value of the accumulator
-// since the last mark.
-// TODO re-write markAccel after bi-modality removal
-func (d *Deltim) markAccel(node Node, pkt Packet) mark {
-	d.counter += pkt.Len
-	i := node.Now() - d.priorMark
-	a := i * i / Clock(d.counter)
-	r := Clock(2*time.Second) - d.acc/2 // TODO work on 2 second magic number
-	if r < 0 {
-		r = 0
-	}
-	if a < r {
-		d.noMark++
-		return markNone
-	}
-	//node.Logf("r:%d i:%d a:%d", r, i, a)
-	var m mark
-	if pkt.SCECapable {
-		m = markSCE
-	}
-	d.sceOps++
-	if d.sceOps == Tau {
-		if !pkt.SCECapable {
-			m = markCE
-		}
-		d.sceOps = 0
-	}
-	// TODO handle overload, if worth it
-
-	d.counter = 0
-	d.priorMark = node.Now()
-	d.plotMark(m, node.Now())
-	d.noMark = 0
-
-	return m
-}
-*/
 
 // plotMark plots and emits the given mark, if configured.
 func (d *Deltim) plotMark(m mark, now Clock) {
