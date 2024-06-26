@@ -9,4 +9,4 @@ fi
 rm -f *.xpl
 go build
 $realtime ./sceaimd
-xplot *.xpl
+xplot *.xpl &
