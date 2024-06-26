@@ -129,7 +129,6 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 	if node.Now() > d.updateEnd {
 		// add min delay to window
 		d.win.add(d.minDelay, node.Now())
-		// run control loop (note: idle not subtracted, not needed)
 		d.deltic(node.Now() - d.updateStart)
 		// reset update state
 		d.minDelay = math.MaxInt64
@@ -172,6 +171,8 @@ func (d *Deltim) deltic(dt Clock) {
 		d.priorError = m
 	} else {
 		delta = -d.updateIdle
+		// note: idle time sigma appears insignificant
+		//sigma = -d.updateIdle.MultiplyScaled(dt)
 		d.priorError = 0
 	}
 	if d.acc += ((delta + sigma) * d.resonance); d.acc <= 0 {
