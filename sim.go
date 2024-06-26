@@ -135,8 +135,7 @@ func (s *Sim) Run() (err error) {
 		}
 	}
 
-	elapsed := time.Since(start)
-	logf(s.now, 0, "elapsed: %s", elapsed)
+	logf(s.now, 0, "elapsed: %s", time.Since(start))
 
 	return
 }
