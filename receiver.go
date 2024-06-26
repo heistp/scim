@@ -141,12 +141,6 @@ func (r *Receiver) sendAck(pkt Packet, node Node) {
 	f.priorSeqAcked = pkt.Seq
 	r.ackedPackets++
 	node.Send(pkt)
-	/*
-		node.RemoveTimers(func(at Clock, data any) bool {
-			p := data.(Packet)
-			return p.Seq <= pkt.Seq
-		})
-	*/
 }
 
 // scheduleAck schedules a delayed acknowledgement.
