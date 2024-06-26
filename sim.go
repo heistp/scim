@@ -69,6 +69,8 @@ func NewSim(handler []Handler) *Sim {
 
 // Run runs the simulation.
 func (s *Sim) Run() (err error) {
+	start := time.Now()
+
 	for i, h := range s.handler {
 		n := nodeID(i)
 		o := newNode(h, s.in[n], s.out[n], 0, n)
@@ -132,6 +134,9 @@ func (s *Sim) Run() (err error) {
 		for range s.out[i] {
 		}
 	}
+
+	elapsed := time.Since(start)
+	logf(s.now, 0, "elapsed: %s", elapsed)
 
 	return
 }
