@@ -93,7 +93,7 @@ const (
 // Receiver: plots
 const (
 	PlotGoodput       = true
-	PlotGoodputPerRTT = 2
+	PlotGoodputPerRTT = 1
 )
 
 // Receiver: delayed ACKs (>0 enables delayed ACKs)
@@ -118,6 +118,7 @@ const (
 	RateFairness           = false
 	NominalRTT             = 20 * time.Millisecond
 	SlowStartExitThreshold = Tau / 2 // e.g. 0, Tau or Tau / 2
+	CwndIncrementDivisor   = true
 )
 
 // Sender: TCP params

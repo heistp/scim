@@ -489,7 +489,9 @@ func (f *Flow) ssCwndIncrement(acked Bytes, divisor int) Bytes {
 	if f.state == FlowStateCSS {
 		m /= HyCSSGrowthDivisor
 	}
-	m /= Bytes(divisor)
+	if CwndIncrementDivisor {
+		m /= Bytes(divisor)
+	}
 	return m
 }
 
