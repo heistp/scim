@@ -173,8 +173,17 @@ func (d *Deltim) deltic(dt Clock) {
 		sigma = m.MultiplyScaled(dt)
 		d.priorError = m
 	} else {
+		// note: the backoff below is dubious mathematically, even if it seems
+		// to work pretty well across a wide range of conditions.  In corner
+		// cases, it doesn't back off quickly enough, for example at end of
+		// slow-start for a high bandwidth flow.
+		//
+		// Ideally, we'd like the positive error to equal the negative error,
+		// but since there's no negative sojourn time, it doesn't seem possible.
+		// There may be a better mathematical relationship for how to adjust the
+		// accumulator after an idle period. The answer is *not* to just clamp
+		// the accumulator, as that leads to oscillations and other bad behavior.
 		delta = -d.updateIdle
-		// note: idle time sigma appears insignificant
 		//sigma = -d.updateIdle.MultiplyScaled(dt)
 		d.priorError = 0
 	}
