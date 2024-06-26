@@ -4,9 +4,9 @@
 package main
 
 import (
+	"container/heap"
 	"fmt"
 	"math"
-	"sort"
 	"time"
 )
 
@@ -41,7 +41,7 @@ type Sim struct {
 	now     Clock
 	in      []chan inputNow
 	out     []chan output
-	timer   []timer
+	timer   timerQueue
 	table
 	done bool
 }
@@ -54,12 +54,14 @@ func NewSim(handler []Handler) *Sim {
 		i = append(i, make(chan inputNow))
 		o = append(o, make(chan output))
 	}
+	q := timerQueue{}
+	heap.Init(&q)
 	return &Sim{
 		handler,
 		0,
 		i,
 		o,
-		make([]timer, 0),
+		q,
 		newTable(len(handler)),
 		false,
 	}
@@ -114,10 +116,7 @@ func (s *Sim) Run() (err error) {
 				err = fmt.Errorf("deadlock: no nodes and no timers running")
 				return
 			}
-			var t timer
-			t, s.timer = s.timer[0], s.timer[1:]
-			//inc := t.at - s.now
-			//fmt.Printf("inc:%s\n", inc)
+			t := heap.Pop(&s.timer).(timer)
 			s.now = t.at
 			s.in[t.from] <- inputNow{ding{t.data}, s.now}
 			s.setState(t.from, Running)
@@ -225,25 +224,39 @@ type timer struct {
 }
 
 // handle implements output.
-//
-// TODO optimize handleSim insert operation (memmove expensive)
 func (t timer) handleSim(sim *Sim, from nodeID) (error, bool) {
-	i := sort.Search(len(sim.timer), func(i int) bool {
-		return sim.timer[i].at > t.at
-	})
-	/*
-		i := 0
-		for i = 0; i < len(sim.timer); i++ {
-			if sim.timer[i].at > t.at {
-				break
-			}
-		}
-	*/
-	if len(sim.timer) == i {
-		sim.timer = append(sim.timer, t)
-		return nil, true
-	}
-	sim.timer = append(sim.timer[:i+1], sim.timer[i:]...)
-	sim.timer[i] = t
+	heap.Push(&sim.timer, t)
 	return nil, true
+}
+
+// timerQueue is a min-heap for timers, using the heap package.
+type timerQueue []timer
+
+// Len implements heap.Interface.
+func (q timerQueue) Len() int {
+	return len(q)
+}
+
+// Less implements heap.Interface.
+func (q timerQueue) Less(i, j int) bool {
+	return q[i].at < q[j].at
+}
+
+// Swap implements heap.Interface.
+func (q timerQueue) Swap(i, j int) {
+	q[i], q[j] = q[j], q[i]
+}
+
+// Push implements heap.Interface.
+func (q *timerQueue) Push(x any) {
+	*q = append(*q, x.(timer))
+}
+
+// Pop implements heap.Interface.
+func (q *timerQueue) Pop() any {
+	o := *q
+	n := len(o)
+	t := o[n-1]
+	*q = o[:n-1]
+	return t
 }
