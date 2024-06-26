@@ -1,7 +1,12 @@
 #!/bin/bash
 set -e
 
+# run with realtime priority if -r specified
+if [[ $1 == "-r" ]]; then
+    realtime="sudo chrt 10"
+fi
+
 rm -f *.xpl
 go build
-sudo chrt 10 time ./sceaimd
+$realtime time ./sceaimd
 xplot *.xpl
