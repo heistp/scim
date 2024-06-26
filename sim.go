@@ -226,7 +226,7 @@ type timer struct {
 
 // handle implements output.
 //
-// TODO optimize handleSim timer insert search
+// TODO optimize handleSim insert operation (memmove expensive)
 func (t timer) handleSim(sim *Sim, from nodeID) (error, bool) {
 	i := sort.Search(len(sim.timer), func(i int) bool {
 		return sim.timer[i].at > t.at
