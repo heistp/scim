@@ -175,7 +175,7 @@ func (d *Deltim) deltic(dt Clock) {
 		//sigma = -d.updateIdle.MultiplyScaled(dt)
 		d.priorError = 0
 	}
-	if d.acc += ((delta + sigma) * d.resonance); d.acc <= 0 {
+	if d.acc += ((delta + sigma) * d.resonance); d.acc < 0 {
 		d.acc = 0
 		// note: clamping oscillators not found to help, and if it's done, then
 		// the ratio between the SCE and CE oscillators needs to be maintained
