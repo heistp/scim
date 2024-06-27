@@ -3,8 +3,8 @@
 .tags
 .exrc
 
-# sceaimd binary and profiling output
-sceaimd
+# scemds binary and profiling output
+scemds
 *.prof
 
 # private directory

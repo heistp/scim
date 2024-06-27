@@ -14,7 +14,7 @@ func main() {
 	if Profile {
 		var f *os.File
 		var e error
-		if f, e = os.Create("sceaimd.prof"); e != nil {
+		if f, e = os.Create("scemds.prof"); e != nil {
 			log.Fatal(e)
 		}
 		pprof.StartCPUProfile(f)

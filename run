@@ -8,5 +8,5 @@ fi
 
 rm -f *.xpl
 go build
-$realtime ./sceaimd
+$realtime ./scemds
 xplot *.xpl &

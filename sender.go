@@ -33,7 +33,7 @@ func NewSender(schedule []FlowAt) *Sender {
 		Flows,
 		schedule,
 		Xplot{
-			Title: "SCE-AIMD data in-flight",
+			Title: "SCE MD-Scaling data in-flight",
 			X: Axis{
 				Label: "Time (S)",
 			},
@@ -42,7 +42,7 @@ func NewSender(schedule []FlowAt) *Sender {
 			},
 		},
 		Xplot{
-			Title: "SCE-AIMD CWND",
+			Title: "SCE MD-Scaling CWND",
 			X: Axis{
 				Label: "Time (S)",
 			},
@@ -51,7 +51,7 @@ func NewSender(schedule []FlowAt) *Sender {
 			},
 		},
 		Xplot{
-			Title: "SCE-AIMD RTT",
+			Title: "SCE MD-Scaling RTT",
 			X: Axis{
 				Label: "Time (S)",
 			},

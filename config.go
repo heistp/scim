@@ -111,7 +111,7 @@ const (
 // Less Common Settings
 //
 
-// Sender: SCE-AIMD params
+// Sender: SCE MD-Scaling params
 const (
 	BaseMD                 = 0.5 // CE and drop
 	Tau                    = 64  // SCE-MD scale factor
