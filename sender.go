@@ -363,11 +363,11 @@ func (f *Flow) receive(pkt Packet, node Node) {
 // receive handles an incoming packet.
 // NOTE all packets considered ACKs for now
 func (f *Flow) handleAck(pkt Packet, node Node) {
-	acked := Bytes(pkt.ACKNum - f.receiveNext + 1)
-	f.receiveNext = pkt.ACKNum + 1
+	acked := Bytes(pkt.ACKNum - f.receiveNext)
+	f.receiveNext = pkt.ACKNum
 	f.inFlight -= acked
 	f.updateRTT(pkt, node)
-	f.latestAcked = pkt.ACKNum
+	f.latestAcked = pkt.ACKNum - 1
 	// react to drops and marks (TODO drop logic not working, leads to deadlock)
 	if pkt.ECE {
 		var b bool

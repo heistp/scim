@@ -126,7 +126,7 @@ func (r *Receiver) Ding(data any, node Node) error {
 // sendAck sends an ack for the given Packet.
 func (r *Receiver) sendAck(pkt Packet, node Node) {
 	pkt.ACK = true
-	pkt.ACKNum = pkt.Seq + Seq(pkt.Len) - 1
+	pkt.ACKNum = pkt.Seq + Seq(pkt.Len)
 	if pkt.CE {
 		pkt.ECE = true
 		pkt.CE = false
