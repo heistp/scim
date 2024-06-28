@@ -140,18 +140,16 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 	// advance oscillator and mark if not after idle period
 	var m mark
 	ok = true
-	if d.idleTime == 0 {
-		m = d.oscillate(node.Now()-d.priorTime, node, pkt)
-		switch m {
-		case markSCE:
-			pkt.SCE = true
-		case markCE:
-			pkt.CE = true
-		case markDrop:
-			// NOTE sender drop logic doesn't work yet so we do a CE
-			//ok = false
-			pkt.CE = true
-		}
+	m = d.oscillate(node.Now()-d.priorTime-d.idleTime, node, pkt)
+	switch m {
+	case markSCE:
+		pkt.SCE = true
+	case markCE:
+		pkt.CE = true
+	case markDrop:
+		// NOTE sender drop logic doesn't work yet so we do a CE
+		//ok = false
+		pkt.CE = true
 	}
 
 	d.plotMark(m, node.Now())
