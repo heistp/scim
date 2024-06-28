@@ -129,14 +129,7 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 	if node.Now() > d.updateEnd {
 		// add min delay to window
 		d.win.add(d.minDelay, node.Now())
-		// do deltic using any idle time as a negative sojourn
-		var v Clock
-		if d.updateIdle == 0 {
-			v = d.win.minimum()
-		} else {
-			v = -d.updateIdle
-		}
-		d.deltic(node.Now()-d.updateStart, v)
+		d.deltic(node.Now() - d.updateStart)
 		// reset update state
 		d.minDelay = math.MaxInt64
 		d.updateIdle = 0
@@ -169,15 +162,29 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 }
 
 // deltic is the delta-sigma control function, with idle time modification.
-func (d *Deltim) deltic(dt, pv Clock) {
+func (d *Deltim) deltic(dt Clock) {
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
 	}
 	var delta, sigma Clock
-	delta = pv - d.priorError
-	sigma = pv.MultiplyScaled(dt)
-	// clamp negative error to zero, allowing negative adjustment to persist
-	if d.priorError = pv; d.priorError < 0 {
+	if d.updateIdle == 0 {
+		m := d.win.minimum()
+		delta = m - d.priorError
+		sigma = m.MultiplyScaled(dt)
+		d.priorError = m
+	} else {
+		// note: the backoff below is dubious mathematically, even if it seems
+		// to work pretty well across a wide range of conditions.  In corner
+		// cases, it doesn't back off quickly enough, for example at end of
+		// slow-start for a high bandwidth flow.
+		//
+		// Ideally, we'd like the positive error to equal the negative error,
+		// but since there's no negative sojourn time, it doesn't seem possible.
+		// There may be a better mathematical relationship for how to adjust the
+		// accumulator after an idle period. The answer is *not* to just clamp
+		// the accumulator, as that leads to oscillations and other bad behavior.
+		delta = -d.updateIdle
+		//sigma = -d.updateIdle.MultiplyScaled(dt)
 		d.priorError = 0
 	}
 	if d.acc += ((delta + sigma) * d.resonance); d.acc < 0 {
