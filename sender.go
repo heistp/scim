@@ -173,6 +173,8 @@ type Flow struct {
 	state       FlowState
 	rtt         Clock
 	srtt        Clock
+	minRtt      Clock
+	maxRtt      Clock
 
 	cwnd        Bytes
 	inFlight    Bytes
@@ -248,6 +250,8 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, pacing PacingEnabled,
 		FlowStateSS,       // state
 		ClockInfinity,     // rtt
 		0,                 // srtt
+		ClockInfinity,     // minRtt
+		0,                 // maxRtt
 		IW,                // cwnd
 		0,                 // inFlight
 		0,                 // acked
@@ -396,7 +400,11 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			f.ssSCECtr++
 			if f.ssSCECtr >= SlowStartExitThreshold {
 				f.state = FlowStateCA
-				if f.cwnd = Bytes(float64(f.cwnd) * BaseMD); f.cwnd < MSS {
+				f.cwnd = Bytes(float64(f.cwnd) * BaseMD)
+				if SlowStartExitCwndAdjustment {
+					f.cwnd = f.cwnd * Bytes(f.minRtt) / Bytes(f.maxRtt)
+				}
+				if f.cwnd < MSS {
 					f.cwnd = MSS
 				}
 				f.priorCEMD = node.Now()
@@ -495,27 +503,40 @@ func (f *Flow) hystartRound(node Node) (end bool) {
 
 // ssCwndIncrement returns the cwnd increment in the SS and CSS states.
 func (f *Flow) ssCwndIncrement(acked Bytes, divisor int) Bytes {
-	s := MSS
+	i := acked
 	if f.hystart == HyStart && f.pacing == NoPacing {
-		s = HyStartLNoPacing * MSS
+		i = min(acked, HyStartLNoPacing*MSS)
 	}
-	m := min(acked, s)
 	if f.state == FlowStateCSS {
-		m /= HyCSSGrowthDivisor
+		i /= HyCSSGrowthDivisor
 	}
 	if CwndIncrementDivisor {
-		m /= Bytes(divisor)
+		i /= Bytes(divisor)
 	}
-	return m
+	return i
 }
 
 // updateRTT updates the rtt from the given packet.
 func (f *Flow) updateRTT(pkt Packet, node Node) {
 	f.rtt = node.Now() - pkt.Sent
+	if f.rtt < f.minRtt {
+		f.minRtt = f.rtt
+	}
 	if f.srtt == 0 {
 		f.srtt = f.rtt
 	} else {
 		f.srtt = Clock(RTTAlpha*float64(f.rtt) + (1-RTTAlpha)*float64(f.srtt))
+	}
+	// NOTE if delayed ACKs are enabled, we use srtt to filter out spuriously
+	// high RTT samples, although this crude filtering is not ideal
+	if DelayedACKTime > 0 {
+		if f.srtt > f.maxRtt {
+			f.maxRtt = f.srtt
+		}
+	} else {
+		if f.rtt > f.maxRtt {
+			f.maxRtt = f.rtt
+		}
 	}
 }
 
