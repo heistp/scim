@@ -179,6 +179,7 @@ type Flow struct {
 	acked       Bytes
 	priorGrowth Clock
 	priorCEMD   Clock
+	priorSCEMD  Clock
 	ssSCECtr    int
 	sceHistory  *clockRing
 
@@ -252,6 +253,7 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, pacing PacingEnabled,
 		0,                 // acked
 		0,                 // priorGrowth
 		0,                 // priorCEMD
+		0,                 // priorSCEMD
 		0,                 // ssSCECtr
 		newClockRing(Tau), // sceHistory
 		false,             // pacingWait
@@ -400,8 +402,15 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 				f.priorCEMD = node.Now()
 			}
 		case FlowStateCA:
-			if f.sceHistory.add(node.Now(), node.Now()-f.srtt) &&
-				(node.Now()-f.priorCEMD) > f.srtt {
+			var b bool
+			if f.pacing {
+				b = node.Now()-f.priorSCEMD > f.srtt/Tau &&
+					node.Now()-f.priorCEMD > f.srtt
+			} else {
+				b = f.sceHistory.add(node.Now(), node.Now()-f.srtt) &&
+					(node.Now()-f.priorCEMD) > f.srtt
+			}
+			if b {
 				md := SCE_MD
 				if RateFairness {
 					tau := float64(Tau) * float64(f.srtt) * float64(f.srtt) /
@@ -411,6 +420,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 				if f.cwnd = Bytes(float64(f.cwnd) * md); f.cwnd < MSS {
 					f.cwnd = MSS
 				}
+				f.priorSCEMD = node.Now()
 			} else {
 				//node.Logf("ignore SCE")
 			}
@@ -450,6 +460,10 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			} else if f.cssRounds >= HyCSSRounds {
 				node.Logf("HyStart: CA")
 				f.state = FlowStateCA
+				if f.cwnd = Bytes(float64(f.cwnd) * BaseMD); f.cwnd < MSS {
+					f.cwnd = MSS
+				}
+				f.priorCEMD = node.Now()
 			}
 		}
 	case FlowStateCA:
