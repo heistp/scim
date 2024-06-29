@@ -17,7 +17,7 @@ const Duration = 60 * time.Second
 // Sender and Delay: flows
 var (
 	Flows = []Flow{
-		AddFlow(ECN, SCE, Pacing, HyStart, true),
+		AddFlow(ECN, SCE, Pacing, NoHyStart, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{0, Clock(20 * time.Second), false},
@@ -104,8 +104,8 @@ const (
 // "Advanced" ACK handling and quick ACK changes in SCE or CE state.  Only
 // applies when delayed ACKs are enabled.
 const (
-	DelayedACKTime = Clock(40 * time.Millisecond)
-	//DelayedACKTime = Clock(0)
+	//DelayedACKTime = Clock(40 * time.Millisecond)
+	DelayedACKTime = Clock(0)
 	QuickACKSignal = true
 )
 
@@ -115,12 +115,22 @@ const (
 
 // Sender: SCE MD-Scaling params
 const (
-	BaseMD                 = 0.5 // CE and drop
-	Tau                    = 64  // SCE-MD scale factor
-	RateFairness           = false
-	NominalRTT             = 20 * time.Millisecond
-	SlowStartExitThreshold = 0 // e.g. 0, Tau or Tau / 2
-	CwndIncrementDivisor   = false
+	BaseMD       = 0.5 // CE and drop
+	Tau          = 64  // SCE-MD scale factor
+	RateFairness = false
+	NominalRTT   = 5 * time.Millisecond
+)
+
+// Sender: Slow-Start params
+//
+// SlowStartExitCwndAdjustment: on slow-start exit, scale cwnd by minRTT/maxRTT,
+// noting that delayed ACKs can affect the results as RTT samples can be
+// spuriously high, although see Flow.updateRTT() for the logic that uses
+// the smoothed RTT to calculate maximums if delayed ACKs are enabled.
+const (
+	SlowStartExitThreshold      = 0 // e.g. 0, Tau or Tau / 2
+	SlowStartExitCwndAdjustment = true
+	CwndIncrementDivisor        = false
 )
 
 // Sender: TCP params
