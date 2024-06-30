@@ -117,8 +117,9 @@ const (
 
 // Sender: SCE MD-Scaling params
 const (
-	BaseMD       = 0.5 // CE and drop
-	Tau          = 64  // SCE-MD scale factor
+	DropMD       = 0.5    // MD done on drop during CA
+	CEMD         = DropMD // MD done on CE during CA
+	Tau          = 64     // SCE-MD scale factor
 	RateFairness = false
 	NominalRTT   = 5 * time.Millisecond
 )
@@ -130,11 +131,26 @@ const (
 // ACKs can affect the results as RTT samples can be spuriously high, although
 // see Flow.updateRTT() for the logic that uses the smoothed RTT to calculate
 // maximums if delayed ACKs are enabled.
+//
+// SlowStartABC: if true, increment cwnd with bytes ACKed, instead of a fixed
+// MSS per ACK.  SlowStartABC should only be set to false if delayed ACKs are
+// enabled, otherwise the MD on slow-start exit will not be correct.
 const (
 	SlowStartExitThreshold      = Tau / 4 // e.g. 0, Tau or Tau / 2
 	SlowStartExitCwndAdjustment = true
 	CwndIncrementDivisor        = false
+	SlowStartABC                = true
 )
+
+var SlowStartExitMD float64
+
+func init() {
+	if SlowStartABC {
+		SlowStartExitMD = 0.5
+	} else {
+		SlowStartExitMD = float64(2) / 3
+	}
+}
 
 // Sender: TCP params
 const (

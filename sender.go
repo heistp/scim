@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var SCE_MD = math.Pow(BaseMD, float64(1)/Tau)
+var SCE_MD = math.Pow(CEMD, float64(1)/Tau)
 
 type FlowID int
 
@@ -380,21 +380,18 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	f.latestAcked = pkt.ACKNum - 1
 	// react to drops and marks (TODO drop logic not working, leads to deadlock)
 	if pkt.ECE {
-		var b bool
 		switch f.state {
 		case FlowStateSS:
 			fallthrough
 		case FlowStateCSS:
-			f.state = FlowStateCA
-			b = true
+			f.exitSlowStart(node)
 		case FlowStateCA:
-			b = (node.Now() - f.priorCEMD) > f.srtt
-		}
-		if b {
-			if f.cwnd = Bytes(float64(f.cwnd) * BaseMD); f.cwnd < MSS {
-				f.cwnd = MSS
+			if node.Now()-f.priorCEMD > f.srtt {
+				if f.cwnd = Bytes(float64(f.cwnd) * CEMD); f.cwnd < MSS {
+					f.cwnd = MSS
+				}
+				f.priorCEMD = node.Now()
 			}
-			f.priorCEMD = node.Now()
 		}
 	} else if pkt.ESCE {
 		switch f.state {
@@ -403,17 +400,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 		case FlowStateCSS:
 			f.ssSCECtr++
 			if f.ssSCECtr >= SlowStartExitThreshold {
-				f.state = FlowStateCA
-				f.cwnd = Bytes(float64(f.cwnd) * BaseMD)
-				if SlowStartExitCwndAdjustment {
-					f.cwnd = f.cwnd * Bytes(f.minRtt) / Bytes(f.maxRtt)
-					node.Logf("cwnd:%d min:%d max:%d ratio:%f", f.cwnd,
-						f.minRtt, f.maxRtt, float64(f.minRtt)/float64(f.maxRtt))
-				}
-				if f.cwnd < MSS {
-					f.cwnd = MSS
-				}
-				f.priorCEMD = node.Now()
+				f.exitSlowStart(node)
 			}
 		case FlowStateCA:
 			var b bool
@@ -429,7 +416,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 				if RateFairness {
 					tau := float64(Tau) * float64(f.srtt) * float64(f.srtt) /
 						float64(NominalRTT) / float64(NominalRTT)
-					md = math.Pow(BaseMD, float64(1)/tau)
+					md = math.Pow(CEMD, float64(1)/tau)
 				}
 				if f.cwnd = Bytes(float64(f.cwnd) * md); f.cwnd < MSS {
 					f.cwnd = MSS
@@ -475,11 +462,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 				f.state = FlowStateSS
 			} else if f.cssRounds >= HyCSSRounds {
 				node.Logf("HyStart: CA")
-				f.state = FlowStateCA
-				if f.cwnd = Bytes(float64(f.cwnd) * BaseMD); f.cwnd < MSS {
-					f.cwnd = MSS
-				}
-				f.priorCEMD = node.Now()
+				f.exitSlowStart(node)
 			}
 		}
 	case FlowStateCA:
@@ -506,6 +489,21 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	}
 }
 
+// exitSlowStart changes state to CA and adjusts cwnd for slow-start exit.
+func (f *Flow) exitSlowStart(node Node) {
+	f.state = FlowStateCA
+	f.cwnd = Bytes(float64(f.cwnd) * SlowStartExitMD)
+	if SlowStartExitCwndAdjustment {
+		f.cwnd = f.cwnd * Bytes(f.minRtt) / Bytes(f.maxRtt)
+		node.Logf("cwnd:%d min:%d max:%d ratio:%f", f.cwnd,
+			f.minRtt, f.maxRtt, float64(f.minRtt)/float64(f.maxRtt))
+	}
+	if f.cwnd < MSS {
+		f.cwnd = MSS
+	}
+	f.priorCEMD = node.Now()
+}
+
 // hystartRound checks if the current round has ended and if so, starts the next
 // round.
 func (f *Flow) hystartRound(node Node) (end bool) {
@@ -525,9 +523,14 @@ func (f *Flow) hystartRound(node Node) (end bool) {
 
 // ssCwndIncrement returns the cwnd increment in the SS and CSS states.
 func (f *Flow) ssCwndIncrement(acked Bytes, divisor int) Bytes {
-	i := acked
+	var i Bytes
+	if SlowStartABC {
+		i = acked
+	} else {
+		i = MSS
+	}
 	if f.hystart == HyStart && f.pacing == NoPacing {
-		i = min(acked, HyStartLNoPacing*MSS)
+		i = min(i, HyStartLNoPacing*MSS)
 	}
 	if f.state == FlowStateCSS {
 		i /= HyCSSGrowthDivisor
