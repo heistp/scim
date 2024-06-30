@@ -43,6 +43,7 @@ func NewIface(rate Bitrate, schedule []RateAt, aqm AQM) *Iface {
 			Y: Axis{
 				Label: "Sojourn time (ms)",
 			},
+			Decimation: PlotSojournInterval,
 		},
 		Xplot{
 			Title: "SCE MD-Scaling Queue Length",
@@ -116,17 +117,17 @@ func (i *Iface) Ding(data any, node Node) error {
 		i.empty = true
 	}
 	if PlotQueueLength {
-		c := 0
+		c := colorWhite
 		if i.aqm.Len() == 0 {
-			c = 2
+			c = colorRed
 		}
 		i.qlen.Dot(node.Now(), strconv.Itoa(i.aqm.Len()), c)
 	}
 	if PlotSojourn {
 		s := node.Now() - p.Enqueue
-		c := 0
+		c := colorWhite
 		if i.empty {
-			c = 2
+			c = colorRed
 		}
 		i.sojourn.Dot(node.Now(), s.StringMS(), c)
 	}

@@ -44,9 +44,27 @@ type Xplot struct {
 	X           Axis
 	Y           Axis
 	NonzeroAxis bool
+	Decimation  Clock
 	file        *os.File
 	writer      *bufio.Writer
+	prior       map[int]Clock
 }
+
+type symbology int
+
+const (
+	symbologyDot symbology = iota * 1024
+	symbologyPlus
+	symbologyX
+)
+
+type color int
+
+const (
+	colorWhite color = iota
+	_
+	colorRed
+)
 
 func (p *Xplot) Open(name string) (err error) {
 	var t *template.Template
@@ -57,24 +75,43 @@ func (p *Xplot) Open(name string) (err error) {
 		return
 	}
 	p.writer = bufio.NewWriter(p.file)
+	p.prior = make(map[int]Clock)
 	err = t.Execute(p.writer, p)
 	return
 }
 
-func (p *Xplot) Dot(x, y any, color int) {
-	fmt.Fprintf(p.writer, "dot %s %s %d\n", x, y, color)
+func (p *Xplot) Dot(now Clock, y any, color color) {
+	if !p.decimate(now, symbologyDot, color) {
+		fmt.Fprintf(p.writer, "dot %s %s %d\n", now, y, color)
+	}
 }
 
-func (p *Xplot) Plus(x, y any, color int) {
-	fmt.Fprintf(p.writer, "+ %s %s %d\n", x, y, color)
+func (p *Xplot) Plus(now Clock, y any, color color) {
+	if !p.decimate(now, symbologyPlus, color) {
+		fmt.Fprintf(p.writer, "+ %s %s %d\n", now, y, color)
+	}
 }
 
-func (p *Xplot) PlotX(x, y any, color int) {
-	fmt.Fprintf(p.writer, "x %s %s %d\n", x, y, color)
+func (p *Xplot) PlotX(now Clock, y any, color color) {
+	if !p.decimate(now, symbologyX, color) {
+		fmt.Fprintf(p.writer, "x %s %s %d\n", now, y, color)
+	}
 }
 
-func (p *Xplot) Line(x0, y0, x1, y1 any, color int) {
+func (p *Xplot) Line(x0, y0, x1, y1 any, color color) {
 	fmt.Fprintf(p.writer, "line %s %s %s %s %d\n", x0, y0, x1, y1, color)
+}
+
+// decimate returns true if the given symbology and color may be plotted now.
+func (p *Xplot) decimate(now Clock, sym symbology, color color) bool {
+	i := int(sym) * int(color)
+	var ok bool
+	var c Clock
+	if c, ok = p.prior[i]; !ok || now-c > p.Decimation {
+		p.prior[i] = now
+		return false
+	}
+	return true
 }
 
 func (p *Xplot) Close() error {

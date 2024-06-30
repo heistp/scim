@@ -5,6 +5,7 @@ package main
 
 import (
 	"math"
+	"time"
 )
 
 var SCE_MD = math.Pow(BaseMD, float64(1)/Tau)
@@ -49,6 +50,7 @@ func NewSender(schedule []FlowAt) *Sender {
 			Y: Axis{
 				Label: "CWND (bytes)",
 			},
+			Decimation: PlotCwndInterval,
 		},
 		Xplot{
 			Title: "SCE MD-Scaling RTT",
@@ -95,13 +97,13 @@ func (s *Sender) Handle(pkt Packet, node Node) error {
 	f := &s.flow[pkt.Flow]
 	f.receive(pkt, node)
 	if PlotInFlight {
-		s.inFlight.Dot(node.Now(), s.flow[pkt.Flow].inFlight, int(pkt.Flow))
+		s.inFlight.Dot(node.Now(), s.flow[pkt.Flow].inFlight, color(pkt.Flow))
 	}
 	if PlotCwnd {
-		s.cwnd.Dot(node.Now(), s.flow[pkt.Flow].cwnd, int(pkt.Flow))
+		s.cwnd.Dot(node.Now(), s.flow[pkt.Flow].cwnd, color(pkt.Flow))
 	}
 	if PlotRTT {
-		s.rtt.Dot(node.Now(), s.flow[pkt.Flow].srtt.StringMS(), int(pkt.Flow))
+		s.rtt.Dot(node.Now(), s.flow[pkt.Flow].srtt.StringMS(), color(pkt.Flow))
 	}
 	if node.Now() > Clock(Duration) {
 		node.Shutdown()
@@ -176,14 +178,15 @@ type Flow struct {
 	minRtt      Clock
 	maxRtt      Clock
 
-	cwnd        Bytes
-	inFlight    Bytes
-	acked       Bytes
-	priorGrowth Clock
-	priorCEMD   Clock
-	priorSCEMD  Clock
-	ssSCECtr    int
-	sceHistory  *clockRing
+	cwnd          Bytes
+	inFlight      Bytes
+	acked         Bytes
+	priorGrowth   Clock
+	priorCEMD     Clock
+	priorSCEMD    Clock
+	ssSCECtr      int
+	caGrowthScale int
+	sceHistory    *clockRing
 
 	pacingWait bool
 
@@ -259,6 +262,7 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, pacing PacingEnabled,
 		0,                 // priorCEMD
 		0,                 // priorSCEMD
 		0,                 // ssSCECtr
+		1,                 // caGrowthScale
 		newClockRing(Tau), // sceHistory
 		false,             // pacingWait
 		ClockInfinity,     // lastRoundMinRTT
@@ -402,6 +406,8 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 				f.state = FlowStateCA
 				f.cwnd = Bytes(float64(f.cwnd) * BaseMD)
 				if SlowStartExitCwndAdjustment {
+					node.Logf("min:%d max:%d ratio:%f", f.minRtt, f.maxRtt,
+						float64(f.minRtt)/float64(f.maxRtt))
 					f.cwnd = f.cwnd * Bytes(f.minRtt) / Bytes(f.maxRtt)
 				}
 				if f.cwnd < MSS {
@@ -411,7 +417,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			}
 		case FlowStateCA:
 			var b bool
-			if f.pacing {
+			if f.pacing && ThrottleSCEResponse {
 				b = node.Now()-f.priorSCEMD > f.srtt/Tau &&
 					node.Now()-f.priorCEMD > f.srtt
 			} else {
@@ -432,6 +438,8 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			} else {
 				//node.Logf("ignore SCE")
 			}
+			f.caGrowthScale = 1
+			f.acked = 0
 		}
 	}
 	// grow cwnd and do HyStart++, if enabled
@@ -476,10 +484,25 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 		}
 	case FlowStateCA:
 		f.acked += acked
-		if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
-			f.cwnd += MSS
-			f.acked = 0
-			f.priorGrowth = node.Now()
+		if f.sce {
+			if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
+				i := MSS * Bytes(f.caGrowthScale)
+				f.cwnd += i
+				f.acked = 0
+				f.priorGrowth = node.Now()
+				node.Logf("grow %d to %d", i, f.cwnd)
+				// TODO fix one second magic number before scaling starts
+				if f.caGrowthScale > 1 ||
+					node.Now()-f.priorSCEMD > Clock(1*time.Second) {
+					f.caGrowthScale++
+				}
+			}
+		} else {
+			if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
+				f.cwnd += MSS
+				f.acked = 0
+				f.priorGrowth = node.Now()
+			}
 		}
 	}
 }

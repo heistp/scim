@@ -20,7 +20,7 @@ var (
 		AddFlow(ECN, SCE, Pacing, NoHyStart, true),
 	}
 	FlowSchedule = []FlowAt{
-		//FlowAt{0, Clock(20 * time.Second), false},
+		//FlowAt{0, Clock(30 * time.Second), true},
 	}
 	FlowDelay = []Clock{
 		Clock(20 * time.Millisecond),
@@ -75,15 +75,17 @@ var (
 
 // Sender: plots
 const (
-	PlotInFlight = false
-	PlotCwnd     = true
-	PlotRTT      = false
+	PlotInFlight     = false
+	PlotCwnd         = true
+	PlotCwndInterval = Clock(100 * time.Microsecond)
+	PlotRTT          = false
 )
 
 // Iface: plots
 const (
-	PlotSojourn     = true
-	PlotQueueLength = false
+	PlotSojourn         = true
+	PlotSojournInterval = Clock(100 * time.Microsecond)
+	PlotQueueLength     = false
 )
 
 // DelTiM: plots
@@ -141,10 +143,14 @@ const (
 )
 
 // Sender: pacing params
+//
+// ThrottleSCEResponse only responds to SCE every RTT/Tau, and only when pacing
+// is enabled.
 const (
-	PacingSSRatio  = float64(100)
-	PacingCSSRatio = float64(100)
-	PacingCARatio  = float64(100)
+	PacingSSRatio       = float64(100)
+	PacingCSSRatio      = float64(100)
+	PacingCARatio       = float64(100)
+	ThrottleSCEResponse = false
 )
 
 // Sender: HyStart++ (RFC 9406)
