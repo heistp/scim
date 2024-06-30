@@ -468,19 +468,22 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	case FlowStateCA:
 		f.acked += acked
 		if f.sce {
-			if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
+			//if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
+			if f.acked >= f.cwnd {
 				i := MSS * Bytes(f.caGrowthScale)
+				//node.Logf("i:%d", i)
 				f.cwnd += i
 				f.acked = 0
 				f.priorGrowth = node.Now()
-				// TODO fix one second magic number before scaling starts
-				if f.caGrowthScale > 1 ||
-					node.Now()-f.priorSCEMD > Clock(1*time.Second) {
+				if ScaleGrowth && (f.caGrowthScale > 1 ||
+					node.Now()-f.priorSCEMD > 2*f.sceRecoveryTime(node)) {
 					f.caGrowthScale++
 				}
 			}
 		} else {
-			if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
+			//if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
+			if f.acked >= f.cwnd {
+				//if f.acked >= f.cwnd {
 				f.cwnd += MSS
 				f.acked = 0
 				f.priorGrowth = node.Now()
@@ -489,11 +492,19 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	}
 }
 
+// sceRecoveryTime returns the estimated sawtooth recovery time for the BDP.
+func (f *Flow) sceRecoveryTime(node Node) Clock {
+	t := float64(f.cwnd) * (1 - SCE_MD) *
+		float64(time.Duration(f.srtt).Seconds()) / float64(MSS)
+	//node.Logf("rt:%f", t)
+	return Clock(t * float64(time.Second))
+}
+
 // exitSlowStart changes state to CA and adjusts cwnd for slow-start exit.
 func (f *Flow) exitSlowStart(node Node) {
 	f.state = FlowStateCA
 	f.cwnd = Bytes(float64(f.cwnd) * SlowStartExitMD)
-	if SlowStartExitCwndAdjustment {
+	if SlowStartExitCwndAdjustment && f.sce {
 		f.cwnd = f.cwnd * Bytes(f.minRtt) / Bytes(f.maxRtt)
 		node.Logf("cwnd:%d min:%d max:%d ratio:%f", f.cwnd,
 			f.minRtt, f.maxRtt, float64(f.minRtt)/float64(f.maxRtt))

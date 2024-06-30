@@ -57,10 +57,10 @@ var RateSchedule = []RateAt{
 //}
 
 // Iface: DelTiM AQM config
-var UseAQM = NewDeltim(Clock(5000*time.Microsecond),
-	Clock(10*time.Microsecond))
+//var UseAQM = NewDeltim(Clock(5000*time.Microsecond),
+//	Clock(10*time.Microsecond))
 
-//var UseAQM = NewDeltim2(Clock(5000 * time.Microsecond))
+var UseAQM = NewDeltim2(Clock(5000 * time.Microsecond))
 
 // Iface: Ramp AQM config
 var (
@@ -121,7 +121,8 @@ const (
 	CEMD         = DropMD // MD done on CE during CA
 	Tau          = 64     // SCE-MD scale factor
 	RateFairness = false
-	NominalRTT   = 5 * time.Millisecond
+	NominalRTT   = 10 * time.Millisecond
+	ScaleGrowth  = true // if true, use scalable cwnd growth
 )
 
 // Sender: Slow-Start params
