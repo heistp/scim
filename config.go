@@ -125,12 +125,13 @@ const (
 
 // Sender: Slow-Start params
 //
-// SlowStartExitCwndAdjustment: on slow-start exit, scale cwnd by minRTT/maxRTT,
-// noting that delayed ACKs can affect the results as RTT samples can be
-// spuriously high, although see Flow.updateRTT() for the logic that uses
-// the smoothed RTT to calculate maximums if delayed ACKs are enabled.
+// SlowStartExitCwndAdjustment: on slow-start exit, scale cwnd by minRTT/maxRTT.
+// For accuracy, it's important to have pacing enabled.  Also note that delayed
+// ACKs can affect the results as RTT samples can be spuriously high, although
+// see Flow.updateRTT() for the logic that uses the smoothed RTT to calculate
+// maximums if delayed ACKs are enabled.
 const (
-	SlowStartExitThreshold      = 0 // e.g. 0, Tau or Tau / 2
+	SlowStartExitThreshold      = Tau / 4 // e.g. 0, Tau or Tau / 2
 	SlowStartExitCwndAdjustment = true
 	CwndIncrementDivisor        = false
 )
