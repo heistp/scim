@@ -490,7 +490,6 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 				f.cwnd += i
 				f.acked = 0
 				f.priorGrowth = node.Now()
-				node.Logf("grow %d to %d", i, f.cwnd)
 				// TODO fix one second magic number before scaling starts
 				if f.caGrowthScale > 1 ||
 					node.Now()-f.priorSCEMD > Clock(1*time.Second) {
