@@ -406,9 +406,9 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 				f.state = FlowStateCA
 				f.cwnd = Bytes(float64(f.cwnd) * BaseMD)
 				if SlowStartExitCwndAdjustment {
-					node.Logf("min:%d max:%d ratio:%f", f.minRtt, f.maxRtt,
-						float64(f.minRtt)/float64(f.maxRtt))
 					f.cwnd = f.cwnd * Bytes(f.minRtt) / Bytes(f.maxRtt)
+					node.Logf("cwnd:%d min:%d max:%d ratio:%f", f.cwnd,
+						f.minRtt, f.maxRtt, float64(f.minRtt)/float64(f.maxRtt))
 				}
 				if f.cwnd < MSS {
 					f.cwnd = MSS
