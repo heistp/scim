@@ -180,7 +180,7 @@ type Flow struct {
 
 	cwnd          Bytes
 	inFlight      Bytes
-	acked         Bytes
+	caAcked       Bytes
 	priorGrowth   Clock
 	priorCEMD     Clock
 	priorSCEMD    Clock
@@ -258,7 +258,7 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, pacing PacingEnabled,
 		0,                 // maxRtt
 		IW,                // cwnd
 		0,                 // inFlight
-		0,                 // acked
+		0,                 // caAcked
 		0,                 // priorGrowth
 		0,                 // priorCEMD
 		0,                 // priorSCEMD
@@ -427,7 +427,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 				//node.Logf("ignore SCE")
 			}
 			f.caGrowthScale = 1
-			f.acked = 0
+			f.caAcked = 0
 		}
 	}
 	// grow cwnd and do HyStart++, if enabled
@@ -467,14 +467,14 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			}
 		}
 	case FlowStateCA:
-		f.acked += acked
+		f.caAcked += acked
 		if f.sce {
 			//if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
-			if f.acked >= f.cwnd {
+			if f.caAcked >= f.cwnd {
 				i := MSS * Bytes(f.caGrowthScale)
 				//node.Logf("i:%d", i)
 				f.cwnd += i
-				f.acked = 0
+				f.caAcked = 0
 				f.priorGrowth = node.Now()
 				if ScaleGrowth && (f.caGrowthScale > 1 ||
 					node.Now()-f.priorSCEMD > 2*f.sceRecoveryTime(node)) {
@@ -483,10 +483,10 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			}
 		} else {
 			//if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
-			if f.acked >= f.cwnd {
+			if f.caAcked >= f.cwnd {
 				//if f.acked >= f.cwnd {
 				f.cwnd += MSS
-				f.acked = 0
+				f.caAcked = 0
 				f.priorGrowth = node.Now()
 			}
 		}
