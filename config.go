@@ -127,31 +127,24 @@ const (
 
 // Sender: Slow-Start params
 //
+// SlowStartABC: if true, increment cwnd with bytes ACKed, instead of a fixed
+// MSS per ACK.
+//
+// SlowStartExitMD: the MD done on slow-start exit, or 0 to calculate it from
+// the cwnd and bytes ACKed.
+//
 // SlowStartExitCwndAdjustment: on slow-start exit, scale cwnd by minRTT/maxRTT.
 // For accuracy, it's important to have pacing enabled.  Also note that delayed
 // ACKs can affect the results as RTT samples can be spuriously high, although
 // see Flow.updateRTT() for the logic that uses the smoothed RTT to calculate
 // maximums if delayed ACKs are enabled.
-//
-// SlowStartABC: if true, increment cwnd with bytes ACKed, instead of a fixed
-// MSS per ACK.  SlowStartABC should only be set to false if delayed ACKs are
-// enabled, otherwise the MD on slow-start exit will not be correct.
 const (
-	SlowStartExitThreshold      = Tau / 4 // e.g. 0, Tau or Tau / 2
-	SlowStartExitCwndAdjustment = true
-	CwndIncrementDivisor        = false
-	SlowStartABC                = true
+	SlowStartABC                  = true
+	SlowStartCwndIncrementDivisor = false
+	SlowStartExitThreshold        = Tau / 4 // e.g. 0, Tau, Tau/2 or Tau/4
+	SlowStartExitMD               = float64(0)
+	SlowStartExitCwndAdjustment   = true
 )
-
-var SlowStartExitMD float64
-
-func init() {
-	if SlowStartABC {
-		SlowStartExitMD = 0.5
-	} else {
-		SlowStartExitMD = float64(2) / 3
-	}
-}
 
 // Sender: TCP params
 const (

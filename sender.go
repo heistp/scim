@@ -185,6 +185,7 @@ type Flow struct {
 	priorCEMD     Clock
 	priorSCEMD    Clock
 	ssSCECtr      int
+	ssBytesAcked  Bytes
 	caGrowthScale int
 	sceHistory    *clockRing
 
@@ -262,6 +263,7 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, pacing PacingEnabled,
 		0,                 // priorCEMD
 		0,                 // priorSCEMD
 		0,                 // ssSCECtr
+		0,                 // ssBytesAcked
 		1,                 // caGrowthScale
 		newClockRing(Tau), // sceHistory
 		false,             // pacingWait
@@ -378,7 +380,6 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	f.inFlight -= acked
 	f.updateRTT(pkt, node)
 	f.latestAcked = pkt.ACKNum - 1
-	// react to drops and marks (TODO drop logic not working, leads to deadlock)
 	if pkt.ECE {
 		switch f.state {
 		case FlowStateSS:
@@ -432,7 +433,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	// grow cwnd and do HyStart++, if enabled
 	switch f.state {
 	case FlowStateSS:
-		f.cwnd += f.ssCwndIncrement(acked, f.ssSCECtr+1)
+		f.growCwndSlowStart(acked, node)
 		if f.hystart == HyStart { // HyStart++
 			f.hystartRound(node)
 			if f.rttSampleCount >= HyNRTTSample &&
@@ -449,7 +450,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			}
 		}
 	case FlowStateCSS: // HyStart++ only
-		f.cwnd += f.ssCwndIncrement(acked, f.ssSCECtr+1)
+		f.growCwndSlowStart(acked, node)
 		if f.hystart == HyStart { // HyStart++
 			if f.hystartRound(node) {
 				f.cssRounds++
@@ -500,14 +501,47 @@ func (f *Flow) sceRecoveryTime(node Node) Clock {
 	return Clock(t * float64(time.Second))
 }
 
+// growCwndSlowStart increases cwnd for the given acked bytes.
+func (f *Flow) growCwndSlowStart(acked Bytes, node Node) {
+	f.ssBytesAcked += acked
+	var i Bytes
+	if SlowStartABC {
+		i = acked
+	} else {
+		i = MSS
+	}
+	if f.hystart == HyStart && f.pacing == NoPacing {
+		i = min(i, HyStartLNoPacing*MSS)
+	}
+	if f.state == FlowStateCSS {
+		i /= HyCSSGrowthDivisor
+	}
+	if SlowStartCwndIncrementDivisor {
+		i /= Bytes(f.ssSCECtr + 1)
+	}
+	f.cwnd += i
+}
+
 // exitSlowStart changes state to CA and adjusts cwnd for slow-start exit.
+// Instead of using 0.5 for the MD, the initial MD is determined using the bytes
+// added (final cwnd) and bytes acked during slow-start, estimating the inverse
+// of the slow-start exponential base.  We then do a cwnd adjustment based on
+// the minimum and final RTT.
 func (f *Flow) exitSlowStart(node Node) {
 	f.state = FlowStateCA
-	f.cwnd = Bytes(float64(f.cwnd) * SlowStartExitMD)
+	var md float64
+	if SlowStartExitMD > 0 {
+		md = SlowStartExitMD
+	} else {
+		md = float64(f.ssBytesAcked) /
+			(float64(f.cwnd) + float64(f.ssBytesAcked))
+	}
+	node.Logf("SS exit MD:%f acked:%d cwnd:%d", md, f.ssBytesAcked, f.cwnd)
+	f.cwnd = Bytes(float64(f.cwnd) * md)
 	if SlowStartExitCwndAdjustment && f.sce {
 		f.cwnd = f.cwnd * Bytes(f.minRtt) / Bytes(f.maxRtt)
-		node.Logf("cwnd:%d min:%d max:%d ratio:%f", f.cwnd,
-			f.minRtt, f.maxRtt, float64(f.minRtt)/float64(f.maxRtt))
+		node.Logf("SS exit MD adjustment min:%d max:%d ratio:%f cwnd:%d",
+			f.minRtt, f.maxRtt, float64(f.minRtt)/float64(f.maxRtt), f.cwnd)
 	}
 	if f.cwnd < MSS {
 		f.cwnd = MSS
@@ -530,26 +564,6 @@ func (f *Flow) hystartRound(node Node) (end bool) {
 	}
 	f.rttSampleCount++
 	return
-}
-
-// ssCwndIncrement returns the cwnd increment in the SS and CSS states.
-func (f *Flow) ssCwndIncrement(acked Bytes, divisor int) Bytes {
-	var i Bytes
-	if SlowStartABC {
-		i = acked
-	} else {
-		i = MSS
-	}
-	if f.hystart == HyStart && f.pacing == NoPacing {
-		i = min(i, HyStartLNoPacing*MSS)
-	}
-	if f.state == FlowStateCSS {
-		i /= HyCSSGrowthDivisor
-	}
-	if CwndIncrementDivisor {
-		i /= Bytes(divisor)
-	}
-	return i
 }
 
 // updateRTT updates the rtt from the given packet.
