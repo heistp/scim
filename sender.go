@@ -538,7 +538,8 @@ func (f *Flow) exitSlowStart(node Node) {
 	}
 	node.Logf("SS exit MD:%f acked:%d cwnd:%d", md, f.ssBytesAcked, f.cwnd)
 	f.cwnd = Bytes(float64(f.cwnd) * md)
-	if SlowStartExitCwndAdjustment && f.sce {
+	if (SlowStartExitCwndAdjustmentSCE && f.sce) ||
+		(SlowStartExitCwndAdjustmentNonSCE && !f.sce) {
 		f.cwnd = f.cwnd * Bytes(f.minRtt) / Bytes(f.maxRtt)
 		node.Logf("SS exit MD adjustment min:%d max:%d ratio:%f cwnd:%d",
 			f.minRtt, f.maxRtt, float64(f.minRtt)/float64(f.maxRtt), f.cwnd)
