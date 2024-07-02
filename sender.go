@@ -127,25 +127,6 @@ func (s *Sender) Ding(data any, node Node) error {
 	return nil
 }
 
-/*
-// send sends packets until the in-flight bytes reaches cwnd.
-func (s *Sender) send(node Node) {
-	var n int
-	for n < len(s.flow) {
-		n = 0
-		for i := range s.flow {
-			if !s.flow[i].active {
-				n++
-				continue
-			}
-			if !s.flow[i].sendMSS(node) {
-				n++
-			}
-		}
-	}
-}
-*/
-
 // Stop implements Stopper.
 func (s *Sender) Stop(node Node) error {
 	if PlotInFlight {
@@ -484,7 +465,6 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 		} else {
 			//if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
 			if f.caAcked >= f.cwnd {
-				//if f.acked >= f.cwnd {
 				f.cwnd += MSS
 				f.caAcked = 0
 				f.priorGrowth = node.Now()
@@ -505,10 +485,13 @@ func (f *Flow) sceRecoveryTime(node Node) Clock {
 func (f *Flow) growCwndSlowStart(acked Bytes, node Node) {
 	f.ssBytesAcked += acked
 	var i Bytes
-	if SlowStartABC {
-		i = acked
-	} else {
+	switch SlowStartGrowth {
+	case SSGrowthNoABC:
 		i = MSS
+	case SSGrowthABC15:
+		i = acked / 2
+	case SSGrowthABC2:
+		i = acked
 	}
 	if f.hystart == HyStart && f.pacing == NoPacing {
 		i = min(i, HyStartLNoPacing*MSS)
@@ -529,6 +512,7 @@ func (f *Flow) growCwndSlowStart(acked Bytes, node Node) {
 // the minimum and final RTT.
 func (f *Flow) exitSlowStart(node Node) {
 	f.state = FlowStateCA
+	cwnd0 := f.cwnd
 	var md float64
 	if SlowStartExitMD > 0 {
 		md = SlowStartExitMD
@@ -536,13 +520,20 @@ func (f *Flow) exitSlowStart(node Node) {
 		md = float64(f.ssBytesAcked) /
 			(float64(f.cwnd) + float64(f.ssBytesAcked))
 	}
-	node.Logf("SS exit MD:%f acked:%d cwnd:%d", md, f.ssBytesAcked, f.cwnd)
 	f.cwnd = Bytes(float64(f.cwnd) * md)
 	if (SlowStartExitCwndAdjustmentSCE && f.sce) ||
 		(SlowStartExitCwndAdjustmentNonSCE && !f.sce) {
-		f.cwnd = f.cwnd * Bytes(f.minRtt) / Bytes(f.maxRtt)
-		node.Logf("SS exit MD adjustment min:%d max:%d ratio:%f cwnd:%d",
-			f.minRtt, f.maxRtt, float64(f.minRtt)/float64(f.maxRtt), f.cwnd)
+		f.cwnd = f.cwnd * Bytes(f.minRtt) / Bytes(f.srtt)
+		// NOTE this seems to help, but I'm unsure about the reasoning behind
+		// this adjustment, so that's not good enough
+		//f.cwnd = f.cwnd * f.inFlight / cwnd0
+		r1 := float64(f.minRtt) / float64(f.srtt)
+		r2 := float64(f.inFlight) / float64(cwnd0)
+		node.Logf("SS exit MD:%f acked:%d in-flight:%d cwnd0:%d cwnd:%d min:%d srtt:%d min/srtt:%f in-flight/cwnd:%f",
+			md, f.ssBytesAcked, f.inFlight, cwnd0, f.cwnd, f.minRtt, f.srtt, r1, r2)
+	} else {
+		node.Logf("SS exit MD:%f acked:%d cwnd0:%d cwnd:%d",
+			md, f.ssBytesAcked, cwnd0, f.cwnd)
 	}
 	if f.cwnd < MSS {
 		f.cwnd = MSS

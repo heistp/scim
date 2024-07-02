@@ -127,9 +127,6 @@ const (
 
 // Sender: Slow-Start params
 //
-// SlowStartABC: if true, increment cwnd with bytes ACKed, instead of a fixed
-// MSS per ACK.
-//
 // SlowStartExitMD: the MD done on slow-start exit, or 0 to calculate it from
 // the cwnd and bytes ACKed.
 //
@@ -139,12 +136,21 @@ const (
 // spuriously high, although see Flow.updateRTT() for the logic that uses the
 // smoothed RTT to calculate maximums if delayed ACKs are enabled.
 const (
-	SlowStartABC                      = true
+	SlowStartGrowth                   = SSGrowthABC2
 	SlowStartCwndIncrementDivisor     = false
 	SlowStartExitThreshold            = Tau / 2 // e.g. 0, Tau, Tau/2 or Tau/4
 	SlowStartExitMD                   = float64(0)
 	SlowStartExitCwndAdjustmentSCE    = true
 	SlowStartExitCwndAdjustmentNonSCE = false
+)
+
+// SSGrowth selects the growth strategy for slow-start.
+type SSGrowth int
+
+const (
+	SSGrowthNoABC = iota // grow by one MSS per ACK
+	SSGrowthABC15        // use ABC with base of 1.5, grow by 1/2 acked bytes
+	SSGrowthABC2         // use ABC with base of 2, grow by acked bytes
 )
 
 // Sender: TCP params
