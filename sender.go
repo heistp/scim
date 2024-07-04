@@ -539,9 +539,9 @@ func (f *Flow) exitSlowStart(node Node) {
 		f.cwnd = f.inFlightWindow.inFlightAt(node.Now() - f.srtt)
 		cwnd1 := f.cwnd
 		f.cwnd = f.cwnd * Bytes(f.minRtt) / Bytes(f.srtt)
-		node.Logf("SS exit cwnd0:%d cwnd1:%d minRtt:%dms srtt:%dms cwnd:%d",
-			cwnd0, cwnd1, time.Duration(f.minRtt).Milliseconds(),
-			time.Duration(f.srtt).Milliseconds(), f.cwnd)
+		node.Logf("SS exit cwnd:%d cwnd0:%d cwnd1:%d minRtt:%dms srtt:%dms",
+			f.cwnd, cwnd0, cwnd1, time.Duration(f.minRtt).Milliseconds(),
+			time.Duration(f.srtt).Milliseconds())
 	} else {
 		cwnd0 := f.cwnd
 		switch SlowStartGrowth {
