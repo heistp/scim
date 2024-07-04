@@ -20,7 +20,7 @@ var (
 		AddFlow(ECN, SCE, Pacing, NoHyStart, true),
 	}
 	FlowSchedule = []FlowAt{
-		//FlowAt{0, Clock(30 * time.Second), true},
+		//FlowAt{1, Clock(10 * time.Second), true},
 	}
 	FlowDelay = []Clock{
 		Clock(20 * time.Millisecond),
@@ -130,27 +130,24 @@ const (
 // SlowStartExitMD: the MD done on slow-start exit, or 0 to calculate it from
 // the cwnd and bytes ACKed.
 //
-// SlowStartExitCwndAdjustment*: on slow-start exit, scale cwnd by
-// minRTT/maxRTT.  For accuracy, it's important to have pacing enabled.  Also
-// note that delayed ACKs can affect the results as RTT samples can be
-// spuriously high, although see Flow.updateRTT() for the logic that uses the
-// smoothed RTT to calculate maximums if delayed ACKs are enabled.
+// SlowStartExitCwndTargetingSCE*: on slow-start exit, target cwnd to the
+// estimated available BDP by finding the in-flight bytes one RTT ago, and
+// scaling that by minRtt/srtt.
 const (
-	SlowStartGrowth                   = SSGrowthABC2
-	SlowStartCwndIncrementDivisor     = false
-	SlowStartExitThreshold            = Tau / 2 // e.g. 0, Tau, Tau/2 or Tau/4
-	SlowStartExitMD                   = float64(0)
-	SlowStartExitCwndAdjustmentSCE    = true
-	SlowStartExitCwndAdjustmentNonSCE = false
+	SlowStartGrowth                  = SSGrowthABC2
+	SlowStartCwndIncrementDivisor    = true
+	SlowStartExitThreshold           = Tau / 2 // e.g. 0, Tau, Tau/2 or Tau/4
+	SlowStartExitCwndTargetingSCE    = true
+	SlowStartExitCwndTargetingNonSCE = false
 )
 
 // SSGrowth selects the growth strategy for slow-start.
 type SSGrowth int
 
 const (
-	SSGrowthNoABC = iota // grow by one MSS per ACK
-	SSGrowthABC15        // use ABC with base of 1.5, grow by 1/2 acked bytes
-	SSGrowthABC2         // use ABC with base of 2, grow by acked bytes
+	SSGrowthNoABC  = iota // grow by one MSS per ACK
+	SSGrowthABC1_5        // use ABC with base of 1.5, grow by 1/2 acked bytes
+	SSGrowthABC2          // use ABC with base of 2, grow by acked bytes
 )
 
 // Sender: TCP params

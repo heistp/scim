@@ -159,16 +159,16 @@ type Flow struct {
 	minRtt      Clock
 	maxRtt      Clock
 
-	cwnd          Bytes
-	inFlight      Bytes
-	caAcked       Bytes
-	priorGrowth   Clock
-	priorCEMD     Clock
-	priorSCEMD    Clock
-	ssSCECtr      int
-	ssBytesAcked  Bytes
-	caGrowthScale int
-	sceHistory    *clockRing
+	cwnd           Bytes
+	inFlight       Bytes
+	inFlightWindow inFlightWindow
+	caAcked        Bytes
+	priorGrowth    Clock
+	priorCEMD      Clock
+	priorSCEMD     Clock
+	ssSCECtr       int
+	caGrowthScale  int
+	sceHistory     *clockRing
 
 	pacingWait bool
 
@@ -181,6 +181,7 @@ type Flow struct {
 	cssRounds          int
 }
 
+// FlowState represents the congestion control state of the Flow.
 type FlowState int
 
 const (
@@ -189,8 +190,10 @@ const (
 	FlowStateCA         // congestion avoidance
 )
 
+// Seq is a sequence number.  For convenience, we use 64 bits.
 type Seq int64
 
+// ECNCapable represents whether a Flow is ECN capable or not.
 type ECNCapable bool
 
 const (
@@ -198,6 +201,7 @@ const (
 	NoECN            = false
 )
 
+// ECNCapable represents whether a Flow is SCE capable or not.
 type SCECapable bool
 
 const (
@@ -205,6 +209,7 @@ const (
 	NoSCE            = false
 )
 
+// PacingEnabled represents whether pacing is enabled or not.
 type PacingEnabled bool
 
 const (
@@ -212,6 +217,7 @@ const (
 	NoPacing               = false
 )
 
+// HyStartEnabled represents whether HyStart++ is enabled or not.
 type HyStartEnabled bool
 
 const (
@@ -239,12 +245,12 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, pacing PacingEnabled,
 		0,                 // maxRtt
 		IW,                // cwnd
 		0,                 // inFlight
+		inFlightWindow{},  // inFlightWindow
 		0,                 // caAcked
 		0,                 // priorGrowth
 		0,                 // priorCEMD
 		0,                 // priorSCEMD
 		0,                 // ssSCECtr
-		0,                 // ssBytesAcked
 		1,                 // caGrowthScale
 		newClockRing(Tau), // sceHistory
 		false,             // pacingWait
@@ -265,6 +271,7 @@ func AddFlow(ecn ECNCapable, sce SCECapable, pacing PacingEnabled,
 	return NewFlow(i, ecn, sce, pacing, hystart, active)
 }
 
+// FlowID is the currently assigned flow ID, incremented as flows are added.
 var flowID FlowID = 0
 
 // setActive sets the active field, and starts sending if active.
@@ -323,9 +330,23 @@ func (f *Flow) sendPacket(pktLen Bytes, node Node) bool {
 		SCECapable: f.sce,
 		Sent:       node.Now(),
 	})
-	f.inFlight += pktLen
+	f.addInFlight(pktLen, node.Now())
 	f.seq += Seq(pktLen)
 	return true
+}
+
+// addInFlight adds the given number of bytes to the in-flight bytes.
+func (f *Flow) addInFlight(b Bytes, now Clock) {
+	f.inFlight += b
+	if f.cwndTargetingEnabled() {
+		f.inFlightWindow.add(now, f.inFlight, now-f.srtt)
+	}
+}
+
+// cwndTargetingEnabled returns true if slow-start cwnd targeting is enabled.
+func (f *Flow) cwndTargetingEnabled() bool {
+	return (SlowStartExitCwndTargetingSCE && bool(f.sce)) ||
+		(SlowStartExitCwndTargetingNonSCE && !bool(f.sce))
 }
 
 // pacingDelay returns the Clock time to wait to pace the given bytes.
@@ -358,7 +379,7 @@ func (f *Flow) receive(pkt Packet, node Node) {
 func (f *Flow) handleAck(pkt Packet, node Node) {
 	acked := Bytes(pkt.ACKNum - f.receiveNext)
 	f.receiveNext = pkt.ACKNum
-	f.inFlight -= acked
+	f.addInFlight(-acked, node.Now())
 	f.updateRTT(pkt, node)
 	f.latestAcked = pkt.ACKNum - 1
 	if pkt.ECE {
@@ -450,17 +471,18 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	case FlowStateCA:
 		f.caAcked += acked
 		if f.sce {
-			//if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
+			//if f.caAcked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
 			if f.caAcked >= f.cwnd {
-				i := MSS * Bytes(f.caGrowthScale)
-				//node.Logf("i:%d", i)
-				f.cwnd += i
 				f.caAcked = 0
-				f.priorGrowth = node.Now()
 				if ScaleGrowth && (f.caGrowthScale > 1 ||
 					node.Now()-f.priorSCEMD > 2*f.sceRecoveryTime(node)) {
 					f.caGrowthScale++
+					//node.Logf("caGrowthScale:%d", f.caGrowthScale)
 				}
+			}
+			if node.Now()-f.priorGrowth > f.srtt/Clock(f.caGrowthScale) {
+				f.cwnd += MSS
+				f.priorGrowth = node.Now()
 			}
 		} else {
 			//if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
@@ -477,18 +499,20 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 func (f *Flow) sceRecoveryTime(node Node) Clock {
 	t := float64(f.cwnd) * (1 - SCE_MD) *
 		float64(time.Duration(f.srtt).Seconds()) / float64(MSS)
-	//node.Logf("rt:%f", t)
-	return Clock(t * float64(time.Second))
+	c := Clock(t * float64(time.Second))
+	if c > Clock(time.Second) {
+		return Clock(time.Second)
+	}
+	return c
 }
 
 // growCwndSlowStart increases cwnd for the given acked bytes.
 func (f *Flow) growCwndSlowStart(acked Bytes, node Node) {
-	f.ssBytesAcked += acked
 	var i Bytes
 	switch SlowStartGrowth {
 	case SSGrowthNoABC:
 		i = MSS
-	case SSGrowthABC15:
+	case SSGrowthABC1_5:
 		i = acked / 2
 	case SSGrowthABC2:
 		i = acked
@@ -505,35 +529,30 @@ func (f *Flow) growCwndSlowStart(acked Bytes, node Node) {
 	f.cwnd += i
 }
 
-// exitSlowStart changes state to CA and adjusts cwnd for slow-start exit.
-// Instead of using 0.5 for the MD, the initial MD is determined using the bytes
-// added (final cwnd) and bytes acked during slow-start, estimating the inverse
-// of the slow-start exponential base.  We then do a cwnd adjustment based on
-// the minimum and final RTT.
+// exitSlowStart changes state to CA and adjusts cwnd for slow-start exit.  If
+// cwnd targeting is enabled, we find what in-flight bytes were srtt ago, and
+// scale that by minRtt / srtt, which estimates the available BDP for the flow.
 func (f *Flow) exitSlowStart(node Node) {
 	f.state = FlowStateCA
-	cwnd0 := f.cwnd
-	var md float64
-	if SlowStartExitMD > 0 {
-		md = SlowStartExitMD
-	} else {
-		md = float64(f.ssBytesAcked) /
-			(float64(f.cwnd) + float64(f.ssBytesAcked))
-	}
-	f.cwnd = Bytes(float64(f.cwnd) * md)
-	if (SlowStartExitCwndAdjustmentSCE && f.sce) ||
-		(SlowStartExitCwndAdjustmentNonSCE && !f.sce) {
+	if f.cwndTargetingEnabled() {
+		cwnd0 := f.cwnd
+		f.cwnd = f.inFlightWindow.inFlightAt(node.Now() - f.srtt)
+		cwnd1 := f.cwnd
 		f.cwnd = f.cwnd * Bytes(f.minRtt) / Bytes(f.srtt)
-		// NOTE this seems to help, but I'm unsure about the reasoning behind
-		// this adjustment, so that's not good enough
-		//f.cwnd = f.cwnd * f.inFlight / cwnd0
-		r1 := float64(f.minRtt) / float64(f.srtt)
-		r2 := float64(f.inFlight) / float64(cwnd0)
-		node.Logf("SS exit MD:%f acked:%d in-flight:%d cwnd0:%d cwnd:%d min:%d srtt:%d min/srtt:%f in-flight/cwnd:%f",
-			md, f.ssBytesAcked, f.inFlight, cwnd0, f.cwnd, f.minRtt, f.srtt, r1, r2)
+		node.Logf("SS exit cwnd0:%d cwnd1:%d minRtt:%dms srtt:%dms cwnd:%d",
+			cwnd0, cwnd1, time.Duration(f.minRtt).Milliseconds(),
+			time.Duration(f.srtt).Milliseconds(), f.cwnd)
 	} else {
-		node.Logf("SS exit MD:%f acked:%d cwnd0:%d cwnd:%d",
-			md, f.ssBytesAcked, cwnd0, f.cwnd)
+		cwnd0 := f.cwnd
+		switch SlowStartGrowth {
+		case SSGrowthNoABC:
+			fallthrough
+		case SSGrowthABC2:
+			f.cwnd /= 2
+		case SSGrowthABC1_5:
+			f.cwnd = f.cwnd * 3 / 2
+		}
+		node.Logf("SS exit cwnd:%d cwnd0:%d", f.cwnd, cwnd0)
 	}
 	if f.cwnd < MSS {
 		f.cwnd = MSS
@@ -641,4 +660,41 @@ func (r *clockRing) length() int {
 		return r.end - r.start
 	}
 	return len(r.ring) - (r.start - r.end)
+}
+
+// inFlightWindow stores inFlight samples for slow-start exit cwnd targeting.
+type inFlightWindow []inFlightSample
+
+// add adds in in-flight bytes value.
+func (w *inFlightWindow) add(time Clock, inFlight Bytes, earliest Clock) {
+	*w = append(*w, inFlightSample{time, inFlight})
+	var i int
+	for i = range *w {
+		if (*w)[i].time >= earliest {
+			break
+		}
+	}
+	*w = (*w)[i:]
+}
+
+// inFlightAt returns the closest in-flight bytes value for the given time.
+func (w inFlightWindow) inFlightAt(time Clock) Bytes {
+	for i, s := range w {
+		if s.time >= time {
+			if i == 0 {
+				return s.inFlight
+			}
+			if s.time-time > time-w[i-1].time {
+				return w[i-1].inFlight
+			}
+			return s.inFlight
+		}
+	}
+	return w[len(w)-1].inFlight
+}
+
+// inFlightSample is one data point in the inFlightWindow.
+type inFlightSample struct {
+	time     Clock
+	inFlight Bytes
 }
