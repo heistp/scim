@@ -216,6 +216,9 @@ func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
 	default:
 		s = markDrop
 		d.sceOsc -= Tau * Clock(time.Second)
+		if d.sceOsc >= Tau*Clock(time.Second) {
+			d.acc -= d.acc >> 4
+		}
 	}
 
 	// CE oscillator
@@ -229,6 +232,9 @@ func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
 	default:
 		c = markDrop
 		d.ceOsc -= Clock(time.Second)
+		if d.ceOsc >= 2*Clock(time.Second) {
+			d.acc -= d.acc >> 4
+		}
 	}
 
 	// assign mark
