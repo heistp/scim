@@ -17,7 +17,7 @@ const Duration = 60 * time.Second
 // Sender and Delay: flows
 var (
 	Flows = []Flow{
-		AddFlow(ECN, SCE, Pacing, NoHyStart, true),
+		AddFlow(ECN, SCE, NewReno(), Pacing, NoHyStart, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{1, Clock(10 * time.Second), true},

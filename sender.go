@@ -159,16 +159,11 @@ type Flow struct {
 	minRtt      Clock
 	maxRtt      Clock
 
+	cca            CCA
 	cwnd           Bytes
 	inFlight       Bytes
 	inFlightWindow inFlightWindow
-	caAcked        Bytes
-	priorGrowth    Clock
-	priorCEMD      Clock
-	priorSCEMD     Clock
 	ssSCECtr       int
-	caGrowthScale  int
-	sceHistory     *clockRing
 
 	pacingWait bool
 
@@ -226,49 +221,44 @@ const (
 )
 
 // NewFlow returns a new flow.
-func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, pacing PacingEnabled,
-	hystart HyStartEnabled, active bool) Flow {
+func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, cca CCA,
+	pacing PacingEnabled, hystart HyStartEnabled, active bool) Flow {
 	return Flow{
-		id,                // id
-		active,            // active
-		pacing,            // pacing
-		hystart,           // hystart
-		ecn,               // ecn
-		sce,               // sce
-		0,                 // seq
-		0,                 // receiveNext
-		-1,                // latestAcked
-		FlowStateSS,       // state
-		ClockInfinity,     // rtt
-		0,                 // srtt
-		ClockInfinity,     // minRtt
-		0,                 // maxRtt
-		IW,                // cwnd
-		0,                 // inFlight
-		inFlightWindow{},  // inFlightWindow
-		0,                 // caAcked
-		0,                 // priorGrowth
-		0,                 // priorCEMD
-		0,                 // priorSCEMD
-		0,                 // ssSCECtr
-		1,                 // caGrowthScale
-		newClockRing(Tau), // sceHistory
-		false,             // pacingWait
-		ClockInfinity,     // lastRoundMinRTT
-		ClockInfinity,     // currentRoundMinRTT
-		ClockInfinity,     // cssBaselineMinRTT
-		0,                 // windowEnd
-		0,                 // rttSampleCount
-		0,                 // cssRounds
+		id,               // id
+		active,           // active
+		pacing,           // pacing
+		hystart,          // hystart
+		ecn,              // ecn
+		sce,              // sce
+		0,                // seq
+		0,                // receiveNext
+		-1,               // latestAcked
+		FlowStateSS,      // state
+		ClockInfinity,    // rtt
+		0,                // srtt
+		ClockInfinity,    // minRtt
+		0,                // maxRtt
+		cca,              // cca
+		IW,               // cwnd
+		0,                // inFlight
+		inFlightWindow{}, // inFlightWindow
+		0,                // ssSCECtr
+		false,            // pacingWait
+		ClockInfinity,    // lastRoundMinRTT
+		ClockInfinity,    // currentRoundMinRTT
+		ClockInfinity,    // cssBaselineMinRTT
+		0,                // windowEnd
+		0,                // rttSampleCount
+		0,                // cssRounds
 	}
 }
 
 // AddFlow adds a flow with an ID from the global flowID.
-func AddFlow(ecn ECNCapable, sce SCECapable, pacing PacingEnabled,
+func AddFlow(ecn ECNCapable, sce SCECapable, cca CCA, pacing PacingEnabled,
 	hystart HyStartEnabled, active bool) (flow Flow) {
 	i := flowID
 	flowID++
-	return NewFlow(i, ecn, sce, pacing, hystart, active)
+	return NewFlow(i, ecn, sce, cca, pacing, hystart, active)
 }
 
 // FlowID is the currently assigned flow ID, incremented as flows are added.
@@ -389,12 +379,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 		case FlowStateCSS:
 			f.exitSlowStart(node)
 		case FlowStateCA:
-			if node.Now()-f.priorCEMD > f.srtt {
-				if f.cwnd = Bytes(float64(f.cwnd) * CEMD); f.cwnd < MSS {
-					f.cwnd = MSS
-				}
-				f.priorCEMD = node.Now()
-			}
+			f.cca.reactToCE(f, node)
 		}
 	} else if pkt.ESCE {
 		switch f.state {
@@ -406,30 +391,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 				f.exitSlowStart(node)
 			}
 		case FlowStateCA:
-			var b bool
-			if f.pacing && ThrottleSCEResponse {
-				b = node.Now()-f.priorSCEMD > f.srtt/Tau &&
-					node.Now()-f.priorCEMD > f.srtt
-			} else {
-				b = f.sceHistory.add(node.Now(), node.Now()-f.srtt) &&
-					(node.Now()-f.priorCEMD) > f.srtt
-			}
-			if b {
-				md := SCE_MD
-				if RateFairness {
-					tau := float64(Tau) * float64(f.srtt) * float64(f.srtt) /
-						float64(NominalRTT) / float64(NominalRTT)
-					md = math.Pow(CEMD, float64(1)/tau)
-				}
-				if f.cwnd = Bytes(float64(f.cwnd) * md); f.cwnd < MSS {
-					f.cwnd = MSS
-				}
-				f.priorSCEMD = node.Now()
-			} else {
-				//node.Logf("ignore SCE")
-			}
-			f.caGrowthScale = 1
-			f.caAcked = 0
+			f.cca.reactToSCE(f, node)
 		}
 	}
 	// grow cwnd and do HyStart++, if enabled
@@ -469,41 +431,16 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			}
 		}
 	case FlowStateCA:
-		f.caAcked += acked
-		if f.sce {
-			//if f.caAcked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
-			if f.caAcked >= f.cwnd {
-				f.caAcked = 0
-				if ScaleGrowth && (f.caGrowthScale > 1 ||
-					node.Now()-f.priorSCEMD > 2*f.sceRecoveryTime(node)) {
-					f.caGrowthScale++
-					//node.Logf("caGrowthScale:%d", f.caGrowthScale)
-				}
-			}
-			if node.Now()-f.priorGrowth > f.srtt/Clock(f.caGrowthScale) {
-				f.cwnd += MSS
-				f.priorGrowth = node.Now()
-			}
-		} else {
-			//if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
-			if f.caAcked >= f.cwnd {
-				f.cwnd += MSS
-				f.caAcked = 0
-				f.priorGrowth = node.Now()
-			}
-		}
+		f.cca.handleAck(acked, f, node)
 	}
 }
 
-// sceRecoveryTime returns the estimated sawtooth recovery time for the BDP.
-func (f *Flow) sceRecoveryTime(node Node) Clock {
-	t := float64(f.cwnd) * (1 - SCE_MD) *
-		float64(time.Duration(f.srtt).Seconds()) / float64(MSS)
-	c := Clock(t * float64(time.Second))
-	if c > Clock(time.Second) {
-		return Clock(time.Second)
-	}
-	return c
+// A CCA implements a congestion control algorithm.
+type CCA interface {
+	slowStartExit(*Flow, Node)
+	reactToCE(*Flow, Node)
+	reactToSCE(*Flow, Node)
+	handleAck(Bytes, *Flow, Node)
 }
 
 // growCwndSlowStart increases cwnd for the given acked bytes.
@@ -551,7 +488,7 @@ func (f *Flow) exitSlowStart(node Node) {
 			f.cwnd = MSS
 		}
 	}
-	f.priorCEMD = node.Now()
+	f.cca.slowStartExit(f, node)
 }
 
 // targetCwnd adjusts cwnd to attempt to target the available BDP, by taking
@@ -608,67 +545,6 @@ func (f *Flow) updateRTT(pkt Packet, node Node) {
 			f.maxRtt = f.rtt
 		}
 	}
-}
-
-// clockRing is a ring buffer of Clock values.
-type clockRing struct {
-	ring  []Clock
-	start int
-	end   int
-}
-
-// newClockRing returns a new ClockRing.
-func newClockRing(size int) *clockRing {
-	return &clockRing{
-		make([]Clock, size+1),
-		0,
-		0,
-	}
-}
-
-// add removes any values earlier than earliest, then adds the given value.
-// False is returned if the ring is full.
-func (r *clockRing) add(value, earliest Clock) bool {
-	// remove earlier values from the end
-	for r.start != r.end {
-		p := r.prior(r.end)
-		if r.ring[p] > earliest {
-			break
-		}
-		r.end = p
-	}
-	// add the value, or return false if full
-	var e int
-	if e = r.next(r.end); e == r.start {
-		return false
-	}
-	r.ring[r.end] = value
-	r.end = e
-	return true
-}
-
-// next returns the ring index after the given index.
-func (r *clockRing) next(index int) int {
-	if index >= len(r.ring)-1 {
-		return 0
-	}
-	return index + 1
-}
-
-// prior returns the ring index before the given index.
-func (r *clockRing) prior(index int) int {
-	if index > 0 {
-		return index - 1
-	}
-	return len(r.ring) - 1
-}
-
-// length returns the number of elements in the ring.
-func (r *clockRing) length() int {
-	if r.end >= r.start {
-		return r.end - r.start
-	}
-	return len(r.ring) - (r.start - r.end)
 }
 
 // inFlightWindow stores inFlight samples for slow-start exit cwnd targeting.
