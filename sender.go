@@ -535,13 +535,7 @@ func (f *Flow) growCwndSlowStart(acked Bytes, node Node) {
 func (f *Flow) exitSlowStart(node Node) {
 	f.state = FlowStateCA
 	if f.cwndTargetingEnabled() {
-		cwnd0 := f.cwnd
-		f.cwnd = f.inFlightWindow.inFlightAt(node.Now() - f.srtt)
-		cwnd1 := f.cwnd
-		f.cwnd = f.cwnd * Bytes(f.minRtt) / Bytes(f.srtt)
-		node.Logf("SS exit cwnd:%d cwnd0:%d cwnd1:%d minRtt:%dms srtt:%dms",
-			f.cwnd, cwnd0, cwnd1, time.Duration(f.minRtt).Milliseconds(),
-			time.Duration(f.srtt).Milliseconds())
+		f.targetCwnd(node)
 	} else {
 		cwnd0 := f.cwnd
 		switch SlowStartGrowth {
@@ -553,11 +547,26 @@ func (f *Flow) exitSlowStart(node Node) {
 			f.cwnd = f.cwnd * 3 / 2
 		}
 		node.Logf("SS exit cwnd:%d cwnd0:%d", f.cwnd, cwnd0)
-	}
-	if f.cwnd < MSS {
-		f.cwnd = MSS
+		if f.cwnd < MSS {
+			f.cwnd = MSS
+		}
 	}
 	f.priorCEMD = node.Now()
+}
+
+// targetCwnd adjusts cwnd to attempt to target the available BDP, by taking
+// the bytes in-flight one srtt ago, and scaling that by minRtt / srtt.
+func (f *Flow) targetCwnd(node Node) {
+	cwnd0 := f.cwnd
+	f.cwnd = f.inFlightWindow.inFlightAt(node.Now() - f.srtt)
+	cwnd1 := f.cwnd
+	if f.cwnd = f.cwnd * Bytes(f.minRtt) / Bytes(f.srtt); f.cwnd < MSS {
+		f.cwnd = MSS
+	}
+	node.Logf("SS exit cwnd:%d cwnd0:%d cwnd1:%d minRtt:%.2fms srtt:%.2fms",
+		f.cwnd, cwnd0, cwnd1,
+		time.Duration(f.minRtt).Seconds()*1000,
+		time.Duration(f.srtt).Seconds()*1000)
 }
 
 // hystartRound checks if the current round has ended and if so, starts the next
