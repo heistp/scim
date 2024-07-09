@@ -135,12 +135,7 @@ func NewCUBIC() *CUBIC {
 	}
 }
 
-// CUBIC constants as recommended in RFC9438.
-const (
-	CubicBeta = 0.7
-	CubicC    = 0.4
-)
-
+// CubicBetaSCE is the MD performed by CUBIC in response to an SCE.
 var CubicBetaSCE = math.Pow(CubicBeta, 1.0/Tau)
 
 // slowStartExit implements CCA.
@@ -155,7 +150,7 @@ func (c *CUBIC) slowStartExit(flow *Flow, node Node) {
 // reactToCE implements CCA.
 func (c *CUBIC) reactToCE(flow *Flow, node Node) {
 	if node.Now()-c.priorCEMD > flow.srtt {
-		c.wMax = flow.cwnd
+		c.updateWmax(flow.cwnd)
 		if flow.cwnd = Bytes(float64(flow.cwnd) * CubicBeta); flow.cwnd < MSS {
 			flow.cwnd = MSS
 		}
@@ -163,6 +158,16 @@ func (c *CUBIC) reactToCE(flow *Flow, node Node) {
 		c.tEpoch = node.Now()
 		c.cwndEpoch = flow.cwnd
 		c.wEst = c.cwndEpoch
+	}
+}
+
+// updateWmax updates CUBIC's wMax from the given cwnd, performing fast
+// convergence if enabled.
+func (c *CUBIC) updateWmax(cwnd Bytes) {
+	if CubicFastConvergence && cwnd < c.wMax {
+		c.wMax = Bytes(float64(cwnd) * ((1.0 + CubicBeta) / 2))
+	} else {
+		c.wMax = cwnd
 	}
 }
 
@@ -177,7 +182,7 @@ func (c *CUBIC) reactToSCE(flow *Flow, node Node) {
 			(node.Now()-c.priorCEMD) > flow.srtt
 	}
 	if b {
-		c.wMax = flow.cwnd
+		c.updateWmax(flow.cwnd)
 		md := CubicBetaSCE
 		if RateFairness {
 			tau := float64(Tau) * float64(flow.srtt) * float64(flow.srtt) /

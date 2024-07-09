@@ -17,7 +17,7 @@ const Duration = 60 * time.Second
 // Sender and Delay: flows
 var (
 	Flows = []Flow{
-		AddFlow(ECN, SCE, NewReno(), Pacing, NoHyStart, true),
+		AddFlow(ECN, SCE, NewCUBIC(), Pacing, NoHyStart, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{1, Clock(10 * time.Second), true},
@@ -155,6 +155,13 @@ const (
 	MSS      = Bytes(1500)
 	IW       = 10 * MSS
 	RTTAlpha = float64(0.1)
+)
+
+// Sender: CUBIC params
+const (
+	CubicBeta            = 0.7  // RFC 9438 Section 4.6
+	CubicC               = 0.4  // RFC 9438 Section 5
+	CubicFastConvergence = true // RFC 9438 Section 4.7
 )
 
 // Sender: pacing params
