@@ -27,6 +27,11 @@ func (c Clock) MultiplyScaled(c2 Clock) Clock {
 	return c * c2 / Clock(time.Second)
 }
 
+// Seconds returns the Clock in seconds as a float64.
+func (c Clock) Seconds() float64 {
+	return time.Duration(c).Seconds()
+}
+
 func (c Clock) StringMS() string {
 	return fmt.Sprintf("%f", time.Duration(c).Seconds()*1000)
 }

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var SCE_MD = math.Pow(CEMD, float64(1)/Tau)
+var SCE_MD = math.Pow(CEMD, 1.0/Tau)
 
 type FlowID int
 

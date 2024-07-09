@@ -111,6 +111,152 @@ func (Reno) sceRecoveryTime(flow *Flow, node Node) Clock {
 	return c
 }
 
+// CUBIC implements a basic version of RFC9438 CUBIC.
+type CUBIC struct {
+	priorCEMD  Clock
+	priorSCEMD Clock
+	tEpoch     Clock
+	cwndEpoch  Bytes
+	wMax       Bytes
+	wEst       Bytes
+	sceHistory *clockRing
+}
+
+// NewCUBIC returns a new CUBIC.
+func NewCUBIC() *CUBIC {
+	return &CUBIC{
+		0,                 // priorCEMD
+		0,                 // priorSCEMD
+		0,                 // tEpoch
+		0,                 // cwndEpoch
+		0,                 // wMax
+		0,                 // wEst
+		newClockRing(Tau), // sceHistory
+	}
+}
+
+// CUBIC constants as recommended in RFC9438.
+const (
+	CubicBeta = 0.7
+	CubicC    = 0.4
+)
+
+var CubicBetaSCE = math.Pow(CubicBeta, 1.0/Tau)
+
+// slowStartExit implements CCA.
+func (c *CUBIC) slowStartExit(flow *Flow, node Node) {
+	c.priorCEMD = node.Now()
+	c.tEpoch = node.Now()
+	c.cwndEpoch = flow.cwnd
+	c.wEst = c.cwndEpoch
+	c.wMax = Bytes(float64(flow.cwnd) / CubicBeta)
+}
+
+// reactToCE implements CCA.
+func (c *CUBIC) reactToCE(flow *Flow, node Node) {
+	if node.Now()-c.priorCEMD > flow.srtt {
+		c.wMax = flow.cwnd
+		if flow.cwnd = Bytes(float64(flow.cwnd) * CubicBeta); flow.cwnd < MSS {
+			flow.cwnd = MSS
+		}
+		c.priorCEMD = node.Now()
+		c.tEpoch = node.Now()
+		c.cwndEpoch = flow.cwnd
+		c.wEst = c.cwndEpoch
+	}
+}
+
+// reactToSCE implements CCA.
+func (c *CUBIC) reactToSCE(flow *Flow, node Node) {
+	var b bool
+	if flow.pacing && ThrottleSCEResponse {
+		b = node.Now()-c.priorSCEMD > flow.srtt/Tau &&
+			node.Now()-c.priorCEMD > flow.srtt
+	} else {
+		b = c.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
+			(node.Now()-c.priorCEMD) > flow.srtt
+	}
+	if b {
+		c.wMax = flow.cwnd
+		md := CubicBetaSCE
+		if RateFairness {
+			tau := float64(Tau) * float64(flow.srtt) * float64(flow.srtt) /
+				float64(NominalRTT) / float64(NominalRTT)
+			md = math.Pow(CubicBetaSCE, float64(1)/tau)
+		}
+		if flow.cwnd = Bytes(float64(flow.cwnd) * md); flow.cwnd < MSS {
+			flow.cwnd = MSS
+		}
+		c.priorSCEMD = node.Now()
+		c.tEpoch = node.Now()
+		c.cwndEpoch = flow.cwnd
+		c.wEst = c.cwndEpoch
+	} else {
+		//node.Logf("ignore SCE")
+	}
+}
+
+// handleAck implements CCA.
+func (c *CUBIC) handleAck(acked Bytes, flow *Flow, node Node) {
+	t := node.Now() - c.tEpoch
+	u := c.wCubic(t)
+	e := c.updateWest(acked, flow.cwnd)
+	//c0 := flow.cwnd
+	//node.Logf("t:%d u:%d e:%d beta:%f", t, u, e, c.beta)
+	if u < e { // TCP-friendly region
+		flow.cwnd = e
+		//node.Logf("  friendly cwnd0:%d cwnd:%d", c0, flow.cwnd)
+	} else if flow.cwnd < c.wMax { // Concave region
+		r := c.target(flow.cwnd, t+flow.srtt).Segments()
+		s := flow.cwnd.Segments()
+		flow.cwnd += Bytes(float64(MSS) * (r - s) / s)
+		//node.Logf("  concave cwnd:%d cwnd0:%d r:%f s:%f t:%d srtt:%d",
+		//	flow.cwnd, c0, r, s, t, flow.srtt)
+	} else { // Convex region (looks same as Concave in RFC9438)
+		r := c.target(flow.cwnd, t+flow.srtt).Segments()
+		s := flow.cwnd.Segments()
+		flow.cwnd += Bytes(float64(MSS) * (r - s) / s)
+		//node.Logf("  convex cwnd:%d cwnd0:%d r:%f s:%f t:%d srtt:%d",
+		//	flow.cwnd, c0, r, s, t, flow.srtt)
+	}
+	if flow.cwnd < MSS {
+		flow.cwnd = MSS
+	}
+}
+
+// updateWest updates and returns the value for wEst according to RFC9438,
+// section 4.3.
+func (c *CUBIC) updateWest(acked, cwnd Bytes) Bytes {
+	a := 3.0 * (1.0 - CubicBeta) / (1.0 + CubicBeta)
+	// TODO set alpha to 1 according to end of section 4.3 in RFC, but this
+	// is connected with ssthresh and drop support
+	s := c.wEst.Segments() + a*(acked.Segments()/cwnd.Segments())
+	c.wEst = Bytes(float64(MSS) * s)
+	return c.wEst
+}
+
+// wCubic returns W_cubic(t) according to RFC9438, except in bytes instead of
+// MSS-sized segments.
+func (c *CUBIC) wCubic(t Clock) Bytes {
+	wmax := c.wMax.Segments()
+	cwep := c.cwndEpoch.Segments()
+	k := math.Cbrt((wmax - cwep) / CubicC)
+	wc := CubicC*math.Pow(t.Seconds()-k, 3) + wmax
+	return Bytes(float64(MSS) * wc)
+}
+
+// target returns the target cwnd after an RTT has elapsed.
+func (c *CUBIC) target(cwnd Bytes, t Clock) Bytes {
+	w := c.wCubic(t)
+	if w < cwnd {
+		return cwnd
+	}
+	if w > cwnd*3/2 {
+		return cwnd * 3 / 2
+	}
+	return w
+}
+
 // clockRing is a ring buffer of Clock values.
 type clockRing struct {
 	ring  []Clock

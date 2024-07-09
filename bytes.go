@@ -74,6 +74,11 @@ func (b Bytes) Pebibytes() float64 {
 	return float64(b) / float64(Pebibyte)
 }
 
+// Segments returns the Bytes as a floating point number of MSS-sized segments.
+func (b Bytes) Segments() float64 {
+	return float64(b) / float64(MSS)
+}
+
 func (b Bytes) String() string {
 	return strconv.FormatUint(uint64(b), 10)
 }
