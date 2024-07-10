@@ -4,6 +4,7 @@
 package main
 
 import (
+	"math"
 	"strconv"
 )
 
@@ -22,6 +23,7 @@ const (
 	Gibibyte       = 1024 * Mebibyte
 	Tebibyte       = 1024 * Gibibyte
 	Pebibyte       = 1024 * Tebibyte
+	MaxBytes       = math.MaxUint64
 )
 
 // Kilobytes returns the Bytes in Kilobytes.
