@@ -208,29 +208,29 @@ func (c *CUBIC) handleAck(acked Bytes, flow *Flow, node Node) {
 	e := c.updateWest(acked, flow.cwnd)
 	//c0 := flow.cwnd
 	//node.Logf("t:%d u:%d e:%d beta:%f", t, u, e, c.beta)
-	if u < e { // TCP-friendly region
+	if u < e { // Reno-friendly region
 		flow.cwnd = e
 		//node.Logf("  friendly cwnd0:%d cwnd:%d", c0, flow.cwnd)
-	} else if flow.cwnd < c.wMax { // Concave region
-		r := c.target(flow.cwnd, t+flow.srtt).Segments()
-		s := flow.cwnd.Segments()
-		flow.cwnd += Bytes(float64(MSS) * (r - s) / s)
-		//node.Logf("  concave cwnd:%d cwnd0:%d r:%f s:%f t:%d srtt:%d",
-		//	flow.cwnd, c0, r, s, t, flow.srtt)
-	} else { // Convex region (looks same as Concave in RFC9438)
-		r := c.target(flow.cwnd, t+flow.srtt).Segments()
-		s := flow.cwnd.Segments()
-		flow.cwnd += Bytes(float64(MSS) * (r - s) / s)
-		//node.Logf("  convex cwnd:%d cwnd0:%d r:%f s:%f t:%d srtt:%d",
-		//	flow.cwnd, c0, r, s, t, flow.srtt)
+	} else { // concave and convex regions
+		r := c.target(flow.cwnd, t+flow.srtt)
+		flow.cwnd += MSS * (r - flow.cwnd) / flow.cwnd
+		/*
+			if flow.cwnd < c.wMax {
+				node.Logf("  concave cwnd:%d cwnd0:%d r:%d t:%d srtt:%d",
+					flow.cwnd, c0, r, t, flow.srtt)
+			} else {
+				node.Logf("  convex cwnd:%d cwnd0:%d r:%d t:%d srtt:%d",
+					flow.cwnd, c0, r, t, flow.srtt)
+			}
+		*/
 	}
 	if flow.cwnd < MSS {
 		flow.cwnd = MSS
 	}
 }
 
-// updateWest updates and returns the value for wEst according to RFC9438,
-// section 4.3.
+// updateWest updates and returns the value for wEst according to RFC9438
+// section 4.3, except in bytes instead of MSS-sized segments.
 func (c *CUBIC) updateWest(acked, cwnd Bytes) Bytes {
 	a := 3.0 * (1.0 - CubicBeta) / (1.0 + CubicBeta)
 	// TODO set alpha to 1 according to end of section 4.3 in RFC, but this
