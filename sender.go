@@ -475,14 +475,8 @@ func (f *Flow) exitSlowStart(node Node) {
 		f.targetCwnd(node)
 	} else {
 		cwnd0 := f.cwnd
-		switch SlowStartGrowth {
-		case SSGrowthNoABC:
-			fallthrough
-		case SSGrowthABC2:
-			f.cwnd /= 2
-		case SSGrowthABC1_5:
-			f.cwnd = f.cwnd * 3 / 2
-		}
+		f.cwnd /= 2
+		// NOTE 2/3 could be done for SSGrowthABC1_5, but not standard practice
 		node.Logf("SS exit cwnd:%d cwnd0:%d", f.cwnd, cwnd0)
 		if f.cwnd < MSS {
 			f.cwnd = MSS
