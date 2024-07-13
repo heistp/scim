@@ -9,4 +9,6 @@ fi
 rm -f *.xpl
 go build
 $realtime ./scemds
-xplot *.xpl &>/dev/null &
+if command -v xplot &> /dev/null; then
+    xplot *.xpl &>/dev/null &
+fi
