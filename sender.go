@@ -12,7 +12,7 @@ var SCE_MD = math.Pow(CEMD, 1.0/Tau)
 
 type FlowID int
 
-// Sender approximates a Reno sender with multiple flows.
+// Sender approximates a TCP sender with multiple flows.
 type Sender struct {
 	flow     []Flow
 	schedule []FlowAt
