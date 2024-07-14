@@ -37,3 +37,40 @@ func (p Packet) handleSim(sim *Sim, node nodeID) (error, bool) {
 func (p Packet) handleNode(node *node) (err error) {
 	return node.handler.Handle(p, node)
 }
+
+// NextSeq returns the next expected sequence number after this Packet.
+func (p Packet) NextSeq() Seq {
+	return p.Seq + Seq(p.Len)
+}
+
+// pktbuf is a buffer for packets, using the heap package.
+type pktbuf []Packet
+
+// Len implements heap.Interface.
+func (p pktbuf) Len() int {
+	return len(p)
+}
+
+// Less implements heap.Interface.
+func (p pktbuf) Less(i, j int) bool {
+	return p[i].Seq < p[i].Seq
+}
+
+// Swap implements heap.Interface.
+func (p pktbuf) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
+
+// Push implements heap.Interface.
+func (p *pktbuf) Push(x any) {
+	*p = append(*p, x.(Packet))
+}
+
+// Pop implements heap.Interface.
+func (p *pktbuf) Pop() any {
+	o := *p
+	n := len(o)
+	t := o[n-1]
+	*p = o[:n-1]
+	return t
+}
