@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// Receiver is a TCP receiver.
 type Receiver struct {
 	count           []Bytes
 	countAll        Bytes
@@ -18,30 +19,59 @@ type Receiver struct {
 	total           []Bytes
 	maxRTTFlow      FlowID
 	goodput         Xplot
-	flow            []receiverFlow
+	flow            []rflow
 }
 
-type receiverFlow struct {
-	delayAck      bool
-	priorSeqAcked Seq
-	priorECE      bool
-	priorESCE     bool
+// rflow stores receiver information about a single flow.
+type rflow struct {
+	buf        pktbuf
+	delayAck   bool
+	next       Seq // rcv.nxt
+	priorAcked Seq
+	priorECE   bool
+	priorESCE  bool
 }
 
+// sendAck sends an ack for the given Packet.
+func (f *rflow) sendAck(pkt Packet, node Node) {
+	pkt.ACK = true
+	pkt.ACKNum = f.next
+	if pkt.CE {
+		pkt.ECE = true
+		pkt.CE = false
+	}
+	if pkt.SCE {
+		pkt.ESCE = true
+		pkt.SCE = false
+	}
+	f.priorECE = pkt.ECE
+	f.priorESCE = pkt.ESCE
+	f.priorAcked = pkt.Seq
+	node.Send(pkt)
+}
+
+// NewReceiver returns a new Receiver.
 func NewReceiver() *Receiver {
-	f := make([]receiverFlow, len(Flows))
+	f := make([]rflow, len(Flows))
 	for range Flows {
-		f = append(f, receiverFlow{true, -1, false, false})
+		f = append(f, rflow{
+			pktbuf{}, // buf
+			true,     // delayAck
+			0,        // next
+			-1,       // priorAcked
+			false,    // priorECE
+			false,    // priorESCE
+		})
 	}
 	return &Receiver{
-		make([]Bytes, len(Flows)),
-		0,
-		make([]Clock, len(Flows)),
-		time.Time{},
-		0,
-		0,
-		make([]Bytes, len(Flows)),
-		0,
+		make([]Bytes, len(Flows)), // count
+		0,                         // countAll
+		make([]Clock, len(Flows)), // countStart
+		time.Time{},               // start
+		0,                         // receivedPackets
+		0,                         // ackedPackets
+		make([]Bytes, len(Flows)), // total
+		0,                         // maxRTTFlow
 		Xplot{
 			Title: "SCE MD-Scaling Goodput",
 			X: Axis{
@@ -50,8 +80,8 @@ func NewReceiver() *Receiver {
 			Y: Axis{
 				Label: "Goodput (Mbps)",
 			},
-		},
-		f,
+		}, // goodput
+		f, // flow
 	}
 }
 
@@ -90,17 +120,26 @@ func (r *Receiver) receive(pkt Packet, node Node) {
 	if pkt.ACK {
 		panic("receiver: ACK receive not implemented")
 	}
-	// delayed ACKs disabled
-	if DelayedACKTime == 0 {
-		r.sendAck(pkt, node)
-		return
-	}
-	// delayed ACKs enabled
-	// "Advanced" ACK handling, always immediately ACK state change, then
-	// proceed to the normal delayed ACK logic
 	f := &r.flow[pkt.Flow]
-	if (QuickACKSignal && (pkt.CE || pkt.SCE)) ||
-		pkt.SCE != f.priorESCE || pkt.CE != f.priorECE {
+	var a bool
+	if pkt.Seq != f.next || len(f.buf) > 0 {
+		a = true
+		if pkt.Seq == f.next {
+			f.next = pkt.NextSeq()
+			for len(f.buf) > 0 && f.buf[0].Seq == f.next {
+				p := f.buf.Pop().(Packet)
+				f.next = p.NextSeq()
+			}
+		} else {
+			f.buf.Push(pkt)
+		}
+	} else {
+		f.next = pkt.NextSeq()
+	}
+	if a || // immediate ACK due to out-of-order packet or filling of hole
+		DelayedACKTime == 0 || // delayed ACKs disabled
+		(QuickACKSignal && (pkt.CE || pkt.SCE)) || // quick ACK all signals
+		pkt.SCE != f.priorESCE || pkt.CE != f.priorECE { // "Advanced" handling
 		r.sendAck(pkt, node)
 		f.delayAck = true
 		return
@@ -117,7 +156,7 @@ func (r *Receiver) receive(pkt Packet, node Node) {
 func (r *Receiver) Ding(data any, node Node) error {
 	p := data.(Packet)
 	f := &r.flow[p.Flow]
-	if f.priorSeqAcked < p.Seq {
+	if f.priorAcked < p.Seq {
 		r.sendAck(p, node)
 	}
 	return nil
@@ -125,22 +164,9 @@ func (r *Receiver) Ding(data any, node Node) error {
 
 // sendAck sends an ack for the given Packet.
 func (r *Receiver) sendAck(pkt Packet, node Node) {
-	pkt.ACK = true
-	pkt.ACKNum = pkt.Seq + Seq(pkt.Len)
-	if pkt.CE {
-		pkt.ECE = true
-		pkt.CE = false
-	}
-	if pkt.SCE {
-		pkt.ESCE = true
-		pkt.SCE = false
-	}
 	f := &r.flow[pkt.Flow]
-	f.priorECE = pkt.ECE
-	f.priorESCE = pkt.ESCE
-	f.priorSeqAcked = pkt.Seq
+	f.sendAck(pkt, node)
 	r.ackedPackets++
-	node.Send(pkt)
 }
 
 // scheduleAck schedules a delayed acknowledgement.
