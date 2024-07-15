@@ -3,13 +3,15 @@
 
 package main
 
-// Packet represents a network packet in the simulation.
+// Packet represents a network packet in the simulation.  For now, this is
+// essentially synonymous with a TCP segment.
 type Packet struct {
-	Flow   FlowID
-	Seq    Seq
-	ACKNum Seq
-	Len    Bytes
+	Len Bytes
 
+	// TCP segment fields
+	Flow       FlowID
+	Seq        Seq
+	ACKNum     Seq
 	ACK        bool
 	CE         bool
 	ECE        bool
@@ -17,9 +19,8 @@ type Packet struct {
 	SCECapable SCECapable
 	SCE        bool
 	ESCE       bool
-
-	Enqueue Clock
-	Sent    Clock
+	Enqueue    Clock
+	Sent       Clock
 }
 
 // handleSim implements output.
