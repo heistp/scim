@@ -89,7 +89,7 @@ func (d *Deltic) Dequeue(node Node) (pkt Packet, ok bool) {
 	// advance oscillator and mark if sojourn above half of target
 	var m mark
 	ok = true
-	if s >= 2*d.target {
+	if s*2 >= d.target {
 		m = d.oscillate(node.Now()-d.priorTime, node, pkt)
 	}
 	switch m {
