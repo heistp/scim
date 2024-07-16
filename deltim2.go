@@ -22,8 +22,8 @@ const (
 // DelTiM (Delay Time Minimization) implements DelTiC with the sojourn time
 // taken as the minimum sojourn time down to one packet, within a given burst.
 // The minimum is tracked using a sliding window over the burst, for sub-burst
-// update times.
-type Deltim struct {
+// update times.  Idle time is used as a negative delta.
+type Deltim2 struct {
 	queue []Packet
 
 	// parameters
@@ -52,8 +52,8 @@ type Deltim struct {
 	emitMarksCtr int
 }
 
-func NewDeltim(burst, update Clock) *Deltim {
-	return &Deltim{
+func NewDeltim2(burst, update Clock) *Deltim2 {
+	return &Deltim2{
 		make([]Packet, 0),          // queue
 		burst,                      // burst
 		update,                     // update
@@ -86,7 +86,7 @@ func NewDeltim(burst, update Clock) *Deltim {
 }
 
 // Start implements Starter.
-func (d *Deltim) Start(node Node) (err error) {
+func (d *Deltim2) Start(node Node) (err error) {
 	if PlotDeltimMarks {
 		if err = d.marksPlot.Open("marks-deltim.xpl"); err != nil {
 			return
@@ -96,7 +96,7 @@ func (d *Deltim) Start(node Node) (err error) {
 }
 
 // Enqueue implements AQM.
-func (d *Deltim) Enqueue(pkt Packet, node Node) {
+func (d *Deltim2) Enqueue(pkt Packet, node Node) {
 	if len(d.queue) == 0 {
 		d.idleTime = node.Now() - d.priorTime
 	}
@@ -105,7 +105,7 @@ func (d *Deltim) Enqueue(pkt Packet, node Node) {
 }
 
 // Dequeue implements AQM.
-func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
+func (d *Deltim2) Dequeue(node Node) (pkt Packet, ok bool) {
 	if len(d.queue) == 0 {
 		return
 	}
@@ -160,7 +160,7 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 }
 
 // deltic is the delta-sigma control function, with idle time modification.
-func (d *Deltim) deltic(dt Clock) {
+func (d *Deltim2) deltic(dt Clock) {
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
 	}
@@ -193,7 +193,7 @@ func (d *Deltim) deltic(dt Clock) {
 }
 
 // oscillate increments the oscillator and returns any resulting mark.
-func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
+func (d *Deltim2) oscillate(dt Clock, node Node, pkt Packet) mark {
 	// clamp dt
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
@@ -251,7 +251,7 @@ func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
 }
 
 // plotMark plots and emits the given mark, if configured.
-func (d *Deltim) plotMark(m mark, now Clock) {
+func (d *Deltim2) plotMark(m mark, now Clock) {
 	if PlotDeltimMarks {
 		switch m {
 		case markNone:
@@ -287,7 +287,7 @@ func (d *Deltim) plotMark(m mark, now Clock) {
 }
 
 // Stop implements Stopper.
-func (d *Deltim) Stop(node Node) error {
+func (d *Deltim2) Stop(node Node) error {
 	if PlotDeltimMarks {
 		d.marksPlot.Close()
 	}
@@ -298,7 +298,7 @@ func (d *Deltim) Stop(node Node) error {
 }
 
 // emitMarks prints marks as characters.
-func (d *Deltim) emitMarks(m mark) {
+func (d *Deltim2) emitMarks(m mark) {
 	// emit marks as characters
 	switch m {
 	case markSCE:
@@ -318,7 +318,7 @@ func (d *Deltim) emitMarks(m mark) {
 }
 
 // Peek implements AQM.
-func (d *Deltim) Peek(node Node) (pkt Packet, ok bool) {
+func (d *Deltim2) Peek(node Node) (pkt Packet, ok bool) {
 	if len(d.queue) == 0 {
 		return
 	}
@@ -328,7 +328,7 @@ func (d *Deltim) Peek(node Node) (pkt Packet, ok bool) {
 }
 
 // Len implements AQM.
-func (d *Deltim) Len() int {
+func (d *Deltim2) Len() int {
 	return len(d.queue)
 }
 
