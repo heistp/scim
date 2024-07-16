@@ -80,17 +80,18 @@ func (d *Deltic) Dequeue(node Node) (pkt Packet, ok bool) {
 	// pop from head
 	pkt, d.queue = d.queue[0], d.queue[1:]
 
-	// calculate sojourn
+	// calculate sojourn and interval
 	s := node.Now() - pkt.Enqueue
+	dt := node.Now() - d.priorTime
 
 	// run deltic
-	d.deltic(s, node.Now()-d.priorTime, node)
+	d.deltic(s, dt, node)
 
 	// advance oscillator and mark if sojourn above half of target
 	var m mark
 	ok = true
 	if s*2 >= d.target {
-		m = d.oscillate(node.Now()-d.priorTime, node, pkt)
+		m = d.oscillate(dt, node, pkt)
 		switch m {
 		case markSCE:
 			pkt.SCE = true
