@@ -56,6 +56,9 @@ var RateSchedule = []RateAt{
 //	}
 //}
 
+// Iface: DelTiC AQM config
+//var UseAQM = NewDeltic(Clock(5000 * time.Microsecond))
+
 // Iface: DelTiM AQM config
 var UseAQM = NewDeltim(Clock(5000 * time.Microsecond))
 
