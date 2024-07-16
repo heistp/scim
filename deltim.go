@@ -19,13 +19,12 @@ type Deltim struct {
 	// calculated values
 	resonance Clock
 	// DelTiC variables
-	acc          Clock
-	sceOsc       Clock
-	ceOsc        Clock
-	priorTime    Clock
-	priorError   Clock
-	priorSojourn Clock
-	idleTime     Clock
+	acc        Clock
+	sceOsc     Clock
+	ceOsc      Clock
+	priorTime  Clock
+	priorError Clock
+	idleTime   Clock
 	// Plots
 	marksPlot    Xplot
 	noSCE        int
@@ -44,7 +43,6 @@ func NewDeltim(burst Clock) *Deltim {
 		Clock(time.Second) / 2,     // ceOsc
 		0,                          // priorTime
 		0,                          // priorError
-		0,                          // priorSojourn
 		0,                          // idleTime
 		Xplot{
 			Title: "SCE MD-Scaling Marks - SCE:white, CE:yellow, drop:red",
@@ -230,7 +228,7 @@ func (d *Deltim) plotMark(m mark, now Clock) {
 			d.noSCE++
 		}
 	}
-	if EmitMarks {
+	if EmitDeltimMarks {
 		d.emitMarks(m)
 	}
 }
@@ -240,7 +238,7 @@ func (d *Deltim) Stop(node Node) error {
 	if PlotDeltimMarks {
 		d.marksPlot.Close()
 	}
-	if EmitMarks && d.emitMarksCtr != 0 {
+	if EmitDeltimMarks && d.emitMarksCtr != 0 {
 		fmt.Println()
 	}
 	return nil

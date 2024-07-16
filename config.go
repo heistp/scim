@@ -88,10 +88,16 @@ const (
 	PlotQueueLength     = false
 )
 
+// DelTiC: plots
+const (
+	PlotDelticMarks = true
+	EmitDelticMarks = false
+)
+
 // DelTiM: plots
 const (
 	PlotDeltimMarks = true
-	EmitMarks       = false
+	EmitDeltimMarks = false
 )
 
 // Receiver: plots

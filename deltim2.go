@@ -281,7 +281,7 @@ func (d *Deltim2) plotMark(m mark, now Clock) {
 			d.noSCE++
 		}
 	}
-	if EmitMarks {
+	if EmitDeltimMarks {
 		d.emitMarks(m)
 	}
 }
@@ -291,7 +291,7 @@ func (d *Deltim2) Stop(node Node) error {
 	if PlotDeltimMarks {
 		d.marksPlot.Close()
 	}
-	if EmitMarks && d.emitMarksCtr != 0 {
+	if EmitDeltimMarks && d.emitMarksCtr != 0 {
 		fmt.Println()
 	}
 	return nil
