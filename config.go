@@ -134,11 +134,11 @@ const (
 // estimated available BDP by finding the in-flight bytes one RTT ago, and
 // scaling that by minRtt/srtt.
 const (
-	SlowStartGrowth                  = SSGrowthABC2
-	SlowStartCwndIncrementDivisor    = true
-	SlowStartExitThreshold           = Tau / 2 // e.g. 0, Tau, Tau/2 or Tau/4
-	SlowStartExitCwndTargetingSCE    = true
-	SlowStartExitCwndTargetingNonSCE = false
+	SlowStartGrowth                   = SSGrowthABC2
+	SlowStartExponentialBaseReduction = true
+	SlowStartExitThreshold            = Tau / 2 // e.g. 0, Tau, Tau/2 or Tau/4
+	SlowStartExitCwndTargetingSCE     = true
+	SlowStartExitCwndTargetingNonSCE  = false
 )
 
 // SSGrowth selects the growth strategy for slow-start.
