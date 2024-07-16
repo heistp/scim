@@ -170,8 +170,8 @@ const (
 // is enabled.
 const (
 	PacingSSRatio       = float64(100)
-	PacingCSSRatio      = float64(100)
 	PacingCARatio       = float64(100)
+	PacingCSSRatio      = float64(100)
 	ThrottleSCEResponse = false
 )
 
