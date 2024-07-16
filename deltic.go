@@ -91,16 +91,16 @@ func (d *Deltic) Dequeue(node Node) (pkt Packet, ok bool) {
 	ok = true
 	if s*2 >= d.target {
 		m = d.oscillate(node.Now()-d.priorTime, node, pkt)
-	}
-	switch m {
-	case markSCE:
-		pkt.SCE = true
-	case markCE:
-		pkt.CE = true
-	case markDrop:
-		// NOTE sender drop logic doesn't work yet so we do a CE
-		//ok = false
-		pkt.CE = true
+		switch m {
+		case markSCE:
+			pkt.SCE = true
+		case markCE:
+			pkt.CE = true
+		case markDrop:
+			// NOTE sender drop logic doesn't work yet so we do a CE
+			//ok = false
+			pkt.CE = true
+		}
 	}
 
 	d.plotMark(m, node.Now())
@@ -128,6 +128,8 @@ func (d *Deltic) deltic(sojourn Clock, dt Clock, node Node) {
 		d.sceOsc = 0
 		d.ceOsc = Clock(time.Second) / 2
 	}
+	//node.Logf("sojourn:%d dt:%d delta:%d sigma:%d acc:%d sceOsc:%d",
+	//	sojourn, dt, delta, sigma, d.acc, d.sceOsc)
 }
 
 // oscillate increments the oscillator and returns any resulting mark.
