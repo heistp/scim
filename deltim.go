@@ -5,11 +5,11 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"strconv"
 	"time"
 )
 
+/*
 type mark int
 
 const (
@@ -18,32 +18,26 @@ const (
 	markCE
 	markDrop
 )
+*/
 
 // DelTiM (Delay Time Minimization) implements DelTiC with the sojourn time
 // taken as the minimum sojourn time down to one packet, within a given burst.
 // The minimum is tracked using a sliding window over the burst, for sub-burst
 // update times.
-type Deltim struct {
+type Deltim2 struct {
 	queue []Packet
-
 	// parameters
-	burst  Clock
-	update Clock
+	burst Clock
 	// calculated values
 	resonance Clock
 	// DelTiC variables
-	acc        Clock
-	sceOsc     Clock
-	ceOsc      Clock
-	priorTime  Clock
-	priorError Clock
-	// error window variables
-	win         *errorWindow
-	minDelay    Clock
-	updateIdle  Clock
-	updateStart Clock
-	updateEnd   Clock
-	idleTime    Clock
+	acc          Clock
+	sceOsc       Clock
+	ceOsc        Clock
+	priorTime    Clock
+	priorError   Clock
+	priorSojourn Clock
+	idleTime     Clock
 	// Plots
 	marksPlot    Xplot
 	noSCE        int
@@ -52,23 +46,18 @@ type Deltim struct {
 	emitMarksCtr int
 }
 
-func NewDeltim(burst, update Clock) *Deltim {
-	return &Deltim{
+func NewDeltim2(burst Clock) *Deltim2 {
+	return &Deltim2{
 		make([]Packet, 0),          // queue
 		burst,                      // burst
-		update,                     // update
 		Clock(time.Second) / burst, // resonance
 		0,                          // acc
 		0,                          // sceOsc
 		Clock(time.Second) / 2,     // ceOsc
 		0,                          // priorTime
 		0,                          // priorError
-		newErrorWindow(int(burst/update)+2, burst), // win
-		math.MaxInt64, // minDelay
-		0,             // updateIdle
-		0,             // updateStart
-		0,             // updateEnd
-		0,             // idleTime
+		0,                          // priorSojourn
+		0,                          // idleTime
 		Xplot{
 			Title: "SCE MD-Scaling Marks - SCE:white, CE:yellow, drop:red",
 			X: Axis{
@@ -86,7 +75,7 @@ func NewDeltim(burst, update Clock) *Deltim {
 }
 
 // Start implements Starter.
-func (d *Deltim) Start(node Node) (err error) {
+func (d *Deltim2) Start(node Node) (err error) {
 	if PlotDeltimMarks {
 		if err = d.marksPlot.Open("marks-deltim.xpl"); err != nil {
 			return
@@ -96,7 +85,7 @@ func (d *Deltim) Start(node Node) (err error) {
 }
 
 // Enqueue implements AQM.
-func (d *Deltim) Enqueue(pkt Packet, node Node) {
+func (d *Deltim2) Enqueue(pkt Packet, node Node) {
 	if len(d.queue) == 0 {
 		d.idleTime = node.Now() - d.priorTime
 	}
@@ -105,37 +94,21 @@ func (d *Deltim) Enqueue(pkt Packet, node Node) {
 }
 
 // Dequeue implements AQM.
-func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
+func (d *Deltim2) Dequeue(node Node) (pkt Packet, ok bool) {
 	if len(d.queue) == 0 {
 		return
 	}
 	// pop from head
 	pkt, d.queue = d.queue[0], d.queue[1:]
 
-	// handle idle time
-	d.updateIdle += d.idleTime
-
-	// update minimum delay from next packet, or 0 if no next packet
-	if len(d.queue) > 0 {
-		s := node.Now() - d.queue[0].Enqueue
-		if s < d.minDelay {
-			d.minDelay = s
-		}
-	} else {
-		d.minDelay = 0
+	// deltic error is sojourn time down to one packet, or negative idle time
+	var e Clock
+	if d.idleTime > 0 {
+		e = -d.idleTime
+	} else if len(d.queue) > 0 {
+		e = node.Now() - d.queue[0].Enqueue
 	}
-
-	// update after update time
-	if node.Now() > d.updateEnd {
-		// add min delay to window
-		d.win.add(d.minDelay, node.Now())
-		d.deltic(node.Now() - d.updateStart)
-		// reset update state
-		d.minDelay = math.MaxInt64
-		d.updateIdle = 0
-		d.updateStart = node.Now()
-		d.updateEnd = node.Now() + d.update
-	}
+	d.deltic(e, node.Now()-d.priorTime, node)
 
 	// advance oscillator and mark if not after idle period
 	var m mark
@@ -160,30 +133,18 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 }
 
 // deltic is the delta-sigma control function, with idle time modification.
-func (d *Deltim) deltic(dt Clock) {
+func (d *Deltim2) deltic(err Clock, dt Clock, node Node) {
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
 	}
 	var delta, sigma Clock
-	if d.updateIdle == 0 {
-		m := d.win.minimum()
-		delta = m - d.priorError
-		sigma = m.MultiplyScaled(dt)
-		d.priorError = m
-	} else {
-		// note: the backoff below is dubious mathematically, even if it seems
-		// to work pretty well across a wide range of conditions.  In corner
-		// cases, it doesn't back off quickly enough, for example at end of
-		// slow-start for a high bandwidth flow.
-		//
-		// Ideally, we'd like the positive error to equal the negative error,
-		// but since there's no negative sojourn time, it doesn't seem possible.
-		// There may be a better mathematical relationship for how to adjust the
-		// accumulator after an idle period. The answer is *not* to just clamp
-		// the accumulator, as that leads to oscillations and other bad behavior.
-		delta = -d.updateIdle
-		//sigma = -d.updateIdle.MultiplyScaled(dt)
+	delta = err - d.priorError
+	sigma = err.MultiplyScaled(dt)
+	d.priorError = err
+	if err < 0 {
 		d.priorError = 0
+		//node.Logf("err:%d acc:%d delta:%d sigma:%d",
+		//	err, d.acc, delta, sigma)
 	}
 	if d.acc += ((delta + sigma) * d.resonance); d.acc < 0 {
 		d.acc = 0
@@ -193,7 +154,7 @@ func (d *Deltim) deltic(dt Clock) {
 }
 
 // oscillate increments the oscillator and returns any resulting mark.
-func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
+func (d *Deltim2) oscillate(dt Clock, node Node, pkt Packet) mark {
 	// clamp dt
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
@@ -251,7 +212,7 @@ func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
 }
 
 // plotMark plots and emits the given mark, if configured.
-func (d *Deltim) plotMark(m mark, now Clock) {
+func (d *Deltim2) plotMark(m mark, now Clock) {
 	if PlotDeltimMarks {
 		switch m {
 		case markNone:
@@ -287,7 +248,7 @@ func (d *Deltim) plotMark(m mark, now Clock) {
 }
 
 // Stop implements Stopper.
-func (d *Deltim) Stop(node Node) error {
+func (d *Deltim2) Stop(node Node) error {
 	if PlotDeltimMarks {
 		d.marksPlot.Close()
 	}
@@ -298,7 +259,7 @@ func (d *Deltim) Stop(node Node) error {
 }
 
 // emitMarks prints marks as characters.
-func (d *Deltim) emitMarks(m mark) {
+func (d *Deltim2) emitMarks(m mark) {
 	// emit marks as characters
 	switch m {
 	case markSCE:
@@ -318,7 +279,7 @@ func (d *Deltim) emitMarks(m mark) {
 }
 
 // Peek implements AQM.
-func (d *Deltim) Peek(node Node) (pkt Packet, ok bool) {
+func (d *Deltim2) Peek(node Node) (pkt Packet, ok bool) {
 	if len(d.queue) == 0 {
 		return
 	}
@@ -328,84 +289,6 @@ func (d *Deltim) Peek(node Node) (pkt Packet, ok bool) {
 }
 
 // Len implements AQM.
-func (d *Deltim) Len() int {
+func (d *Deltim2) Len() int {
 	return len(d.queue)
-}
-
-// errorWindow keeps track of a running minimum error in a ring buffer.
-type errorWindow struct {
-	ring     []errorAt
-	duration Clock
-	start    int
-	end      int
-}
-
-// newErrorWindow returns a new errorWindow.
-func newErrorWindow(size int, duration Clock) *errorWindow {
-	return &errorWindow{
-		make([]errorAt, size),
-		duration,
-		0,
-		0,
-	}
-}
-
-// add adds an error value.
-func (w *errorWindow) add(value Clock, time Clock) {
-	// remove equal or larger values from the end
-	for w.start != w.end {
-		p := w.prior(w.end)
-		if w.ring[p].value < value {
-			break
-		}
-		w.end = p
-	}
-	// add the value
-	w.ring[w.end] = errorAt{value, time}
-	if w.end = w.next(w.end); w.end == w.start {
-		panic(fmt.Sprintf("errorWindow overflow, len %d", len(w.ring)))
-	}
-	// remove expired values from the start
-	t := time - w.duration
-	for w.ring[w.start].time <= t {
-		w.start = w.next(w.start)
-	}
-}
-
-// min returns the minimum error value.
-func (w *errorWindow) minimum() Clock {
-	if w.start != w.end {
-		return w.ring[w.start].value
-	}
-	return 0
-}
-
-// next returns the ring index after the given index.
-func (w *errorWindow) next(index int) int {
-	if index >= len(w.ring)-1 {
-		return 0
-	}
-	return index + 1
-}
-
-// prior returns the ring index before the given index.
-func (w *errorWindow) prior(index int) int {
-	if index > 0 {
-		return index - 1
-	}
-	return len(w.ring) - 1
-}
-
-// length returns the number of elements in the ring.
-func (w *errorWindow) length() int {
-	if w.end >= w.start {
-		return w.end - w.start
-	}
-	return len(w.ring) - (w.start - w.end)
-}
-
-// errorAt contains a value for the errorWindow.
-type errorAt struct {
-	value Clock
-	time  Clock
 }

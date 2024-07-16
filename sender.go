@@ -460,7 +460,7 @@ func (f *Flow) growCwndSlowStart(acked Bytes, node Node) {
 	if f.state == FlowStateCSS {
 		i /= HyCSSGrowthDivisor
 	}
-	if SlowStartCwndIncrementDivisor {
+	if SlowStartExponentialBaseReduction {
 		i /= Bytes(f.ssSCECtr + 1)
 	}
 	f.cwnd += i
