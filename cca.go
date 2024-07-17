@@ -10,6 +10,7 @@ import (
 
 // Reno implements TCP Reno.
 type Reno struct {
+	sce           Responder
 	caAcked       Bytes
 	priorGrowth   Clock
 	priorCEMD     Clock
@@ -21,6 +22,7 @@ type Reno struct {
 // NewReno returns a new Reno (not a NewReno :).
 func NewReno() *Reno {
 	return &Reno{
+		MD(SCE_MD),        // sce
 		0,                 // caAcked
 		0,                 // priorGrowth
 		0,                 // priorCEMD
@@ -56,15 +58,7 @@ func (r *Reno) reactToSCE(flow *Flow, node Node) {
 			(node.Now()-r.priorCEMD) > flow.srtt
 	}
 	if b {
-		md := SCE_MD
-		if RateFairness {
-			tau := float64(Tau) * float64(flow.srtt) * float64(flow.srtt) /
-				float64(NominalRTT) / float64(NominalRTT)
-			md = math.Pow(CEMD, float64(1)/tau)
-		}
-		if flow.cwnd = Bytes(float64(flow.cwnd) * md); flow.cwnd < MSS {
-			flow.cwnd = MSS
-		}
+		flow.cwnd = r.sce.Respond(flow)
 		r.priorSCEMD = node.Now()
 	} else {
 		//node.Logf("ignore SCE")
@@ -113,6 +107,7 @@ func (Reno) sceRecoveryTime(flow *Flow, node Node) Clock {
 
 // CUBIC implements a basic version of RFC9438 CUBIC.
 type CUBIC struct {
+	sce        Responder
 	priorCEMD  Clock
 	priorSCEMD Clock
 	tEpoch     Clock
@@ -125,6 +120,8 @@ type CUBIC struct {
 // NewCUBIC returns a new CUBIC.
 func NewCUBIC() *CUBIC {
 	return &CUBIC{
+		MD(CubicBetaSCE), // sce
+		//SqrtP{},           // sce
 		0,                 // priorCEMD
 		0,                 // priorSCEMD
 		0,                 // tEpoch
@@ -183,15 +180,7 @@ func (c *CUBIC) reactToSCE(flow *Flow, node Node) {
 	}
 	if b {
 		c.updateWmax(flow.cwnd)
-		md := CubicBetaSCE
-		if RateFairness {
-			tau := float64(Tau) * float64(flow.srtt) * float64(flow.srtt) /
-				float64(NominalRTT) / float64(NominalRTT)
-			md = math.Pow(CubicBetaSCE, float64(1)/tau)
-		}
-		if flow.cwnd = Bytes(float64(flow.cwnd) * md); flow.cwnd < MSS {
-			flow.cwnd = MSS
-		}
+		flow.cwnd = c.sce.Respond(flow)
 		c.priorSCEMD = node.Now()
 		c.tEpoch = node.Now()
 		c.cwndEpoch = flow.cwnd
@@ -321,4 +310,54 @@ func (r *clockRing) length() int {
 		return r.end - r.start
 	}
 	return len(r.ring) - (r.start - r.end)
+}
+
+// A Responder adjusts cwnd in response to a congestion control signal.
+type Responder interface {
+	Respond(flow *Flow) (cnwd Bytes)
+}
+
+// SCE_MD is the multiplicative decrease for the SCE MD-Scaling response.
+var SCE_MD = math.Pow(CEMD, 1.0/Tau)
+
+// MD is a generic multiplicative decrease Responder.
+type MD float64
+
+// Respond implements Responder.
+func (m MD) Respond(flow *Flow) (cwnd Bytes) {
+	if cwnd = Bytes(float64(flow.cwnd) * float64(m)); cwnd < MSS {
+		cwnd = MSS
+	}
+	return
+}
+
+// RateFairMD is a Responder that performs an MD-Scaling multiplicative decrease
+// that results in rate independent fairness with other MD-Scaling flows.
+type RateFairMD struct {
+	MD         float64
+	NominalRTT Clock
+}
+
+// Respond implements Responder.
+func (r RateFairMD) Respond(flow *Flow) (cwnd Bytes) {
+	t := float64(Tau) * float64(flow.srtt) * float64(flow.srtt) /
+		float64(r.NominalRTT) / float64(r.NominalRTT)
+	m := math.Pow(r.MD, float64(1)/t)
+	if cwnd = Bytes(float64(flow.cwnd) * m); cwnd < MSS {
+		cwnd = MSS
+	}
+	return
+}
+
+// SqrtP is a 1/sqrt(p) Responder.
+type SqrtP struct {
+}
+
+// Respond implements Responder.
+func (s SqrtP) Respond(flow *Flow) (cwnd Bytes) {
+	m := 1.0 - math.Sqrt(float64(flow.cwnd))/float64(flow.cwnd)
+	if cwnd = Bytes(float64(flow.cwnd) * m); cwnd < MSS {
+		cwnd = MSS
+	}
+	return
 }

@@ -4,11 +4,8 @@
 package main
 
 import (
-	"math"
 	"time"
 )
-
-var SCE_MD = math.Pow(CEMD, 1.0/Tau)
 
 type FlowID int
 
