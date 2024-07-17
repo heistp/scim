@@ -17,7 +17,7 @@ const Duration = 60 * time.Second
 // Sender and Delay: flows
 var (
 	Flows = []Flow{
-		AddFlow(ECN, SCE, NewCUBIC(), Pacing, NoHyStart, true),
+		AddFlow(ECN, SCE, NewCUBIC(CMD), Pacing, NoHyStart, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{1, Clock(10 * time.Second), true},
@@ -39,8 +39,20 @@ var (
 		Clock(20 * time.Millisecond),
 		Clock(20 * time.Millisecond),
 		Clock(20 * time.Millisecond),
-		//Clock(100 * 120 * time.Microsecond),
 	}
+)
+
+// Sender: default responses
+var (
+	// CUBIC-SCE response
+	CMD = MD(CubicBetaSCE)
+	CRF = RateFairMD{CubicBeta, Clock(10 * time.Millisecond)}
+	CHF = HybridFairMD{CubicBeta, Clock(10 * time.Millisecond)}
+
+	// Reno-SCE Response
+	RMD = MD(SCE_MD)
+	RRF = RateFairMD{CEMD, Clock(10 * time.Millisecond)}
+	RHF = HybridFairMD{CEMD, Clock(10 * time.Millisecond)}
 )
 
 // IFace: initial rate and rate schedule
@@ -178,8 +190,8 @@ const (
 // ThrottleSCEResponse only responds to SCE every RTT/Tau, and only when pacing
 // is enabled.
 const (
-	PacingSSRatio       = float64(100)
-	PacingCARatio       = float64(100)
+	PacingSSRatio       = float64(100) // Linux default == 200
+	PacingCARatio       = float64(100) // Linux default == 120
 	PacingCSSRatio      = float64(100)
 	ThrottleSCEResponse = false
 )

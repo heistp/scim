@@ -20,9 +20,9 @@ type Reno struct {
 }
 
 // NewReno returns a new Reno (not a NewReno :).
-func NewReno() *Reno {
+func NewReno(sce Responder) *Reno {
 	return &Reno{
-		MD(SCE_MD),        // sce
+		sce,
 		0,                 // caAcked
 		0,                 // priorGrowth
 		0,                 // priorCEMD
@@ -118,10 +118,9 @@ type CUBIC struct {
 }
 
 // NewCUBIC returns a new CUBIC.
-func NewCUBIC() *CUBIC {
+func NewCUBIC(sce Responder) *CUBIC {
 	return &CUBIC{
-		MD(CubicBetaSCE), // sce
-		//SqrtP{},           // sce
+		sce,               // sce
 		0,                 // priorCEMD
 		0,                 // priorSCEMD
 		0,                 // tEpoch
@@ -343,6 +342,24 @@ func (r RateFairMD) Respond(flow *Flow) (cwnd Bytes) {
 	t := float64(Tau) * float64(flow.srtt) * float64(flow.srtt) /
 		float64(r.NominalRTT) / float64(r.NominalRTT)
 	m := math.Pow(r.MD, float64(1)/t)
+	if cwnd = Bytes(float64(flow.cwnd) * m); cwnd < MSS {
+		cwnd = MSS
+	}
+	return
+}
+
+// HybridFairMD is a Responder that performs an MD-Scaling multiplicative
+// decrease that is between rate independent fairness and cwnd convergence with
+// other MD-Scaling flows.
+type HybridFairMD struct {
+	MD         float64
+	NominalRTT Clock
+}
+
+// Respond implements Responder.
+func (h HybridFairMD) Respond(flow *Flow) (cwnd Bytes) {
+	t := float64(Tau) * float64(flow.srtt) / float64(h.NominalRTT)
+	m := math.Pow(h.MD, float64(1)/t)
 	if cwnd = Bytes(float64(flow.cwnd) * m); cwnd < MSS {
 		cwnd = MSS
 	}
