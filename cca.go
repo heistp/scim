@@ -58,7 +58,9 @@ func (r *Reno) reactToSCE(flow *Flow, node Node) {
 			(node.Now()-r.priorCEMD) > flow.srtt
 	}
 	if b {
-		flow.cwnd = r.sce.Respond(flow)
+		if flow.cwnd = r.sce.Respond(flow, node.Now()); flow.cwnd < MSS {
+			flow.cwnd = MSS
+		}
 		r.priorSCEMD = node.Now()
 	} else {
 		//node.Logf("ignore SCE")
@@ -179,7 +181,9 @@ func (c *CUBIC) reactToSCE(flow *Flow, node Node) {
 	}
 	if b {
 		c.updateWmax(flow.cwnd)
-		flow.cwnd = c.sce.Respond(flow)
+		if flow.cwnd = c.sce.Respond(flow, node.Now()); flow.cwnd < MSS {
+			flow.cwnd = MSS
+		}
 		c.priorSCEMD = node.Now()
 		c.tEpoch = node.Now()
 		c.cwndEpoch = flow.cwnd
@@ -313,7 +317,7 @@ func (r *clockRing) length() int {
 
 // A Responder adjusts cwnd in response to a congestion control signal.
 type Responder interface {
-	Respond(flow *Flow) (cnwd Bytes)
+	Respond(flow *Flow, now Clock) (cnwd Bytes)
 }
 
 // SCE_MD is the multiplicative decrease for the SCE MD-Scaling response.
@@ -323,10 +327,8 @@ var SCE_MD = math.Pow(CEMD, 1.0/Tau)
 type MD float64
 
 // Respond implements Responder.
-func (m MD) Respond(flow *Flow) (cwnd Bytes) {
-	if cwnd = Bytes(float64(flow.cwnd) * float64(m)); cwnd < MSS {
-		cwnd = MSS
-	}
+func (m MD) Respond(flow *Flow, now Clock) (cwnd Bytes) {
+	cwnd = Bytes(float64(flow.cwnd) * float64(m))
 	return
 }
 
@@ -338,13 +340,11 @@ type RateFairMD struct {
 }
 
 // Respond implements Responder.
-func (r RateFairMD) Respond(flow *Flow) (cwnd Bytes) {
+func (r RateFairMD) Respond(flow *Flow, now Clock) (cwnd Bytes) {
 	t := float64(Tau) * float64(flow.srtt) * float64(flow.srtt) /
 		float64(r.NominalRTT) / float64(r.NominalRTT)
 	m := math.Pow(r.MD, float64(1)/t)
-	if cwnd = Bytes(float64(flow.cwnd) * m); cwnd < MSS {
-		cwnd = MSS
-	}
+	cwnd = Bytes(float64(flow.cwnd) * m)
 	return
 }
 
@@ -357,12 +357,10 @@ type HybridFairMD struct {
 }
 
 // Respond implements Responder.
-func (h HybridFairMD) Respond(flow *Flow) (cwnd Bytes) {
+func (h HybridFairMD) Respond(flow *Flow, now Clock) (cwnd Bytes) {
 	t := float64(Tau) * float64(flow.srtt) / float64(h.NominalRTT)
 	m := math.Pow(h.MD, float64(1)/t)
-	if cwnd = Bytes(float64(flow.cwnd) * m); cwnd < MSS {
-		cwnd = MSS
-	}
+	cwnd = Bytes(float64(flow.cwnd) * m)
 	return
 }
 
@@ -371,10 +369,17 @@ type SqrtP struct {
 }
 
 // Respond implements Responder.
-func (s SqrtP) Respond(flow *Flow) (cwnd Bytes) {
+func (s SqrtP) Respond(flow *Flow, now Clock) (cwnd Bytes) {
 	m := 1.0 - math.Sqrt(float64(flow.cwnd))/float64(flow.cwnd)
-	if cwnd = Bytes(float64(flow.cwnd) * m); cwnd < MSS {
-		cwnd = MSS
-	}
+	cwnd = Bytes(float64(flow.cwnd) * m)
+	return
+}
+
+// TargetCWND ...
+type TargetCWND struct {
+}
+
+func (t TargetCWND) Respond(flow *Flow, now Clock) (cwnd Bytes) {
+	cwnd, _ = flow.targetCwnd(now)
 	return
 }
