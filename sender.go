@@ -386,7 +386,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	// grow cwnd and do HyStart++, if enabled
 	switch f.state {
 	case FlowStateSS:
-		f.growCwndSlowStart(acked, node)
+		f.growCwndSlowStart(acked)
 		if f.hystart == HyStart { // HyStart++
 			f.hystartRound(node)
 			if f.rttSampleCount >= HyNRTTSample &&
@@ -403,7 +403,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			}
 		}
 	case FlowStateCSS: // HyStart++ only
-		f.growCwndSlowStart(acked, node)
+		f.growCwndSlowStart(acked)
 		if f.hystart == HyStart { // HyStart++
 			if f.hystartRound(node) {
 				f.cssRounds++
@@ -425,7 +425,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 }
 
 // growCwndSlowStart increases cwnd for the given acked bytes.
-func (f *Flow) growCwndSlowStart(acked Bytes, node Node) {
+func (f *Flow) growCwndSlowStart(acked Bytes) {
 	var i Bytes
 	switch SlowStartGrowth {
 	case SSGrowthNoABC:
