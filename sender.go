@@ -136,12 +136,11 @@ func (s *Sender) Stop(node Node) error {
 
 // Flow represents the state for a single Flow.
 type Flow struct {
-	id      FlowID
-	active  bool
-	pacing  PacingEnabled
-	hystart HyStartEnabled
-	ecn     ECNCapable
-	sce     SCECapable
+	id     FlowID
+	active bool
+	pacing PacingEnabled
+	ecn    ECNCapable
+	sce    SCECapable
 
 	seq         Seq // SND.NXT
 	receiveNext Seq // RCV.NXT
@@ -152,6 +151,7 @@ type Flow struct {
 	minRtt      Clock
 	maxRtt      Clock
 
+	slowStart     SlowStart
 	slowStartExit Responder
 
 	cca            CCA
@@ -161,23 +161,14 @@ type Flow struct {
 	ssSCECtr       int
 
 	pacingWait bool
-
-	// HyStart++
-	lastRoundMinRTT    Clock
-	currentRoundMinRTT Clock
-	cssBaselineMinRTT  Clock
-	windowEnd          Seq
-	rttSampleCount     int
-	cssRounds          int
 }
 
 // FlowState represents the congestion control state of the Flow.
 type FlowState int
 
 const (
-	FlowStateSS  = iota // slow start
-	FlowStateCSS        // conservative slow start (HyStart++)
-	FlowStateCA         // congestion avoidance
+	FlowStateSS = iota // slow start
+	FlowStateCA        // congestion avoidance
 )
 
 // Seq is a sequence number.  For convenience, we use 64 bits.
@@ -207,22 +198,13 @@ const (
 	NoPacing               = false
 )
 
-// HyStartEnabled represents whether HyStart++ is enabled or not.
-type HyStartEnabled bool
-
-const (
-	HyStart   HyStartEnabled = true
-	NoHyStart                = false
-)
-
 // NewFlow returns a new flow.
-func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ssExit Responder,
-	cca CCA, pacing PacingEnabled, hystart HyStartEnabled, active bool) Flow {
+func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
+	ssExit Responder, cca CCA, pacing PacingEnabled, active bool) Flow {
 	return Flow{
 		id,               // id
 		active,           // active
 		pacing,           // pacing
-		hystart,          // hystart
 		ecn,              // ecn
 		sce,              // sce
 		0,                // seq
@@ -233,6 +215,7 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ssExit Responder,
 		0,                // srtt
 		ClockInfinity,    // minRtt
 		0,                // maxRtt
+		ss,               // slowStart
 		ssExit,           // slowStartExit
 		cca,              // cca
 		IW,               // cwnd
@@ -240,22 +223,16 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ssExit Responder,
 		inFlightWindow{}, // inFlightWindow
 		0,                // ssSCECtr
 		false,            // pacingWait
-		ClockInfinity,    // lastRoundMinRTT
-		ClockInfinity,    // currentRoundMinRTT
-		ClockInfinity,    // cssBaselineMinRTT
-		0,                // windowEnd
-		0,                // rttSampleCount
-		0,                // cssRounds
 	}
 }
 
 // AddFlow adds a flow with an ID from the global flowID.
-func AddFlow(ecn ECNCapable, sce SCECapable, ssExit Responder,
-	cca CCA, pacing PacingEnabled, hystart HyStartEnabled, active bool) (
+func AddFlow(ecn ECNCapable, sce SCECapable, ss SlowStart, ssExit Responder,
+	cca CCA, pacing PacingEnabled, active bool) (
 	flow Flow) {
 	i := flowID
 	flowID++
-	return NewFlow(i, ecn, sce, ssExit, cca, pacing, hystart, active)
+	return NewFlow(i, ecn, sce, ss, ssExit, cca, pacing, active)
 }
 
 // FlowID is the currently assigned flow ID, incremented as flows are added.
@@ -337,8 +314,6 @@ func (f *Flow) pacingDelay(size Bytes) Clock {
 	switch f.state {
 	case FlowStateSS:
 		r *= PacingSSRatio / 100.0
-	case FlowStateCSS:
-		r *= PacingCSSRatio / 100.0
 	case FlowStateCA:
 		r *= PacingCARatio / 100.0
 	}
@@ -361,11 +336,10 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	f.addInFlight(-acked, node.Now())
 	f.updateRTT(pkt, node)
 	f.latestAcked = pkt.ACKNum - 1
+	// react to congestion signals
 	if pkt.ECE {
 		switch f.state {
 		case FlowStateSS:
-			fallthrough
-		case FlowStateCSS:
 			f.exitSlowStart(node)
 		case FlowStateCA:
 			f.cca.reactToCE(f, node)
@@ -373,78 +347,22 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	} else if pkt.ESCE {
 		switch f.state {
 		case FlowStateSS:
-			fallthrough
-		case FlowStateCSS:
-			f.ssSCECtr++
-			if f.ssSCECtr >= SlowStartExitThreshold {
+			if f.slowStart.reactToSCE(f) {
 				f.exitSlowStart(node)
 			}
 		case FlowStateCA:
 			f.cca.reactToSCE(f, node)
 		}
 	}
-	// grow cwnd and do HyStart++, if enabled
+	// grow cwnd
 	switch f.state {
 	case FlowStateSS:
-		f.growCwndSlowStart(acked)
-		if f.hystart == HyStart { // HyStart++
-			f.hystartRound(node)
-			if f.rttSampleCount >= HyNRTTSample &&
-				f.currentRoundMinRTT != ClockInfinity &&
-				f.lastRoundMinRTT != ClockInfinity {
-				t := max(HyMinRTTThresh,
-					min(f.lastRoundMinRTT/HyMinRTTDivisor, HyMaxRTTThresh))
-				if f.currentRoundMinRTT >= f.lastRoundMinRTT+t {
-					node.Logf("HyStart: CSS")
-					f.cssBaselineMinRTT = f.currentRoundMinRTT
-					f.state = FlowStateCSS
-					f.cssRounds = 0
-				}
-			}
-		}
-	case FlowStateCSS: // HyStart++ only
-		f.growCwndSlowStart(acked)
-		if f.hystart == HyStart { // HyStart++
-			if f.hystartRound(node) {
-				f.cssRounds++
-				node.Logf("HyStart: CSS rounds %d", f.cssRounds)
-			}
-			if f.rttSampleCount >= HyNRTTSample &&
-				f.currentRoundMinRTT < f.cssBaselineMinRTT {
-				node.Logf("HyStart: back to SS")
-				f.cssBaselineMinRTT = ClockInfinity
-				f.state = FlowStateSS
-			} else if f.cssRounds >= HyCSSRounds {
-				node.Logf("HyStart: CA")
-				f.exitSlowStart(node)
-			}
+		if f.slowStart.grow(acked, f, node) {
+			f.exitSlowStart(node)
 		}
 	case FlowStateCA:
 		f.cca.handleAck(acked, f, node)
 	}
-}
-
-// growCwndSlowStart increases cwnd for the given acked bytes.
-func (f *Flow) growCwndSlowStart(acked Bytes) {
-	var i Bytes
-	switch SlowStartGrowth {
-	case SSGrowthNoABC:
-		i = MSS
-	case SSGrowthABC1_5:
-		i = acked / 2
-	case SSGrowthABC2:
-		i = acked
-	}
-	if f.hystart == HyStart && f.pacing == NoPacing {
-		i = min(i, HyStartLNoPacing*MSS)
-	}
-	if f.state == FlowStateCSS {
-		i /= HyCSSGrowthDivisor
-	}
-	if SlowStartExponentialBaseReduction {
-		i /= Bytes(f.ssSCECtr + 1)
-	}
-	f.cwnd += i
 }
 
 // exitSlowStart adjusts cwnd for slow-start exit and changes state to CA.
@@ -456,23 +374,6 @@ func (f *Flow) exitSlowStart(node Node) {
 	node.Logf("slow-start exit cwnd:%d cwnd0:%d", f.cwnd, cwnd0)
 	f.cca.slowStartExit(f, node)
 	f.state = FlowStateCA
-}
-
-// hystartRound checks if the current round has ended and if so, starts the next
-// round.
-func (f *Flow) hystartRound(node Node) (end bool) {
-	if f.latestAcked > f.windowEnd {
-		f.lastRoundMinRTT = f.currentRoundMinRTT
-		f.currentRoundMinRTT = ClockInfinity
-		f.rttSampleCount = 0
-		f.windowEnd = f.seq
-		end = true
-	}
-	if f.rtt < f.currentRoundMinRTT {
-		f.currentRoundMinRTT = f.rtt
-	}
-	f.rttSampleCount++
-	return
 }
 
 // updateRTT updates the rtt from the given packet.

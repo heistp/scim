@@ -17,7 +17,7 @@ const Duration = 60 * time.Second
 // Sender and Delay: flows
 var (
 	Flows = []Flow{
-		AddFlow(ECN, SCE, TargetCWND{}, NewCUBIC(CMD), Pacing, NoHyStart, true),
+		AddFlow(ECN, SCE, &StdSS{}, TargetCWND{}, NewCUBIC(CMD), Pacing, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{1, Clock(10 * time.Second), true},
@@ -146,11 +146,11 @@ const (
 	ScaleGrowth  = false // if true, use scalable cwnd growth
 )
 
-// Sender: Slow-Start params
+// Sender: Slow-Start defaults
 const (
-	SlowStartGrowth                   = SSGrowthABC2
-	SlowStartExponentialBaseReduction = true
-	SlowStartExitThreshold            = Tau / 2 // e.g. 0, Tau, Tau/2 or Tau/4
+	DefaultSSGrowth        = SSGrowthABC2
+	DefaultSSBaseReduction = true
+	DefaultSSExitThreshold = Tau / 2 // e.g. 0, Tau, Tau/2 or Tau/4
 )
 
 // SSGrowth selects the growth strategy for slow-start.
@@ -183,7 +183,6 @@ const (
 const (
 	PacingSSRatio       = float64(100) // Linux default == 200
 	PacingCARatio       = float64(100) // Linux default == 120
-	PacingCSSRatio      = float64(100)
 	ThrottleSCEResponse = false
 )
 
