@@ -17,7 +17,7 @@ const Duration = 60 * time.Second
 // Sender and Delay: flows
 var (
 	Flows = []Flow{
-		AddFlow(ECN, SCE, NewCUBIC(CMD), Pacing, NoHyStart, true),
+		AddFlow(ECN, SCE, TargetCWND{}, NewCUBIC(CMD), Pacing, NoHyStart, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{1, Clock(10 * time.Second), true},
@@ -147,19 +147,10 @@ const (
 )
 
 // Sender: Slow-Start params
-//
-// SlowStartExitMD: the MD done on slow-start exit, or 0 to calculate it from
-// the cwnd and bytes ACKed.
-//
-// SlowStartExitCwndTargetingSCE*: on slow-start exit, target cwnd to the
-// estimated available BDP by finding the in-flight bytes one RTT ago, and
-// scaling that by minRtt/srtt.
 const (
 	SlowStartGrowth                   = SSGrowthABC2
 	SlowStartExponentialBaseReduction = true
 	SlowStartExitThreshold            = Tau / 2 // e.g. 0, Tau, Tau/2 or Tau/4
-	SlowStartExitCwndTargetingSCE     = true
-	SlowStartExitCwndTargetingNonSCE  = false
 )
 
 // SSGrowth selects the growth strategy for slow-start.

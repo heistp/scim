@@ -8,6 +8,14 @@ import (
 	"time"
 )
 
+// A CCA implements a congestion control algorithm.
+type CCA interface {
+	slowStartExit(*Flow, Node)
+	reactToCE(*Flow, Node)
+	reactToSCE(*Flow, Node)
+	handleAck(Bytes, *Flow, Node)
+}
+
 // Reno implements TCP Reno.
 type Reno struct {
 	sce           Responder
@@ -22,7 +30,7 @@ type Reno struct {
 // NewReno returns a new Reno (not a NewReno :).
 func NewReno(sce Responder) *Reno {
 	return &Reno{
-		sce,
+		sce,               // sce
 		0,                 // caAcked
 		0,                 // priorGrowth
 		0,                 // priorCEMD
@@ -58,7 +66,7 @@ func (r *Reno) reactToSCE(flow *Flow, node Node) {
 			(node.Now()-r.priorCEMD) > flow.srtt
 	}
 	if b {
-		if flow.cwnd = r.sce.Respond(flow, node.Now()); flow.cwnd < MSS {
+		if flow.cwnd = r.sce.Respond(flow, node); flow.cwnd < MSS {
 			flow.cwnd = MSS
 		}
 		r.priorSCEMD = node.Now()
@@ -73,13 +81,11 @@ func (r *Reno) reactToSCE(flow *Flow, node Node) {
 func (r *Reno) handleAck(acked Bytes, flow *Flow, node Node) {
 	r.caAcked += acked
 	if flow.sce {
-		//if f.caAcked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
 		if r.caAcked >= flow.cwnd {
 			r.caAcked = 0
 			if ScaleGrowth && (r.caGrowthScale > 1 ||
 				node.Now()-r.priorSCEMD > 2*r.sceRecoveryTime(flow, node)) {
 				r.caGrowthScale++
-				//node.Logf("caGrowthScale:%d", f.caGrowthScale)
 			}
 		}
 		if node.Now()-r.priorGrowth > flow.srtt/Clock(r.caGrowthScale) {
@@ -87,7 +93,6 @@ func (r *Reno) handleAck(acked Bytes, flow *Flow, node Node) {
 			r.priorGrowth = node.Now()
 		}
 	} else {
-		//if f.acked >= f.cwnd && (node.Now()-f.priorGrowth) > f.srtt {
 		if r.caAcked >= flow.cwnd {
 			flow.cwnd += MSS
 			r.caAcked = 0
@@ -181,7 +186,7 @@ func (c *CUBIC) reactToSCE(flow *Flow, node Node) {
 	}
 	if b {
 		c.updateWmax(flow.cwnd)
-		if flow.cwnd = c.sce.Respond(flow, node.Now()); flow.cwnd < MSS {
+		if flow.cwnd = c.sce.Respond(flow, node); flow.cwnd < MSS {
 			flow.cwnd = MSS
 		}
 		c.priorSCEMD = node.Now()
@@ -313,73 +318,4 @@ func (r *clockRing) length() int {
 		return r.end - r.start
 	}
 	return len(r.ring) - (r.start - r.end)
-}
-
-// A Responder adjusts cwnd in response to a congestion control signal.
-type Responder interface {
-	Respond(flow *Flow, now Clock) (cnwd Bytes)
-}
-
-// SCE_MD is the multiplicative decrease for the SCE MD-Scaling response.
-var SCE_MD = math.Pow(CEMD, 1.0/Tau)
-
-// MD is a generic multiplicative decrease Responder.
-type MD float64
-
-// Respond implements Responder.
-func (m MD) Respond(flow *Flow, now Clock) (cwnd Bytes) {
-	cwnd = Bytes(float64(flow.cwnd) * float64(m))
-	return
-}
-
-// RateFairMD is a Responder that performs an MD-Scaling multiplicative decrease
-// that results in rate independent fairness with other MD-Scaling flows.
-type RateFairMD struct {
-	MD         float64
-	NominalRTT Clock
-}
-
-// Respond implements Responder.
-func (r RateFairMD) Respond(flow *Flow, now Clock) (cwnd Bytes) {
-	t := float64(Tau) * float64(flow.srtt) * float64(flow.srtt) /
-		float64(r.NominalRTT) / float64(r.NominalRTT)
-	m := math.Pow(r.MD, float64(1)/t)
-	cwnd = Bytes(float64(flow.cwnd) * m)
-	return
-}
-
-// HybridFairMD is a Responder that performs an MD-Scaling multiplicative
-// decrease that is between rate independent fairness and cwnd convergence with
-// other MD-Scaling flows.
-type HybridFairMD struct {
-	MD         float64
-	NominalRTT Clock
-}
-
-// Respond implements Responder.
-func (h HybridFairMD) Respond(flow *Flow, now Clock) (cwnd Bytes) {
-	t := float64(Tau) * float64(flow.srtt) / float64(h.NominalRTT)
-	m := math.Pow(h.MD, float64(1)/t)
-	cwnd = Bytes(float64(flow.cwnd) * m)
-	return
-}
-
-// SqrtP is a 1/sqrt(p) Responder.
-type SqrtP struct {
-}
-
-// Respond implements Responder.
-func (s SqrtP) Respond(flow *Flow, now Clock) (cwnd Bytes) {
-	m := 1.0 - math.Sqrt(float64(flow.cwnd))/float64(flow.cwnd)
-	cwnd = Bytes(float64(flow.cwnd) * m)
-	return
-}
-
-// TargetCWND ...
-type TargetCWND struct {
-}
-
-func (t TargetCWND) Respond(flow *Flow, now Clock) (cwnd Bytes) {
-	cwnd, _ = flow.targetCwnd(now)
-	return
 }

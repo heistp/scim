@@ -3,10 +3,6 @@
 
 package main
 
-import (
-	"time"
-)
-
 type FlowID int
 
 // Sender approximates a TCP sender with multiple flows.
@@ -156,6 +152,8 @@ type Flow struct {
 	minRtt      Clock
 	maxRtt      Clock
 
+	slowStartExit Responder
+
 	cca            CCA
 	cwnd           Bytes
 	inFlight       Bytes
@@ -218,8 +216,8 @@ const (
 )
 
 // NewFlow returns a new flow.
-func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, cca CCA,
-	pacing PacingEnabled, hystart HyStartEnabled, active bool) Flow {
+func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ssExit Responder,
+	cca CCA, pacing PacingEnabled, hystart HyStartEnabled, active bool) Flow {
 	return Flow{
 		id,               // id
 		active,           // active
@@ -235,6 +233,7 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, cca CCA,
 		0,                // srtt
 		ClockInfinity,    // minRtt
 		0,                // maxRtt
+		ssExit,           // slowStartExit
 		cca,              // cca
 		IW,               // cwnd
 		0,                // inFlight
@@ -251,11 +250,12 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, cca CCA,
 }
 
 // AddFlow adds a flow with an ID from the global flowID.
-func AddFlow(ecn ECNCapable, sce SCECapable, cca CCA, pacing PacingEnabled,
-	hystart HyStartEnabled, active bool) (flow Flow) {
+func AddFlow(ecn ECNCapable, sce SCECapable, ssExit Responder,
+	cca CCA, pacing PacingEnabled, hystart HyStartEnabled, active bool) (
+	flow Flow) {
 	i := flowID
 	flowID++
-	return NewFlow(i, ecn, sce, cca, pacing, hystart, active)
+	return NewFlow(i, ecn, sce, ssExit, cca, pacing, hystart, active)
 }
 
 // FlowID is the currently assigned flow ID, incremented as flows are added.
@@ -325,15 +325,7 @@ func (f *Flow) sendPacket(pktLen Bytes, node Node) bool {
 // addInFlight adds the given number of bytes to the in-flight bytes.
 func (f *Flow) addInFlight(b Bytes, now Clock) {
 	f.inFlight += b
-	if f.cwndTargetingEnabled() {
-		f.inFlightWindow.add(now, f.inFlight, now-f.srtt)
-	}
-}
-
-// cwndTargetingEnabled returns true if slow-start cwnd targeting is enabled.
-func (f *Flow) cwndTargetingEnabled() bool {
-	return (SlowStartExitCwndTargetingSCE && bool(f.sce)) ||
-		(SlowStartExitCwndTargetingNonSCE && !bool(f.sce))
+	f.inFlightWindow.add(now, f.inFlight, now-f.srtt)
 }
 
 // pacingDelay returns the Clock time to wait to pace the given bytes.
@@ -432,14 +424,6 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	}
 }
 
-// A CCA implements a congestion control algorithm.
-type CCA interface {
-	slowStartExit(*Flow, Node)
-	reactToCE(*Flow, Node)
-	reactToSCE(*Flow, Node)
-	handleAck(Bytes, *Flow, Node)
-}
-
 // growCwndSlowStart increases cwnd for the given acked bytes.
 func (f *Flow) growCwndSlowStart(acked Bytes, node Node) {
 	var i Bytes
@@ -463,39 +447,15 @@ func (f *Flow) growCwndSlowStart(acked Bytes, node Node) {
 	f.cwnd += i
 }
 
-// exitSlowStart changes state to CA and adjusts cwnd for slow-start exit.  If
-// cwnd targeting is enabled, we find what in-flight bytes were srtt ago, and
-// scale that by minRtt / srtt, which estimates the available BDP for the flow.
+// exitSlowStart adjusts cwnd for slow-start exit and changes state to CA.
 func (f *Flow) exitSlowStart(node Node) {
-	f.state = FlowStateCA
-	if f.cwndTargetingEnabled() {
-		var cwnd0, cwnd1 Bytes
-		cwnd0 = f.cwnd
-		if f.cwnd, cwnd1 = f.targetCwnd(node.Now()); f.cwnd < MSS {
-			f.cwnd = MSS
-		}
-		node.Logf("SS exit cwnd:%d cwnd0:%d cwnd1:%d minRtt:%.2fms srtt:%.2fms",
-			f.cwnd, cwnd0, cwnd1,
-			time.Duration(f.minRtt).Seconds()*1000,
-			time.Duration(f.srtt).Seconds()*1000)
-	} else {
-		cwnd0 := f.cwnd
-		f.cwnd /= 2
-		// NOTE 2/3 could be done for SSGrowthABC1_5, but not standard practice
-		node.Logf("SS exit cwnd:%d cwnd0:%d", f.cwnd, cwnd0)
-		if f.cwnd < MSS {
-			f.cwnd = MSS
-		}
+	cwnd0 := f.cwnd
+	if f.cwnd = f.slowStartExit.Respond(f, node); f.cwnd < MSS {
+		f.cwnd = MSS
 	}
+	node.Logf("SS exit cwnd:%d cwnd0:%d", f.cwnd, cwnd0)
 	f.cca.slowStartExit(f, node)
-}
-
-// targetCwnd adjusts cwnd to attempt to target the available BDP, by taking
-// the in-flight bytes one srtt ago, and scaling that by minRtt / srtt.
-func (f *Flow) targetCwnd(now Clock) (cwnd, cwnd1 Bytes) {
-	cwnd1 = f.inFlightWindow.at(now - f.srtt)
-	cwnd = cwnd1 * Bytes(f.minRtt) / Bytes(f.srtt)
-	return
+	f.state = FlowStateCA
 }
 
 // hystartRound checks if the current round has ended and if so, starts the next
