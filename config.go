@@ -188,13 +188,13 @@ const (
 
 // Sender: HyStart++ (RFC 9406)
 const (
-	HyMinRTTThresh     = Clock(2 * time.Millisecond) // default 4ms
-	HyMaxRTTThresh     = Clock(8 * time.Millisecond) // default 16ms
-	HyMinRTTDivisor    = 16                          // default 8
-	HyNRTTSample       = 4                           // default 8
-	HyCSSGrowthDivisor = 4                           // default 4
-	HyCSSRounds        = 3                           // default 5
-	HyStartLNoPacing   = 8                           // default 8
+	HyMinRTTThresh     = Clock(4 * time.Millisecond)  // default 4ms
+	HyMaxRTTThresh     = Clock(16 * time.Millisecond) // default 16ms
+	HyMinRTTDivisor    = 8                            // default 8
+	HyNRTTSample       = 8                            // default 8
+	HyCSSGrowthDivisor = 4                            // default 4
+	HyCSSRounds        = 5                            // default 5
+	HyStartLNoPacing   = 8                            // default 8
 )
 
 // Slow Start
