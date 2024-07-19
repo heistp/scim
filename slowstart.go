@@ -205,7 +205,7 @@ func (s *Slick) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 			}
 		}
 		s.burstStart = node.Now()
-		node.Logf("divisor:%d", s.divisor)
+		//node.Logf("divisor:%d", s.divisor)
 	}
 	flow.cwnd += acked / Bytes(s.divisor)
 	return
