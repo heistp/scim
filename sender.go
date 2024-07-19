@@ -3,6 +3,8 @@
 
 package main
 
+import "fmt"
+
 type FlowID int
 
 // Sender approximates a TCP sender with multiple flows.
@@ -340,7 +342,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	if pkt.ECE {
 		switch f.state {
 		case FlowStateSS:
-			f.exitSlowStart(node)
+			f.exitSlowStart(node, "CE")
 		case FlowStateCA:
 			f.cca.reactToCE(f, node)
 		}
@@ -348,7 +350,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 		switch f.state {
 		case FlowStateSS:
 			if f.slowStart.reactToSCE(f) {
-				f.exitSlowStart(node)
+				f.exitSlowStart(node, "SCE")
 			}
 		case FlowStateCA:
 			f.cca.reactToSCE(f, node)
@@ -358,7 +360,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	switch f.state {
 	case FlowStateSS:
 		if f.slowStart.grow(acked, f, node) {
-			f.exitSlowStart(node)
+			f.exitSlowStart(node, fmt.Sprintf("%T", f.slowStart))
 		}
 	case FlowStateCA:
 		f.cca.handleAck(acked, f, node)
@@ -366,12 +368,12 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 }
 
 // exitSlowStart adjusts cwnd for slow-start exit and changes state to CA.
-func (f *Flow) exitSlowStart(node Node) {
+func (f *Flow) exitSlowStart(node Node, reason string) {
 	cwnd0 := f.cwnd
 	if f.cwnd = f.slowStartExit.Respond(f, node); f.cwnd < MSS {
 		f.cwnd = MSS
 	}
-	node.Logf("slow-start exit cwnd:%d cwnd0:%d", f.cwnd, cwnd0)
+	node.Logf("slow-start exit %s cwnd:%d cwnd0:%d", reason, f.cwnd, cwnd0)
 	f.cca.slowStartExit(f, node)
 	f.state = FlowStateCA
 }

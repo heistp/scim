@@ -17,7 +17,7 @@ const Duration = 60 * time.Second
 // Sender and Delay: flows
 var (
 	Flows = []Flow{
-		AddFlow(ECN, SCE, &StdSS{}, TargetCWND{}, NewCUBIC(CMD), Pacing, true),
+		AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{1, Clock(10 * time.Second), true},
@@ -158,8 +158,8 @@ type SSGrowth int
 
 const (
 	SSGrowthNoABC  = iota // grow by one MSS per ACK
-	SSGrowthABC1_5        // use ABC with base of 1.5, grow by 1/2 acked bytes
 	SSGrowthABC2          // use ABC with base of 2, grow by acked bytes
+	SSGrowthABC1_5        // use ABC with base of 1.5, grow by 1/2 acked bytes
 )
 
 // Sender: TCP params
@@ -195,6 +195,16 @@ const (
 	HyCSSGrowthDivisor = 4                           // default 4
 	HyCSSRounds        = 3                           // default 5
 	HyStartLNoPacing   = 8                           // default 8
+)
+
+// Slow Start
+var (
+	Slick1  = NewSlick(Clock(1 * time.Millisecond))
+	Slick2  = NewSlick(Clock(2 * time.Millisecond))
+	Slick3  = NewSlick(Clock(3 * time.Millisecond))
+	Slick4  = NewSlick(Clock(4 * time.Millisecond))
+	Slick5  = NewSlick(Clock(5 * time.Millisecond))
+	Slick10 = NewSlick(Clock(10 * time.Millisecond))
 )
 
 // main
