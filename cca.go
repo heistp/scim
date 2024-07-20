@@ -5,7 +5,6 @@ package main
 
 import (
 	"math"
-	"time"
 )
 
 // A CCA implements a congestion control algorithm.
@@ -18,13 +17,12 @@ type CCA interface {
 
 // Reno implements TCP Reno.
 type Reno struct {
-	sce           Responder
-	caAcked       Bytes
-	priorGrowth   Clock
-	priorCEMD     Clock
-	priorSCEMD    Clock
-	caGrowthScale int
-	sceHistory    *clockRing
+	sce         Responder
+	caAcked     Bytes
+	priorGrowth Clock
+	priorCEMD   Clock
+	priorSCEMD  Clock
+	sceHistory  *clockRing
 }
 
 // NewReno returns a new Reno (not a NewReno :).
@@ -35,7 +33,6 @@ func NewReno(sce Responder) *Reno {
 		0,                 // priorGrowth
 		0,                 // priorCEMD
 		0,                 // priorSCEMD
-		1,                 // caGrowthScale
 		newClockRing(Tau), // sceHistory
 	}
 }
@@ -73,43 +70,17 @@ func (r *Reno) reactToSCE(flow *Flow, node Node) {
 	} else {
 		//node.Logf("ignore SCE")
 	}
-	r.caGrowthScale = 1
 	r.caAcked = 0
 }
 
 // handleAck implements CCA.
 func (r *Reno) handleAck(acked Bytes, flow *Flow, node Node) {
 	r.caAcked += acked
-	if flow.sce {
-		if r.caAcked >= flow.cwnd {
-			r.caAcked = 0
-			if ScaleGrowth && (r.caGrowthScale > 1 ||
-				node.Now()-r.priorSCEMD > 2*r.sceRecoveryTime(flow, node)) {
-				r.caGrowthScale++
-			}
-		}
-		if node.Now()-r.priorGrowth > flow.srtt/Clock(r.caGrowthScale) {
-			flow.cwnd += MSS
-			r.priorGrowth = node.Now()
-		}
-	} else {
-		if r.caAcked >= flow.cwnd {
-			flow.cwnd += MSS
-			r.caAcked = 0
-			r.priorGrowth = node.Now()
-		}
+	if r.caAcked >= flow.cwnd && node.Now()-r.priorGrowth > flow.srtt {
+		flow.cwnd += MSS
+		r.caAcked = 0
+		r.priorGrowth = node.Now()
 	}
-}
-
-// sceRecoveryTime returns the estimated sawtooth recovery time for the BDP.
-func (Reno) sceRecoveryTime(flow *Flow, node Node) Clock {
-	t := float64(flow.cwnd) * (1 - SCE_MD) *
-		float64(time.Duration(flow.srtt).Seconds()) / float64(MSS)
-	c := Clock(t * float64(time.Second))
-	if c > Clock(time.Second) {
-		return Clock(time.Second)
-	}
-	return c
 }
 
 // CUBIC implements a basic version of RFC9438 CUBIC.

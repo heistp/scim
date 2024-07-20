@@ -143,7 +143,6 @@ const (
 	Tau          = 64     // SCE-MD scale factor
 	RateFairness = false
 	NominalRTT   = 10 * time.Millisecond
-	ScaleGrowth  = false // if true, use scalable cwnd growth
 )
 
 // Sender: Slow-Start defaults
