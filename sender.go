@@ -3,7 +3,9 @@
 
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type FlowID int
 
@@ -162,7 +164,9 @@ type Flow struct {
 	inFlightWindow inFlightWindow
 	ssSCECtr       int
 
-	pacingWait bool
+	pacingWait    bool
+	pacingSSRatio float64
+	pacingCARatio float64
 }
 
 // FlowState represents the congestion control state of the Flow.
@@ -204,27 +208,29 @@ const (
 func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 	ssExit Responder, cca CCA, pacing PacingEnabled, active bool) Flow {
 	return Flow{
-		id,               // id
-		active,           // active
-		pacing,           // pacing
-		ecn,              // ecn
-		sce,              // sce
-		0,                // seq
-		0,                // receiveNext
-		-1,               // latestAcked
-		FlowStateSS,      // state
-		ClockInfinity,    // rtt
-		0,                // srtt
-		ClockInfinity,    // minRtt
-		0,                // maxRtt
-		ss,               // slowStart
-		ssExit,           // slowStartExit
-		cca,              // cca
-		IW,               // cwnd
-		0,                // inFlight
-		inFlightWindow{}, // inFlightWindow
-		0,                // ssSCECtr
-		false,            // pacingWait
+		id,                   // id
+		active,               // active
+		pacing,               // pacing
+		ecn,                  // ecn
+		sce,                  // sce
+		0,                    // seq
+		0,                    // receiveNext
+		-1,                   // latestAcked
+		FlowStateSS,          // state
+		ClockInfinity,        // rtt
+		0,                    // srtt
+		ClockInfinity,        // minRtt
+		0,                    // maxRtt
+		ss,                   // slowStart
+		ssExit,               // slowStartExit
+		cca,                  // cca
+		IW,                   // cwnd
+		0,                    // inFlight
+		inFlightWindow{},     // inFlightWindow
+		0,                    // ssSCECtr
+		false,                // pacingWait
+		DefaultPacingSSRatio, // pacingSSRatio
+		DefaultPacingCARatio, // pacingCARatio
 	}
 }
 
@@ -315,9 +321,9 @@ func (f *Flow) pacingDelay(size Bytes) Clock {
 	r := float64(f.cwnd) / float64(f.srtt)
 	switch f.state {
 	case FlowStateSS:
-		r *= PacingSSRatio / 100.0
+		r *= f.pacingSSRatio
 	case FlowStateCA:
-		r *= PacingCARatio / 100.0
+		r *= f.pacingCARatio
 	}
 	return Clock(float64(size) / r)
 }

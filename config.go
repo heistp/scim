@@ -166,7 +166,7 @@ const (
 const (
 	MSS      = Bytes(1500)
 	IW       = 10 * MSS
-	RTTAlpha = float64(0.1)
+	RTTAlpha = 0.125 // RFC 6298
 )
 
 // Sender: CUBIC params
@@ -181,9 +181,9 @@ const (
 // ThrottleSCEResponse only responds to SCE every RTT/Tau, and only when pacing
 // is enabled.
 const (
-	PacingSSRatio       = float64(100) // Linux default == 200
-	PacingCARatio       = float64(100) // Linux default == 120
-	ThrottleSCEResponse = false
+	DefaultPacingSSRatio = 1.0 // Linux default == 2.0
+	DefaultPacingCARatio = 1.0 // Linux default == 1.2
+	ThrottleSCEResponse  = false
 )
 
 // Sender: HyStart++ (RFC 9406)
