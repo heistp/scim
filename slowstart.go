@@ -5,6 +5,7 @@ package main
 
 // A SlowStart implements the slow-start state for a sender.
 type SlowStart interface {
+	reactToCE(flow *Flow) (exit bool)
 	reactToSCE(flow *Flow) (exit bool)
 	grow(acked Bytes, flow *Flow, node Node) (exit bool)
 }
@@ -19,6 +20,12 @@ func NewStdSS() *StdSS {
 	return &StdSS{
 		0, // sceCtr
 	}
+}
+
+// reactToCE implements SlowStart.
+func (*StdSS) reactToCE(flow *Flow) (exit bool) {
+	exit = true
+	return
 }
 
 // reactToSCE implements SlowStart.
@@ -74,6 +81,12 @@ func NewHyStartPP() *HyStartPP {
 		false,         // conservative
 		0,             // sceCtr
 	}
+}
+
+// reactToCE implements SlowStart.
+func (*HyStartPP) reactToCE(flow *Flow) (exit bool) {
+	exit = true
+	return
 }
 
 // reactToSCE implements SlowStart.
@@ -174,6 +187,12 @@ func NewSlick(burst Clock) *Slick {
 	}
 }
 
+// reactToCE implements SlowStart.
+func (*Slick) reactToCE(flow *Flow) (exit bool) {
+	exit = true
+	return
+}
+
 // reactToSCE implements SlowStart.
 func (s *Slick) reactToSCE(flow *Flow) (exit bool) {
 	s.sceCtr++
@@ -208,5 +227,59 @@ func (s *Slick) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 		//node.Logf("divisor:%d", s.divisor)
 	}
 	flow.cwnd += acked / Bytes(s.divisor)
+	return
+}
+
+// Leonardo reduces both the exponential base and the pacing scaling factor in
+// response to congestion signals.  K is the number of acked bytes before CWND
+// is increased by one byte, and follows the Leonardo numbers on congestion
+// signals.  The initial scale factor is the limit of the product ∏(i) 1+1/K(i).
+type Leonardo struct {
+}
+
+// reactToCE implements SlowStart.
+func (*Leonardo) reactToCE(flow *Flow) (exit bool) {
+	exit = true
+	return
+}
+
+// reactToSCE implements SlowStart.
+func (l *Leonardo) reactToSCE(flow *Flow) (exit bool) {
+	/*
+		s.sceCtr++
+		if DefaultSSBaseReduction {
+			s.divisor++
+		}
+		exit = s.sceCtr >= DefaultSSExitThreshold
+	*/
+	return
+}
+
+// grow implements SlowStart.
+func (l *Leonardo) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
+	/*
+		hi := flow.srtt-flow.minRtt > s.burst
+		if hi != s.priorHi {
+			s.edgeStart = node.Now()
+			s.burstStart = node.Now()
+			s.priorHi = hi
+		}
+		if hi && node.Now()-s.edgeStart > max(s.burst, flow.srtt) {
+			exit = true
+			return
+		}
+		if node.Now()-s.burstStart > s.burst {
+			if hi {
+				s.divisor++
+			} else {
+				if s.divisor--; s.divisor < DefaultSSGrowth {
+					s.divisor = DefaultSSGrowth
+				}
+			}
+			s.burstStart = node.Now()
+			//node.Logf("divisor:%d", s.divisor)
+		}
+		flow.cwnd += acked / Bytes(s.divisor)
+	*/
 	return
 }

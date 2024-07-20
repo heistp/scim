@@ -348,7 +348,9 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	if pkt.ECE {
 		switch f.state {
 		case FlowStateSS:
-			f.exitSlowStart(node, "CE")
+			if f.slowStart.reactToCE(f) {
+				f.exitSlowStart(node, "CE")
+			}
 		case FlowStateCA:
 			f.cca.reactToCE(f, node)
 		}
