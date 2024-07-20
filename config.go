@@ -168,6 +168,11 @@ const (
 	RTTAlpha = 0.125 // RFC 6298
 )
 
+// Sender: Reno params
+const (
+	RenoFractionalGrowth = false // NOTE: faster/smoother than RFC 5681 growth
+)
+
 // Sender: CUBIC params
 const (
 	CubicBeta            = 0.7  // RFC 9438 Section 4.6

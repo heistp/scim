@@ -76,10 +76,20 @@ func (r *Reno) reactToSCE(flow *Flow, node Node) {
 // handleAck implements CCA.
 func (r *Reno) handleAck(acked Bytes, flow *Flow, node Node) {
 	r.caAcked += acked
-	if r.caAcked >= flow.cwnd && node.Now()-r.priorGrowth > flow.srtt {
-		flow.cwnd += MSS
-		r.caAcked = 0
+	if RenoFractionalGrowth {
+		// NOTE this is faster than RFC 5681 Reno-linear growth
+		b := flow.cwnd / MSS
+		for r.caAcked >= b && node.Now()-r.priorGrowth > flow.srtt/Clock(MSS) {
+			flow.cwnd++
+			r.caAcked -= b
+		}
 		r.priorGrowth = node.Now()
+	} else {
+		if r.caAcked >= flow.cwnd && node.Now()-r.priorGrowth > flow.srtt {
+			flow.cwnd += MSS
+			r.caAcked = 0
+			r.priorGrowth = node.Now()
+		}
 	}
 }
 
