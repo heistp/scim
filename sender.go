@@ -389,7 +389,8 @@ func (f *Flow) exitSlowStart(node Node, reason string) {
 	if f.cwnd = f.slowStartExit.Respond(f, node); f.cwnd < MSS {
 		f.cwnd = MSS
 	}
-	node.Logf("slow-start exit %s cwnd:%d cwnd0:%d", reason, f.cwnd, cwnd0)
+	node.Logf("flow:%d slow-start exit %s cwnd:%d cwnd0:%d",
+		f.id, reason, f.cwnd, cwnd0)
 	f.cca.slowStartExit(f, node)
 	f.state = FlowStateCA
 }

@@ -298,8 +298,8 @@ func (l *Leo) advance(flow *Flow, node Node) (exit bool) {
 		l.signalNext = flow.seq
 	}
 	r := flow.pacingRate()
-	node.Logf("stage:%d k:%d scale:%f cwnd:%d rate0:%.2f rate:%.2f",
-		l.stage, l.k(), l.scale(), flow.cwnd, r0.Mbps(), r.Mbps())
+	node.Logf("flow:%d stage:%d k:%d scale:%f cwnd:%d rate0:%.2f rate:%.2f",
+		flow.id, l.stage, l.k(), l.scale(), flow.cwnd, r0.Mbps(), r.Mbps())
 	return
 }
 
