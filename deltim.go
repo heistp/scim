@@ -18,7 +18,7 @@ type Deltim struct {
 	burst Clock
 	// calculated values
 	resonance Clock
-	// DelTiC variables
+	// DelTiM variables
 	acc        Clock
 	sceOsc     Clock
 	ceOsc      Clock
@@ -87,14 +87,14 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 	// pop from head
 	pkt, d.queue = d.queue[0], d.queue[1:]
 
-	// deltic error is sojourn time down to one packet, or negative idle time
+	// deltim error is sojourn time down to one packet, or negative idle time
 	var e Clock
 	if d.idleTime > 0 {
 		e = -d.idleTime
 	} else if len(d.queue) > 0 {
 		e = node.Now() - d.queue[0].Enqueue
 	}
-	d.deltic(e, node.Now()-d.priorTime, node)
+	d.deltim(e, node.Now()-d.priorTime, node)
 
 	// advance oscillator and mark if not after idle period
 	var m mark
@@ -118,8 +118,8 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 	return
 }
 
-// deltic is the delta-sigma control function, with idle time modification.
-func (d *Deltim) deltic(err Clock, dt Clock, node Node) {
+// deltim is the delta-sigma control function, with idle time modification.
+func (d *Deltim) deltim(err Clock, dt Clock, node Node) {
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
 	}
