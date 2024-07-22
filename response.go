@@ -94,3 +94,13 @@ func (HalfCWND) Respond(flow *Flow, node Node) (cwnd Bytes) {
 	cwnd = flow.cwnd / 2
 	return
 }
+
+// NoResponse is a Responder that does nothing.
+type NoResponse struct {
+}
+
+// Respond implements Responder.
+func (NoResponse) Respond(flow *Flow, node Node) (cwnd Bytes) {
+	cwnd = flow.cwnd
+	return
+}

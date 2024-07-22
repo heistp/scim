@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 )
 
 type FlowID int
@@ -330,6 +331,11 @@ func (f *Flow) pacingDelay(size Bytes) Clock {
 	return Clock(float64(size) / r)
 }
 
+// pacingRate returns the current pacing rate.
+func (f *Flow) pacingRate() Bitrate {
+	return CalcBitrate(MSS, time.Duration(f.pacingDelay(MSS)))
+}
+
 // receive handles an incoming packet.
 func (f *Flow) receive(pkt Packet, node Node) {
 	if !pkt.ACK {
@@ -350,7 +356,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	if pkt.ECE {
 		switch f.state {
 		case FlowStateSS:
-			if f.slowStart.reactToCE(f) {
+			if f.slowStart.reactToCE(f, node) {
 				f.exitSlowStart(node, "CE")
 			}
 		case FlowStateCA:
@@ -359,7 +365,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	} else if pkt.ESCE {
 		switch f.state {
 		case FlowStateSS:
-			if f.slowStart.reactToSCE(f) {
+			if f.slowStart.reactToSCE(f, node) {
 				f.exitSlowStart(node, "SCE")
 			}
 		case FlowStateCA:

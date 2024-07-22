@@ -3,10 +3,14 @@
 
 package main
 
+import (
+	"fmt"
+)
+
 // A SlowStart implements the slow-start state for a sender.
 type SlowStart interface {
-	reactToCE(flow *Flow) (exit bool)
-	reactToSCE(flow *Flow) (exit bool)
+	reactToCE(*Flow, Node) (exit bool)
+	reactToSCE(*Flow, Node) (exit bool)
 	grow(acked Bytes, flow *Flow, node Node) (exit bool)
 }
 
@@ -23,13 +27,13 @@ func NewStdSS() *StdSS {
 }
 
 // reactToCE implements SlowStart.
-func (*StdSS) reactToCE(flow *Flow) (exit bool) {
+func (*StdSS) reactToCE(flow *Flow, node Node) (exit bool) {
 	exit = true
 	return
 }
 
 // reactToSCE implements SlowStart.
-func (s *StdSS) reactToSCE(flow *Flow) (exit bool) {
+func (s *StdSS) reactToSCE(flow *Flow, node Node) (exit bool) {
 	s.sceCtr++
 	exit = s.sceCtr >= DefaultSSExitThreshold
 	return
@@ -84,13 +88,13 @@ func NewHyStartPP() *HyStartPP {
 }
 
 // reactToCE implements SlowStart.
-func (*HyStartPP) reactToCE(flow *Flow) (exit bool) {
+func (*HyStartPP) reactToCE(flow *Flow, node Node) (exit bool) {
 	exit = true
 	return
 }
 
 // reactToSCE implements SlowStart.
-func (h *HyStartPP) reactToSCE(flow *Flow) (exit bool) {
+func (h *HyStartPP) reactToSCE(flow *Flow, node Node) (exit bool) {
 	h.sceCtr++
 	exit = h.sceCtr >= DefaultSSExitThreshold
 	return
@@ -188,13 +192,13 @@ func NewSlick(burst Clock) *Slick {
 }
 
 // reactToCE implements SlowStart.
-func (*Slick) reactToCE(flow *Flow) (exit bool) {
+func (*Slick) reactToCE(flow *Flow, node Node) (exit bool) {
 	exit = true
 	return
 }
 
 // reactToSCE implements SlowStart.
-func (s *Slick) reactToSCE(flow *Flow) (exit bool) {
+func (s *Slick) reactToSCE(flow *Flow, node Node) (exit bool) {
 	s.sceCtr++
 	if DefaultSSBaseReduction {
 		s.divisor++
@@ -230,56 +234,143 @@ func (s *Slick) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 	return
 }
 
-// Leonardo reduces both the exponential base and the pacing scaling factor in
+// Leo reduces both the exponential base and the pacing scaling factor in
 // response to congestion signals.  K is the number of acked bytes before CWND
-// is increased by one byte, and follows the Leonardo numbers on congestion
+// is increased by one byte, and follows the Leo numbers on congestion
 // signals.  The initial scale factor is the limit of the product ∏(i) 1+1/K(i).
-type Leonardo struct {
+//
+// TODO improve doc
+type Leo struct {
+	sce             Responder
+	stage           int
+	priorCEResponse Clock
+	signalNext      Seq
+	ackedRem        Bytes
+}
+
+// NewLeo returns a new Leo.
+func NewLeo(sce Responder) *Leo {
+	return &Leo{
+		sce, // sce
+		-1,  // stage
+		0,   // priorCEResponse
+		0,   // signalnext
+		0,   // ackedRem
+	}
 }
 
 // reactToCE implements SlowStart.
-func (*Leonardo) reactToCE(flow *Flow) (exit bool) {
-	exit = true
+func (l *Leo) reactToCE(flow *Flow, node Node) (exit bool) {
+	if node.Now()-l.priorCEResponse > flow.srtt {
+		if flow.cwnd = Bytes(float64(flow.cwnd) / l.scale()); flow.cwnd < MSS {
+			flow.cwnd = MSS
+		}
+		l.priorCEResponse = node.Now()
+	}
+	if flow.receiveNext <= l.signalNext {
+		return
+	}
+	exit = l.advance(flow, node)
+	return
+}
+
+// k returns the growth term K for the current stage.
+func (l *Leo) k() int {
+	return LeoK[l.stage]
+}
+
+// scale returns the pacing scale factor for the current stage.
+func (l *Leo) scale() float64 {
+	return LeoScale[l.stage]
+}
+
+// advance moves to the next stage, and returns true if K would result in
+// Reno-linear growth or slower, meaning it's time to exit slow-start.
+func (l *Leo) advance(flow *Flow, node Node) (exit bool) {
+	if l.stage++; l.stage >= LeoStageMax {
+		panic(fmt.Sprintf("max Leo stage reached: %d", l.stage))
+	}
+	r0 := flow.pacingRate()
+	if exit = Bytes(l.k()) >= flow.cwnd/MSS; exit {
+		flow.pacingSSRatio = DefaultPacingSSRatio
+	} else {
+		flow.pacingSSRatio = l.scale()
+		l.signalNext = flow.seq
+	}
+	r := flow.pacingRate()
+	node.Logf("stage:%d k:%d scale:%f cwnd:%d rate0:%.2f rate:%.2f",
+		l.stage, l.k(), l.scale(), flow.cwnd, r0.Mbps(), r.Mbps())
 	return
 }
 
 // reactToSCE implements SlowStart.
-func (l *Leonardo) reactToSCE(flow *Flow) (exit bool) {
-	/*
-		s.sceCtr++
-		if DefaultSSBaseReduction {
-			s.divisor++
-		}
-		exit = s.sceCtr >= DefaultSSExitThreshold
-	*/
+func (l *Leo) reactToSCE(flow *Flow, node Node) (exit bool) {
+	if flow.cwnd = l.sce.Respond(flow, node); flow.cwnd < MSS {
+		flow.cwnd = MSS
+	}
+	if flow.receiveNext <= l.signalNext {
+		return
+	}
+	exit = l.advance(flow, node)
 	return
 }
 
 // grow implements SlowStart.
-func (l *Leonardo) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
-	/*
-		hi := flow.srtt-flow.minRtt > s.burst
-		if hi != s.priorHi {
-			s.edgeStart = node.Now()
-			s.burstStart = node.Now()
-			s.priorHi = hi
-		}
-		if hi && node.Now()-s.edgeStart > max(s.burst, flow.srtt) {
-			exit = true
-			return
-		}
-		if node.Now()-s.burstStart > s.burst {
-			if hi {
-				s.divisor++
-			} else {
-				if s.divisor--; s.divisor < DefaultSSGrowth {
-					s.divisor = DefaultSSGrowth
-				}
-			}
-			s.burstStart = node.Now()
-			//node.Logf("divisor:%d", s.divisor)
-		}
-		flow.cwnd += acked / Bytes(s.divisor)
-	*/
+func (l *Leo) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
+	if l.stage == -1 {
+		l.advance(flow, node)
+	}
+	a := acked + l.ackedRem
+	//c0 := flow.cwnd
+	flow.cwnd += a / Bytes(l.k())
+	l.ackedRem = a % Bytes(l.k())
+	//node.Logf("grow cwnd0:%d cwnd:%d", c0, flow.cwnd)
+	return
+}
+
+// LeoStageMax is the maximum number of Leo slow-start stages.
+const LeoStageMax = 64
+
+var (
+	LeoScale [LeoStageMax]float64 // scale factors for each stage
+	LeoK     [LeoStageMax]int     // K for each stage (n+1 Leonardo numbers)
+)
+
+// leoScale returns the nth scale factor for the Leo slow-start algorithm.
+func leoScale(n int) (scale float64) {
+	term := func(n int) float64 {
+		return 1.0 + 1.0/float64(LeonardoN(n))
+	}
+	scale = term(n)
+	for n = n + 1; n < LeoStageMax*2; n++ {
+		scale *= term(n)
+	}
+	return
+}
+
+func init() {
+	for i := 0; i < LeoStageMax; i++ {
+		LeoScale[i] = leoScale(i + 1)
+		LeoK[i] = LeonardoN(i + 1)
+		//fmt.Printf("i:%d k:%d scale:%.20f\n", i, LeoK[i], LeoScale[i])
+	}
+}
+
+// LeonardoN returns the nth Leonardo number.
+func LeonardoN(n int) (l int) {
+	if n < 0 {
+		panic(fmt.Sprintf("no Leonardo number for negative n (n=%d)", n))
+	}
+	if n <= 1 {
+		l = 1
+		return
+	}
+	l1 := 1
+	l2 := 1
+	for n -= 2; n >= 0; n-- {
+		l = l1 + l2 + 1
+		l2 = l1
+		l1 = l
+	}
 	return
 }
