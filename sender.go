@@ -31,16 +31,17 @@ func NewSender(schedule []FlowAt) *Sender {
 		Flows,
 		schedule,
 		Xplot{
-			Title: "SCE MD-Scaling data in-flight",
+			Title: "Data in-flight",
 			X: Axis{
 				Label: "Time (S)",
 			},
 			Y: Axis{
 				Label: "In-flight (bytes)",
 			},
+			Decimation: PlotInFlightInterval,
 		},
 		Xplot{
-			Title: "SCE MD-Scaling CWND",
+			Title: "CWND",
 			X: Axis{
 				Label: "Time (S)",
 			},
@@ -50,7 +51,7 @@ func NewSender(schedule []FlowAt) *Sender {
 			Decimation: PlotCwndInterval,
 		},
 		Xplot{
-			Title: "SCE MD-Scaling RTT",
+			Title: "RTT",
 			X: Axis{
 				Label: "Time (S)",
 			},
@@ -58,6 +59,7 @@ func NewSender(schedule []FlowAt) *Sender {
 				Label: "RTT (ms)",
 			},
 			NonzeroAxis: true,
+			Decimation:  PlotRTTInterval,
 		},
 	}
 }

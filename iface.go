@@ -36,7 +36,7 @@ func NewIface(rate Bitrate, schedule []RateAt, aqm AQM) *Iface {
 		schedule,
 		aqm,
 		Xplot{
-			Title: "SCE MD-Scaling Queue Sojourn Time",
+			Title: "Queue Sojourn Time",
 			X: Axis{
 				Label: "Time (S)",
 			},
@@ -46,13 +46,14 @@ func NewIface(rate Bitrate, schedule []RateAt, aqm AQM) *Iface {
 			Decimation: PlotSojournInterval,
 		},
 		Xplot{
-			Title: "SCE MD-Scaling Queue Length",
+			Title: "Queue Length",
 			X: Axis{
 				Label: "Time (S)",
 			},
 			Y: Axis{
-				Label: "Queue Length",
+				Label: "Length (packets)",
 			},
+			Decimation: PlotQueueLengthInterval,
 		},
 		0,
 		0,

@@ -90,17 +90,20 @@ var (
 
 // Sender: plots
 const (
-	PlotInFlight     = false
-	PlotCwnd         = true
-	PlotCwndInterval = Clock(100 * time.Microsecond)
-	PlotRTT          = false
+	PlotInFlight         = false
+	PlotInFlightInterval = Clock(100 * time.Microsecond)
+	PlotCwnd             = true
+	PlotCwndInterval     = Clock(100 * time.Microsecond)
+	PlotRTT              = false
+	PlotRTTInterval      = Clock(100 * time.Microsecond)
 )
 
 // Iface: plots
 const (
-	PlotSojourn         = true
-	PlotSojournInterval = Clock(100 * time.Microsecond)
-	PlotQueueLength     = false
+	PlotSojourn             = true
+	PlotSojournInterval     = Clock(100 * time.Microsecond)
+	PlotQueueLength         = false
+	PlotQueueLengthInterval = Clock(100 * time.Microsecond)
 )
 
 // DelTiC: plots
@@ -169,6 +172,11 @@ const (
 )
 
 // Sender: Reno params
+//
+// RenoFractionalGrowth: This grows CWND for Reno fractionally based on the
+// number of acked bytes.  This is faster, smoother, and not currently
+// compatible with RFC 5681 Reno-linear growth as it can grow more than one
+// MSS per RTT.
 const (
 	RenoFractionalGrowth = false // NOTE: faster/smoother than RFC 5681 growth
 )

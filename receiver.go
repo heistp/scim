@@ -73,7 +73,7 @@ func NewReceiver() *Receiver {
 		make([]Bytes, len(Flows)), // total
 		0,                         // maxRTTFlow
 		Xplot{
-			Title: "SCE MD-Scaling Goodput",
+			Title: "Goodput",
 			X: Axis{
 				Label: "Time (S)",
 			},

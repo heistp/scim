@@ -45,7 +45,7 @@ func NewDeltim(burst Clock) *Deltim {
 		0,                          // priorError
 		0,                          // idleTime
 		Xplot{
-			Title: "SCE MD-Scaling Marks - SCE:white, CE:yellow, drop:red",
+			Title: "Congestion Signals - SCE:white, CE:yellow, drop:red",
 			X: Axis{
 				Label: "Time (S)",
 			},

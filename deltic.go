@@ -41,7 +41,7 @@ func NewDeltic(target Clock) *Deltic {
 		0,                           // priorTime
 		0,                           // priorSojourn
 		Xplot{
-			Title: "SCE MD-Scaling Marks - SCE:white, CE:yellow, drop:red",
+			Title: "Congestion Signals - SCE:white, CE:yellow, drop:red",
 			X: Axis{
 				Label: "Time (S)",
 			},
