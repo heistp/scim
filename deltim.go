@@ -4,8 +4,6 @@
 package main
 
 import (
-	"fmt"
-	"strconv"
 	"time"
 )
 
@@ -26,13 +24,10 @@ type Deltim struct {
 	priorError Clock
 	idleTime   Clock
 	// Plots
-	marksPlot    Xplot
-	noSCE        int
-	noCE         int
-	noDrop       int
-	emitMarksCtr int
+	aqmPlot
 }
 
+// NewDeltim returns a new Deltim.
 func NewDeltim(burst Clock) *Deltim {
 	return &Deltim{
 		make([]Packet, 0),          // queue
@@ -44,30 +39,13 @@ func NewDeltim(burst Clock) *Deltim {
 		0,                          // priorTime
 		0,                          // priorError
 		0,                          // idleTime
-		Xplot{
-			Title: "Congestion Signals - SCE:white, CE:yellow, drop:red",
-			X: Axis{
-				Label: "Time (S)",
-			},
-			Y: Axis{
-				Label: "Proportion",
-			},
-		}, // marksPlot
-		0, // noSCE
-		0, // noCE
-		0, // noDrop
-		0, // emitMarksCtr
+		newAqmPlot(),               // aqmPlot
 	}
 }
 
 // Start implements Starter.
-func (d *Deltim) Start(node Node) (err error) {
-	if PlotDeltimMarks {
-		if err = d.marksPlot.Open("marks-deltim.xpl"); err != nil {
-			return
-		}
-	}
-	return nil
+func (d *Deltim) Start(node Node) error {
+	return d.aqmPlot.Start(node)
 }
 
 // Enqueue implements AQM.
@@ -197,71 +175,9 @@ func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
 	return m
 }
 
-// plotMark plots and emits the given mark, if configured.
-func (d *Deltim) plotMark(m mark, now Clock) {
-	if PlotDeltimMarks {
-		switch m {
-		case markNone:
-			d.noSCE++
-			d.noCE++
-			d.noDrop++
-		case markSCE:
-			p := 1.0 / float64(d.noSCE+1)
-			ps := strconv.FormatFloat(p, 'f', -1, 64)
-			d.marksPlot.Dot(now, ps, 0)
-			d.noSCE = 0
-			d.noCE++
-			d.noDrop++
-		case markCE:
-			p := 1.0 / float64(d.noCE+1)
-			ps := strconv.FormatFloat(p, 'f', -1, 64)
-			d.marksPlot.PlotX(now, ps, 4)
-			d.noCE = 0
-			d.noSCE++
-			d.noDrop++
-		case markDrop:
-			p := 1.0 / float64(d.noDrop+1)
-			ps := strconv.FormatFloat(p, 'f', -1, 64)
-			d.marksPlot.PlotX(now, ps, 2)
-			d.noDrop = 0
-			d.noCE++
-			d.noSCE++
-		}
-	}
-	if EmitDeltimMarks {
-		d.emitMarks(m)
-	}
-}
-
 // Stop implements Stopper.
 func (d *Deltim) Stop(node Node) error {
-	if PlotDeltimMarks {
-		d.marksPlot.Close()
-	}
-	if EmitDeltimMarks && d.emitMarksCtr != 0 {
-		fmt.Println()
-	}
-	return nil
-}
-
-// emitMarks prints marks as characters.
-func (d *Deltim) emitMarks(m mark) {
-	// emit marks as characters
-	switch m {
-	case markSCE:
-		fmt.Print("s")
-	case markCE:
-		fmt.Print("c")
-	case markDrop:
-		fmt.Print("D")
-	default:
-		return
-	}
-	d.emitMarksCtr++
-	if d.emitMarksCtr == 64 {
-		fmt.Println()
-		d.emitMarksCtr = 0
-	}
+	return d.aqmPlot.Stop(node)
 }
 
 // Peek implements AQM.
