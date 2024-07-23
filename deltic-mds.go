@@ -9,8 +9,9 @@ import (
 	"time"
 )
 
-// DelTiC (Delay Time Control) implements standard DelTiC.
-type Deltic struct {
+// DelticMDS (Delay Time Control MD-Scaling) implements DelTiC with SCE and CE
+// oscillators linked with the MD-Scaling relationship.
+type DelticMDS struct {
 	queue []Packet
 	// parameters
 	target Clock
@@ -30,8 +31,9 @@ type Deltic struct {
 	emitMarksCtr int
 }
 
-func NewDeltic(target Clock) *Deltic {
-	return &Deltic{
+// NewDelticMDS returns a new DelticMDS.
+func NewDelticMDS(target Clock) *DelticMDS {
+	return &DelticMDS{
 		make([]Packet, 0),           // queue
 		target,                      // target
 		Clock(time.Second) / target, // resonance
@@ -57,7 +59,7 @@ func NewDeltic(target Clock) *Deltic {
 }
 
 // Start implements Starter.
-func (d *Deltic) Start(node Node) (err error) {
+func (d *DelticMDS) Start(node Node) (err error) {
 	if PlotDelticMarks {
 		if err = d.marksPlot.Open("marks-deltic.xpl"); err != nil {
 			return
@@ -67,13 +69,13 @@ func (d *Deltic) Start(node Node) (err error) {
 }
 
 // Enqueue implements AQM.
-func (d *Deltic) Enqueue(pkt Packet, node Node) {
+func (d *DelticMDS) Enqueue(pkt Packet, node Node) {
 	pkt.Enqueue = node.Now()
 	d.queue = append(d.queue, pkt)
 }
 
 // Dequeue implements AQM.
-func (d *Deltic) Dequeue(node Node) (pkt Packet, ok bool) {
+func (d *DelticMDS) Dequeue(node Node) (pkt Packet, ok bool) {
 	if len(d.queue) == 0 {
 		return
 	}
@@ -111,7 +113,7 @@ func (d *Deltic) Dequeue(node Node) (pkt Packet, ok bool) {
 }
 
 // deltic is the delta-sigma control function.
-func (d *Deltic) deltic(sojourn Clock, dt Clock, node Node) {
+func (d *DelticMDS) deltic(sojourn Clock, dt Clock, node Node) {
 	if dt > Clock(time.Second) {
 		if sojourn < d.target {
 			dt = 0
@@ -134,7 +136,7 @@ func (d *Deltic) deltic(sojourn Clock, dt Clock, node Node) {
 }
 
 // oscillate increments the oscillator and returns any resulting mark.
-func (d *Deltic) oscillate(dt Clock, node Node, pkt Packet) mark {
+func (d *DelticMDS) oscillate(dt Clock, node Node, pkt Packet) mark {
 	// clamp dt
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
@@ -192,7 +194,7 @@ func (d *Deltic) oscillate(dt Clock, node Node, pkt Packet) mark {
 }
 
 // plotMark plots and emits the given mark, if configured.
-func (d *Deltic) plotMark(m mark, now Clock) {
+func (d *DelticMDS) plotMark(m mark, now Clock) {
 	if PlotDelticMarks {
 		switch m {
 		case markNone:
@@ -228,7 +230,7 @@ func (d *Deltic) plotMark(m mark, now Clock) {
 }
 
 // Stop implements Stopper.
-func (d *Deltic) Stop(node Node) error {
+func (d *DelticMDS) Stop(node Node) error {
 	if PlotDelticMarks {
 		d.marksPlot.Close()
 	}
@@ -239,7 +241,7 @@ func (d *Deltic) Stop(node Node) error {
 }
 
 // emitMarks prints marks as characters.
-func (d *Deltic) emitMarks(m mark) {
+func (d *DelticMDS) emitMarks(m mark) {
 	// emit marks as characters
 	switch m {
 	case markSCE:
@@ -259,7 +261,7 @@ func (d *Deltic) emitMarks(m mark) {
 }
 
 // Peek implements AQM.
-func (d *Deltic) Peek(node Node) (pkt Packet, ok bool) {
+func (d *DelticMDS) Peek(node Node) (pkt Packet, ok bool) {
 	if len(d.queue) == 0 {
 		return
 	}
@@ -269,6 +271,6 @@ func (d *Deltic) Peek(node Node) (pkt Packet, ok bool) {
 }
 
 // Len implements AQM.
-func (d *Deltic) Len() int {
+func (d *DelticMDS) Len() int {
 	return len(d.queue)
 }
