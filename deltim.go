@@ -96,7 +96,7 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 	}
 	d.deltim(e, node.Now()-d.priorTime, node)
 
-	// advance oscillator and mark if not after idle period
+	// advance oscillator for non-idle time and mark
 	var m mark
 	ok = true
 	m = d.oscillate(node.Now()-d.priorTime-d.idleTime, node, pkt)
