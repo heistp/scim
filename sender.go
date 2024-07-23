@@ -353,6 +353,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	f.updateRTT(pkt, node)
 	f.latestAcked = pkt.ACKNum - 1
 	// react to congestion signals
+	// NOTE check for ECN support after drop logic implemented
 	if pkt.ECE {
 		switch f.state {
 		case FlowStateSS:
@@ -362,7 +363,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 		case FlowStateCA:
 			f.cca.reactToCE(f, node)
 		}
-	} else if pkt.ESCE {
+	} else if pkt.ESCE && f.sce == SCE {
 		switch f.state {
 		case FlowStateSS:
 			if f.slowStart.reactToSCE(f, node) {
