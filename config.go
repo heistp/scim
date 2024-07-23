@@ -18,7 +18,6 @@ const Duration = 60 * time.Second
 var (
 	Flows = []Flow{
 		AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
-		//AddFlow(ECN, SCE, NewLeo(CMD), NoResponse{}, NewCUBIC(CMD), Pacing, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{1, Clock(10 * time.Second), true},
@@ -70,6 +69,13 @@ var RateSchedule = []RateAt{
 //}
 
 // Iface: DelTiC AQM config
+//var UseAQM = NewDeltic(
+//	Clock(5*time.Millisecond),   // SCE
+//	Clock(25*time.Millisecond),  // CE
+//	Clock(125*time.Millisecond), // drop
+//)
+
+// Iface: DelTiC-MDS AQM config
 //var UseAQM = NewDelticMDS(Clock(5000 * time.Microsecond))
 
 // Iface: DelTiM AQM config
