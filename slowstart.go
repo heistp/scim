@@ -328,49 +328,26 @@ func (l *Leo) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 	return
 }
 
-// LeoStageMax is the maximum number of Leo slow-start stages.
-const LeoStageMax = 64
+// LeoStageMax is the maximum number of Leo stages.
+const LeoStageMax = 22
 
 var (
-	LeoScale [LeoStageMax]float64 // scale factors for each stage
-	LeoK     [LeoStageMax]int     // K for each stage (n+1 Leonardo numbers)
+	LeoK     [LeoStageMax*2 - 1]int // K for each stage (n+1 Leonardo numbers)
+	LeoScale [LeoStageMax]float64   // scale factors for each stage
 )
 
-// leoScale returns the nth scale factor for the Leo slow-start algorithm.
-func leoScale(n int) (scale float64) {
-	term := func(n int) float64 {
-		return 1.0 + 1.0/float64(LeonardoN(n))
-	}
-	scale = term(n)
-	for n = n + 1; n < LeoStageMax*2; n++ {
-		scale *= term(n)
-	}
-	return
-}
-
 func init() {
-	for i := 0; i < LeoStageMax; i++ {
-		LeoScale[i] = leoScale(i + 1)
-		LeoK[i] = LeonardoN(i + 1)
-		//fmt.Printf("i:%d k:%d scale:%.20f\n", i, LeoK[i], LeoScale[i])
+	s := 1.0
+	a := 1
+	b := 1
+	for i := 0; i < len(LeoK); i++ {
+		LeoK[i] = b
+		s *= 1.0 + 1.0/float64(b)
+		a, b = b, 1+a+b
 	}
-}
-
-// LeonardoN returns the nth Leonardo number.
-func LeonardoN(n int) (l int) {
-	if n < 0 {
-		panic(fmt.Sprintf("no Leonardo number for negative n (n=%d)", n))
+	for i := 0; i < len(LeoScale); i++ {
+		LeoScale[i] = s
+		s /= 1.0 + 1.0/float64(LeoK[i])
+		//fmt.Printf("%d %d %d %.15f\n", i, LeoK[i], LeoK[i*2], LeoScale[i])
 	}
-	if n <= 1 {
-		l = 1
-		return
-	}
-	l1 := 1
-	l2 := 1
-	for n -= 2; n >= 0; n-- {
-		l = l1 + l2 + 1
-		l2 = l1
-		l1 = l
-	}
-	return
 }
