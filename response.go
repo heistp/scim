@@ -85,6 +85,27 @@ func (TargetCWND) Respond(flow *Flow, node Node) (cwnd Bytes) {
 	return
 }
 
+// TargetResponse responds by using CWND targeting followed by a regular SCE
+// response.
+type TargetResponse struct {
+}
+
+// Respond implements Responder.
+func (TargetResponse) Respond(flow *Flow, node Node) (cwnd Bytes) {
+	//cwnd0 := flow.cwnd
+	flight := flow.inFlightWindow.at(node.Now() - flow.srtt)
+	//cwnd = flight * Bytes(flow.minRtt+flow.srtt) / Bytes(2*flow.srtt)
+	cwnd = flight * Bytes(flow.minRtt) / Bytes(flow.srtt)
+	m := 1.0 - math.Sqrt(float64(cwnd))/float64(cwnd)
+	cwnd = Bytes(float64(cwnd) * m)
+	//cwnd = Bytes(float64(cwnd) * float64(SCE_MD))
+	//node.Logf("approach cwnd:%d cwnd0:%d flight:%d minRtt:%.2fms srtt:%.2fms",
+	//	cwnd, cwnd0, flight,
+	//	time.Duration(flow.minRtt).Seconds()*1000,
+	//	time.Duration(flow.srtt).Seconds()*1000)
+	return
+}
+
 // HalfCWND responds by dividing CWND by 2.
 type HalfCWND struct {
 }
