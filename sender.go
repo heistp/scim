@@ -363,6 +363,7 @@ func (f *Flow) receive(pkt Packet, node Node) {
 
 // handleSynAck handles an incoming SYN-ACK packet.
 func (f *Flow) handleSynAck(pkt Packet, node Node) {
+	f.open = true
 	f.seq = pkt.ACKNum
 	f.receiveNext = pkt.ACKNum
 	f.latestAcked = pkt.ACKNum - 1
