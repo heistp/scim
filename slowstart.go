@@ -270,12 +270,20 @@ func (l *Leo) reactToCE(flow *Flow, node Node) (exit bool) {
 	if flow.receiveNext <= l.signalNext {
 		return
 	}
-	exit = l.advance(flow, node)
+	exit = l.advance(flow, node, "CE")
 	return
 }
 
 // k returns the growth term K for the current stage.
 func (l *Leo) k() int {
+	return LeoK[l.stage]
+}
+
+// exitK returns the K at which slow-start exit should occur.
+func (l *Leo) exitK() int {
+	if LeoDoubleKExit {
+		return LeoK[l.stage*2]
+	}
 	return LeoK[l.stage]
 }
 
@@ -286,20 +294,20 @@ func (l *Leo) scale() float64 {
 
 // advance moves to the next stage, and returns true if K would result in
 // Reno-linear growth or slower, meaning it's time to exit slow-start.
-func (l *Leo) advance(flow *Flow, node Node) (exit bool) {
+func (l *Leo) advance(flow *Flow, node Node, why string) (exit bool) {
 	if l.stage++; l.stage >= LeoStageMax {
 		panic(fmt.Sprintf("max Leo stage reached: %d", l.stage))
 	}
 	r0 := flow.pacingRate()
-	if exit = Bytes(l.k()) >= flow.cwnd/MSS; exit {
+	if exit = Bytes(l.exitK()) >= flow.cwnd/MSS; exit {
 		flow.pacingSSRatio = DefaultPacingSSRatio
 	} else {
 		flow.pacingSSRatio = l.scale()
 		l.signalNext = flow.seq
 	}
 	r := flow.pacingRate()
-	node.Logf("flow:%d stage:%d k:%d scale:%f cwnd:%d rate0:%.2f rate:%.2f",
-		flow.id, l.stage, l.k(), l.scale(), flow.cwnd, r0.Mbps(), r.Mbps())
+	node.Logf("flow:%d stage:%d k:%d scale:%.3f cwnd:%d rate0:%.2f rate:%.2f (%s)",
+		flow.id, l.stage, l.k(), l.scale(), flow.cwnd, r0.Mbps(), r.Mbps(), why)
 	return
 }
 
@@ -311,14 +319,21 @@ func (l *Leo) reactToSCE(flow *Flow, node Node) (exit bool) {
 	if flow.receiveNext <= l.signalNext {
 		return
 	}
-	exit = l.advance(flow, node)
+	exit = l.advance(flow, node, "SCE")
 	return
 }
 
 // grow implements SlowStart.
 func (l *Leo) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 	if l.stage == -1 {
-		l.advance(flow, node)
+		if exit = l.advance(flow, node, "init"); exit {
+			return
+		}
+	} else if Leo2xDelayAdvance && flow.srtt > 2*flow.minRtt &&
+		flow.receiveNext > l.signalNext {
+		if exit = l.advance(flow, node, "delay"); exit {
+			return
+		}
 	}
 	a := acked + l.ackedRem
 	//c0 := flow.cwnd
