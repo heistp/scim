@@ -165,6 +165,12 @@ const (
 	SSGrowthABC1_5        // use ABC with base of 1.5, grow by 1/2 acked bytes
 )
 
+// Slow-Start: Leo params
+const (
+	LeoDoubleKExit    = true // if true, exit earlier, at K(i*2) instead of K(i)
+	Leo2xDelayAdvance = true // if true, advance stage when sRTT > 2x minRTT
+)
+
 // Sender: TCP params
 const (
 	MSS      = Bytes(1500)
