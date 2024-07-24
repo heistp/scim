@@ -286,7 +286,7 @@ func (l *Leo) init(flow *Flow, node Node) {
 
 // reactToCE implements SlowStart.
 func (l *Leo) reactToCE(flow *Flow, node Node) (exit bool) {
-	if node.Now()-l.priorCEResponse > flow.srtt {
+	if !LeoCENoResponse && node.Now()-l.priorCEResponse > flow.srtt {
 		if flow.cwnd = Bytes(float64(flow.cwnd) / l.scale()); flow.cwnd < MSS {
 			flow.cwnd = MSS
 		}
@@ -323,7 +323,16 @@ func (l *Leo) advance(flow *Flow, node Node, why string) (exit bool) {
 	if l.stage++; l.stage >= LeoStageMax {
 		panic(fmt.Sprintf("max Leo stage reached: %d", l.stage))
 	}
+	c0 := flow.cwnd
 	r0 := flow.pacingRate()
+	if LeoCWNDTargeting && l.stage > 0 {
+		f := flow.inFlightWindow.at(node.Now() - flow.srtt)
+		c := f * Bytes(flow.minRtt) / Bytes(flow.srtt)
+		c = Bytes(float64(c) * l.scale())
+		if flow.cwnd > c {
+			flow.cwnd = c
+		}
+	}
 	if exit = Bytes(l.exitK()) >= flow.cwnd/MSS; exit {
 		flow.pacingSSRatio = DefaultPacingSSRatio
 	} else {
@@ -331,15 +340,17 @@ func (l *Leo) advance(flow *Flow, node Node, why string) (exit bool) {
 		l.signalNext = flow.seq
 	}
 	r := flow.pacingRate()
-	node.Logf("flow:%d stage:%d k:%d scale:%.3f cwnd:%d rate0:%.2f rate:%.2f (%s)",
-		flow.id, l.stage, l.k(), l.scale(), flow.cwnd, r0.Mbps(), r.Mbps(), why)
+	node.Logf("flow:%d stage:%d k:%d scale:%.3f cwnd:%d->%d rate:%.2f->%.2f (%s)",
+		flow.id, l.stage, l.k(), l.scale(), c0, flow.cwnd, r0.Mbps(), r.Mbps(), why)
 	return
 }
 
 // reactToSCE implements SlowStart.
 func (l *Leo) reactToSCE(flow *Flow, node Node) (exit bool) {
-	if flow.cwnd = l.sce.Respond(flow, node); flow.cwnd < MSS {
-		flow.cwnd = MSS
+	if !LeoSCENoResponse {
+		if flow.cwnd = l.sce.Respond(flow, node); flow.cwnd < MSS {
+			flow.cwnd = MSS
+		}
 	}
 	if flow.receiveNext <= l.signalNext {
 		return
