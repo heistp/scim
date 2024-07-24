@@ -9,6 +9,7 @@ import (
 
 // A SlowStart implements the slow-start state for a sender.
 type SlowStart interface {
+	init(*Flow, Node)
 	reactToCE(*Flow, Node) (exit bool)
 	reactToSCE(*Flow, Node) (exit bool)
 	grow(acked Bytes, flow *Flow, node Node) (exit bool)
@@ -24,6 +25,11 @@ func NewStdSS() *StdSS {
 	return &StdSS{
 		0, // sceCtr
 	}
+}
+
+// init implements SlowStart.
+func (*StdSS) init(flow *Flow, node Node) {
+	return
 }
 
 // reactToCE implements SlowStart.
@@ -85,6 +91,11 @@ func NewHyStartPP() *HyStartPP {
 		false,         // conservative
 		0,             // sceCtr
 	}
+}
+
+// init implements SlowStart.
+func (*HyStartPP) init(flow *Flow, node Node) {
+	return
 }
 
 // reactToCE implements SlowStart.
@@ -154,6 +165,7 @@ func (h *HyStartPP) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 // hystartRound checks if the current round has ended and if so, starts the next
 // round.
 func (h *HyStartPP) hystartRound(flow *Flow) (end bool) {
+	// TODO can latestAcked be removed? only in Flow for HyStart
 	if flow.latestAcked > h.windowEnd {
 		h.lastRoundMinRTT = h.currentRoundMinRTT
 		h.currentRoundMinRTT = ClockInfinity
@@ -189,6 +201,11 @@ func NewSlick(burst Clock) *Slick {
 		0,               // burstStart
 		DefaultSSGrowth, // divisor
 	}
+}
+
+// init implements SlowStart.
+func (*Slick) init(flow *Flow, node Node) {
+	return
 }
 
 // reactToCE implements SlowStart.
@@ -259,6 +276,14 @@ func NewLeo(sce Responder) *Leo {
 	}
 }
 
+// init implements SlowStart.
+func (l *Leo) init(flow *Flow, node Node) {
+	if e := l.advance(flow, node, "init"); e {
+		panic(fmt.Sprintf("leo: unexpected slow-start exit on initial advance"))
+	}
+	return
+}
+
 // reactToCE implements SlowStart.
 func (l *Leo) reactToCE(flow *Flow, node Node) (exit bool) {
 	if node.Now()-l.priorCEResponse > flow.srtt {
@@ -325,11 +350,7 @@ func (l *Leo) reactToSCE(flow *Flow, node Node) (exit bool) {
 
 // grow implements SlowStart.
 func (l *Leo) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
-	if l.stage == -1 {
-		if exit = l.advance(flow, node, "init"); exit {
-			return
-		}
-	} else if Leo2xDelayAdvance && flow.srtt > 2*flow.minRtt &&
+	if Leo2xDelayAdvance && flow.srtt > 2*flow.minRtt &&
 		flow.receiveNext > l.signalNext {
 		if exit = l.advance(flow, node, "delay"); exit {
 			return

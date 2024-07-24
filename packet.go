@@ -12,6 +12,7 @@ type Packet struct {
 	Flow       FlowID
 	Seq        Seq
 	ACKNum     Seq
+	SYN        bool
 	ACK        bool
 	CE         bool
 	ECE        bool
@@ -41,6 +42,9 @@ func (p Packet) handleNode(node *node) (err error) {
 
 // NextSeq returns the next expected sequence number after this Packet.
 func (p Packet) NextSeq() Seq {
+	if p.SYN {
+		return p.Seq + 1
+	}
 	return p.Seq + Seq(p.Len)
 }
 

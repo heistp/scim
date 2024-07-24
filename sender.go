@@ -145,6 +145,7 @@ func (s *Sender) Stop(node Node) error {
 type Flow struct {
 	id     FlowID
 	active bool
+	open   bool
 	pacing PacingEnabled
 	ecn    ECNCapable
 	sce    SCECapable
@@ -213,6 +214,7 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 	return Flow{
 		id,                   // id
 		active,               // active
+		false,                // open
 		pacing,               // pacing
 		ecn,                  // ecn
 		sce,                  // sce
@@ -253,7 +255,11 @@ var flowID FlowID = 0
 func (f *Flow) setActive(active bool, node Node) {
 	f.active = active
 	if active {
-		f.send(node)
+		if !f.open {
+			f.sendPacket(Packet{SYN: true}, node)
+		} else {
+			f.send(node)
+		}
 	}
 }
 
@@ -267,7 +273,7 @@ func (f *Flow) send(node Node) {
 	}
 	// no pacing
 	if !f.pacing {
-		for b := true; b; b = f.sendPacket(MSS, node) {
+		for b := true; b; b = f.sendPacket(Packet{Len: MSS}, node) {
 		}
 		return
 	}
@@ -275,12 +281,12 @@ func (f *Flow) send(node Node) {
 	if f.pacingWait {
 		return
 	}
-	if !f.sendPacket(MSS, node) {
+	if !f.sendPacket(Packet{Len: MSS}, node) {
 		return
 	}
 	d := f.pacingDelay(MSS)
 	if d == 0 {
-		for b := true; b; b = f.sendPacket(MSS, node) {
+		for b := true; b; b = f.sendPacket(Packet{Len: MSS}, node) {
 		}
 		return
 	}
@@ -291,22 +297,29 @@ func (f *Flow) send(node Node) {
 // FlowSend is used as timer data for pacing.
 type FlowSend FlowID
 
-// sendPacket sends a packet with the given length.  It returns false if it
-// wasn't possible to send because cwnd would be exceeded.
-func (f *Flow) sendPacket(pktLen Bytes, node Node) bool {
-	if f.inFlight+pktLen > f.cwnd {
+// sendPacket sets relevant fields and sends the given Packet.  It returns
+// false if it wasn't possible to send because cwnd would be exceeded.
+func (f *Flow) sendPacket(pkt Packet, node Node) bool {
+	if pkt.SYN {
+		if pkt.Len > 0 {
+			panic("SYN packet must have length 0")
+		}
+	} else {
+		if pkt.Len <= 0 {
+			panic(fmt.Sprintf("non-SYN packet length %d <= 0", pkt.Len))
+		}
+	}
+	if f.inFlight+pkt.Len > f.cwnd {
 		return false
 	}
-	node.Send(Packet{
-		Flow:       f.id,
-		Seq:        f.seq,
-		Len:        pktLen,
-		ECNCapable: f.ecn,
-		SCECapable: f.sce,
-		Sent:       node.Now(),
-	})
-	f.addInFlight(pktLen, node.Now())
-	f.seq += Seq(pktLen)
+	pkt.Flow = f.id
+	pkt.Seq = f.seq
+	pkt.ECNCapable = f.ecn
+	pkt.SCECapable = f.sce
+	pkt.Sent = node.Now()
+	node.Send(pkt)
+	f.addInFlight(pkt.Len, node.Now())
+	f.seq += Seq(pkt.Len)
 	return true
 }
 
@@ -341,17 +354,30 @@ func (f *Flow) receive(pkt Packet, node Node) {
 	if !pkt.ACK {
 		panic("sender: non-ACK receive not implemented")
 	}
+	if pkt.SYN {
+		f.handleSynAck(pkt, node)
+		return
+	}
 	f.handleAck(pkt, node)
 }
 
-// receive handles an incoming packet.
-// NOTE all packets considered ACKs for now
+// handleSynAck handles an incoming SYN-ACK packet.
+func (f *Flow) handleSynAck(pkt Packet, node Node) {
+	f.seq = pkt.ACKNum
+	f.receiveNext = pkt.ACKNum
+	f.latestAcked = pkt.ACKNum - 1
+	f.updateRTT(pkt, node)
+	f.slowStart.init(f, node)
+	f.send(node)
+}
+
+// receive handles an incoming non-SYN ACK packet.
 func (f *Flow) handleAck(pkt Packet, node Node) {
 	acked := Bytes(pkt.ACKNum - f.receiveNext)
-	f.receiveNext = pkt.ACKNum
 	f.addInFlight(-acked, node.Now())
-	f.updateRTT(pkt, node)
+	f.receiveNext = pkt.ACKNum
 	f.latestAcked = pkt.ACKNum - 1
+	f.updateRTT(pkt, node)
 	// react to congestion signals
 	// NOTE check for ECN support after drop logic implemented
 	if pkt.ECE {
@@ -420,7 +446,7 @@ func (f *Flow) updateRTT(pkt Packet, node Node) {
 	}
 }
 
-// inFlightWindow stores inFlight samples for slow-start exit cwnd targeting.
+// inFlightWindow stores inFlight samples for cwnd targeting.
 type inFlightWindow []inFlightSample
 
 // add adds in in-flight bytes value.
