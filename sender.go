@@ -423,8 +423,12 @@ func (f *Flow) exitSlowStart(node Node, reason string) {
 	f.state = FlowStateCA
 }
 
-// updateRTT updates the rtt from the given packet.
+// updateRTT updates the rtt from the given packet, if its Delayed flag is not
+// set.
 func (f *Flow) updateRTT(pkt Packet, node Node) {
+	if pkt.Delayed {
+		return
+	}
 	f.rtt = node.Now() - pkt.Sent
 	if f.rtt < f.minRtt {
 		f.minRtt = f.rtt
@@ -434,17 +438,14 @@ func (f *Flow) updateRTT(pkt Packet, node Node) {
 	} else {
 		f.srtt = Clock(RTTAlpha*float64(f.rtt) + (1-RTTAlpha)*float64(f.srtt))
 	}
-	// NOTE if delayed ACKs are enabled, we use srtt to filter out spuriously
-	// high RTT samples, although this crude filtering is not ideal
-	if DelayedACKTime > 0 {
-		if f.srtt > f.maxRtt {
-			f.maxRtt = f.srtt
-		}
-	} else {
-		if f.rtt > f.maxRtt {
-			f.maxRtt = f.rtt
-		}
+	if f.srtt > f.maxRtt {
+		f.maxRtt = f.srtt
 	}
+}
+
+// resetMaxRTT reset the maximum RTT to the minimum RTT.
+func (f *Flow) resetMaxRTT() {
+	f.maxRtt = f.minRtt
 }
 
 // inFlightWindow stores inFlight samples for cwnd targeting.

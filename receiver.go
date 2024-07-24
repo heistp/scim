@@ -157,6 +157,7 @@ func (r *Receiver) Ding(data any, node Node) error {
 	p := data.(Packet)
 	f := &r.flow[p.Flow]
 	if f.priorAcked < p.Seq {
+		p.Delayed = true
 		r.sendAck(p, node)
 	}
 	return nil

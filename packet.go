@@ -20,6 +20,7 @@ type Packet struct {
 	SCECapable SCECapable
 	SCE        bool
 	ESCE       bool
+	Delayed    bool
 	Enqueue    Clock
 	Sent       Clock
 }

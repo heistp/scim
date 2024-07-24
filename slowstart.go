@@ -306,7 +306,7 @@ func (l *Leo) k() int {
 
 // exitK returns the K at which slow-start exit should occur.
 func (l *Leo) exitK() int {
-	if LeoDoubleKExit {
+	if LeoHalfKExit {
 		return LeoK[l.stage*2]
 	}
 	return LeoK[l.stage]
@@ -327,11 +327,15 @@ func (l *Leo) advance(flow *Flow, node Node, why string) (exit bool) {
 	r0 := flow.pacingRate()
 	if LeoCWNDTargeting && l.stage > 0 {
 		f := flow.inFlightWindow.at(node.Now() - flow.srtt)
-		c := f * Bytes(flow.minRtt) / Bytes(flow.srtt)
+		c := f * Bytes(flow.minRtt) / Bytes(flow.maxRtt)
+		// NOTE should we target based on current cwnd, or in-flight bytes
+		// one RTT ago?
+		//c := flow.cwnd * Bytes(flow.minRtt) / Bytes(flow.maxRtt)
 		c = Bytes(float64(c) * l.scale())
 		if flow.cwnd > c {
 			flow.cwnd = c
 		}
+		flow.resetMaxRTT()
 	}
 	if exit = Bytes(l.exitK()) >= flow.cwnd/MSS; exit {
 		flow.pacingSSRatio = DefaultPacingSSRatio

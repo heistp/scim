@@ -17,8 +17,9 @@ const Duration = 60 * time.Second
 // Sender and Delay: flows
 var (
 	Flows = []Flow{
-		AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
-		//AddFlow(ECN, SCE, NewLeo(SqrtP{}), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, true),
+		AddFlow(ECN, SCE, NewLeo(SqrtP{}), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, true),
+		//AddFlow(ECN, SCE, NewLeo(SqrtP{}), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, false),
+		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, false),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{1, Clock(10 * time.Second), true},
@@ -168,7 +169,7 @@ const (
 
 // Slow-Start: Leo params
 const (
-	LeoDoubleKExit    = true  // if true, exit earlier, at K(i*2) instead of K(i)
+	LeoHalfKExit      = true  // if true, exit earlier, at K(i*2) instead of K(i)
 	Leo2xDelayAdvance = true  // if true, advance stage when sRTT > 2x minRTT
 	LeoCWNDTargeting  = true  // if true, target CWND on advance
 	LeoCENoResponse   = false // if true, skip normal response to CE
