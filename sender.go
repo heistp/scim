@@ -438,8 +438,8 @@ func (f *Flow) updateRTT(pkt Packet, node Node) {
 	} else {
 		f.srtt = Clock(RTTAlpha*float64(f.rtt) + (1-RTTAlpha)*float64(f.srtt))
 	}
-	if f.srtt > f.maxRtt {
-		f.maxRtt = f.srtt
+	if f.rtt > f.maxRtt {
+		f.maxRtt = f.rtt
 	}
 }
 
