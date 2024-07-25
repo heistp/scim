@@ -17,7 +17,7 @@ const Duration = 60 * time.Second
 // Sender and Delay: flows
 var (
 	Flows = []Flow{
-		AddFlow(ECN, SCE, NewLeo(SqrtP{}), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, true),
+		AddFlow(ECN, SCE, NewEssp(SqrtP{}), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, true),
 		//AddFlow(ECN, SCE, NewLeo(SqrtP{}), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, false),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, false),
 	}
@@ -167,13 +167,13 @@ const (
 	SSGrowthABC1_5        // use ABC with base of 1.5, grow by 1/2 acked bytes
 )
 
-// Slow-Start: Leo params
+// Slow-Start: ESSP params
 const (
-	LeoHalfKExit      = true // if true, exit earlier, at K(i*2) instead of K(i)
-	Leo2xDelayAdvance = true // if true, advance stage when sRTT > 2x minRTT
-	LeoCWNDTargeting  = true // if true, target CWND on advance
-	LeoCENoResponse   = true // if true, skip normal response to CE
-	LeoSCENoResponse  = true // if true, skip normal response to SCE
+	EsspHalfKExit      = true // if true, exit earlier, at K(i*2) instead of K(i)
+	Essp2xDelayAdvance = true // if true, advance stage when sRTT > 2x minRTT
+	EsspCWNDTargeting  = true // if true, target CWND on advance
+	EsspCENoResponse   = true // if true, skip normal response to CE
+	EsspSCENoResponse  = true // if true, skip normal response to SCE
 )
 
 // Sender: TCP params
@@ -229,6 +229,11 @@ var (
 	Slick4  = NewSlick(Clock(4 * time.Millisecond))
 	Slick5  = NewSlick(Clock(5 * time.Millisecond))
 	Slick10 = NewSlick(Clock(10 * time.Millisecond))
+)
+
+// AQM
+const (
+	JitterCompensation = true
 )
 
 // main

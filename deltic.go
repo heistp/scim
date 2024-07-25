@@ -15,6 +15,7 @@ type Deltic struct {
 	sce       deltic
 	ce        deltic
 	drop      deltic
+	jit       jitterEstimator
 	priorTime Clock
 	// Plots
 	aqmPlot
@@ -27,6 +28,7 @@ func NewDeltic(sceTarget, ceTarget, dropTarget Clock) *Deltic {
 		newDeltic(sceTarget),  // sce
 		newDeltic(ceTarget),   // ce
 		newDeltic(dropTarget), // drop
+		jitterEstimator{},     // jit
 		0,                     // priorTime
 		newAqmPlot(),          // aqmPlot
 	}
@@ -40,6 +42,9 @@ func (d *Deltic) Start(node Node) error {
 // Enqueue implements AQM.
 func (d *Deltic) Enqueue(pkt Packet, node Node) {
 	pkt.Enqueue = node.Now()
+	if JitterCompensation && len(d.queue) == 0 {
+		d.jit.prior = node.Now()
+	}
 	d.queue = append(d.queue, pkt)
 	d.plotLength(len(d.queue), node.Now())
 }
@@ -54,6 +59,10 @@ func (d *Deltic) Dequeue(node Node) (pkt Packet, ok bool) {
 
 	// calculate sojourn and interval
 	s := node.Now() - pkt.Enqueue
+	if JitterCompensation {
+		d.jit.estimate(node.Now())
+		s = d.jit.adjustSojourn(s)
+	}
 	dt := node.Now() - d.priorTime
 
 	// run deltic
@@ -80,7 +89,7 @@ func (d *Deltic) Dequeue(node Node) (pkt Packet, ok bool) {
 
 	d.priorTime = node.Now()
 
-	d.plotSojourn(s, len(d.queue) == 0, node.Now())
+	d.plotSojourn(node.Now()-pkt.Enqueue, len(d.queue) == 0, node.Now())
 	d.plotLength(len(d.queue), node.Now())
 	d.plotMark(m, node.Now())
 

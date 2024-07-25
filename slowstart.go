@@ -253,13 +253,13 @@ func (s *Slick) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 	return
 }
 
-// Leo reduces both the exponential base and the pacing scaling factor in
+// Essp reduces both the exponential base and the pacing scaling factor in
 // response to congestion signals.  K is the number of acked bytes before CWND
-// is increased by one byte, and follows the Leo numbers on congestion
+// is increased by one byte, and follows the Essp numbers on congestion
 // signals.  The initial scale factor is the limit of the product ∏(i) 1+1/K(i).
 //
 // TODO improve doc
-type Leo struct {
+type Essp struct {
 	sce             Responder
 	stage           int
 	priorCEResponse Clock
@@ -270,9 +270,9 @@ type Leo struct {
 	maxsRtt         Clock // NOTE remove if not needed
 }
 
-// NewLeo returns a new Leo.
-func NewLeo(sce Responder) *Leo {
-	return &Leo{
+// NewEssp returns a new Essp.
+func NewEssp(sce Responder) *Essp {
+	return &Essp{
 		sce, // sce
 		-1,  // stage
 		0,   // priorCEResponse
@@ -285,16 +285,16 @@ func NewLeo(sce Responder) *Leo {
 }
 
 // init implements SlowStart.
-func (l *Leo) init(flow *Flow, node Node) {
+func (l *Essp) init(flow *Flow, node Node) {
 	if e := l.advance(flow, node, "init"); e {
-		panic(fmt.Sprintf("leo: unexpected slow-start exit on initial advance"))
+		panic(fmt.Sprintf("essp: unexpected slow-start exit on initial advance"))
 	}
 	return
 }
 
 // reactToCE implements SlowStart.
-func (l *Leo) reactToCE(flow *Flow, node Node) (exit bool) {
-	if !LeoCENoResponse && node.Now()-l.priorCEResponse > flow.srtt {
+func (l *Essp) reactToCE(flow *Flow, node Node) (exit bool) {
+	if !EsspCENoResponse && node.Now()-l.priorCEResponse > flow.srtt {
 		if flow.cwnd = Bytes(float64(flow.cwnd) / l.scale()); flow.cwnd < MSS {
 			flow.cwnd = MSS
 		}
@@ -308,32 +308,32 @@ func (l *Leo) reactToCE(flow *Flow, node Node) (exit bool) {
 }
 
 // k returns the growth term K for the current stage.
-func (l *Leo) k() int {
-	return LeoK[l.stage]
+func (l *Essp) k() int {
+	return EsspK[l.stage]
 }
 
 // exitK returns the K at which slow-start exit should occur.
-func (l *Leo) exitK() int {
-	if LeoHalfKExit {
-		return LeoK[l.stage*2]
+func (l *Essp) exitK() int {
+	if EsspHalfKExit {
+		return EsspK[l.stage*2]
 	}
-	return LeoK[l.stage]
+	return EsspK[l.stage]
 }
 
 // scale returns the pacing scale factor for the current stage.
-func (l *Leo) scale() float64 {
-	return LeoScale[l.stage]
+func (l *Essp) scale() float64 {
+	return EsspScale[l.stage]
 }
 
 // advance moves to the next stage, and returns true if K would result in
 // Reno-linear growth or slower, meaning it's time to exit slow-start.
-func (l *Leo) advance(flow *Flow, node Node, why string) (exit bool) {
-	if l.stage++; l.stage >= LeoStageMax {
-		panic(fmt.Sprintf("max Leo stage reached: %d", l.stage))
+func (l *Essp) advance(flow *Flow, node Node, why string) (exit bool) {
+	if l.stage++; l.stage >= EsspStageMax {
+		panic(fmt.Sprintf("max ESSP stage reached: %d", l.stage))
 	}
 	c0 := flow.cwnd
 	r0 := flow.pacingRate()
-	if LeoCWNDTargeting && l.stage > 0 {
+	if EsspCWNDTargeting && l.stage > 0 {
 		f := flow.inFlightWindow.at(node.Now() - flow.srtt)
 		c := f * Bytes(flow.minRtt) / Bytes(l.maxRtt)
 		c = Bytes(float64(c) * l.scale())
@@ -358,8 +358,8 @@ func (l *Leo) advance(flow *Flow, node Node, why string) (exit bool) {
 }
 
 // reactToSCE implements SlowStart.
-func (l *Leo) reactToSCE(flow *Flow, node Node) (exit bool) {
-	if !LeoSCENoResponse {
+func (l *Essp) reactToSCE(flow *Flow, node Node) (exit bool) {
+	if !EsspSCENoResponse {
 		if flow.cwnd = l.sce.Respond(flow, node); flow.cwnd < MSS {
 			flow.cwnd = MSS
 		}
@@ -372,8 +372,8 @@ func (l *Leo) reactToSCE(flow *Flow, node Node) (exit bool) {
 }
 
 // grow implements SlowStart.
-func (l *Leo) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
-	if Leo2xDelayAdvance && flow.srtt > 2*flow.minRtt &&
+func (l *Essp) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
+	if Essp2xDelayAdvance && flow.srtt > 2*flow.minRtt &&
 		flow.receiveNext > l.signalNext {
 		if exit = l.advance(flow, node, "delay"); exit {
 			return
@@ -388,7 +388,7 @@ func (l *Leo) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 }
 
 // updateRtt implements updateRtter.
-func (l *Leo) updateRtt(rtt Clock) {
+func (l *Essp) updateRtt(rtt Clock) {
 	if rtt > l.maxRtt {
 		l.maxRtt = rtt
 	}
@@ -403,32 +403,32 @@ func (l *Leo) updateRtt(rtt Clock) {
 }
 
 // resetRtt resets the RTT stats upon advancing the stage.
-func (l *Leo) resetRtt() {
+func (l *Essp) resetRtt() {
 	l.sRtt = 0
 	l.maxRtt = 0
 	l.maxsRtt = 0
 }
 
-// LeoStageMax is the maximum number of Leo stages.
-const LeoStageMax = 22
+// EsspStageMax is the maximum number of ESSP stages.
+const EsspStageMax = 22
 
 var (
-	LeoK     [LeoStageMax*2 - 1]int // K for each stage (n+1 Leonardo numbers)
-	LeoScale [LeoStageMax]float64   // scale factors for each stage
+	EsspK     [EsspStageMax*2 - 1]int // K for each stage (n+1 Leonardo numbers)
+	EsspScale [EsspStageMax]float64   // scale factors for each stage
 )
 
 func init() {
 	s := 1.0
 	a := 1
 	b := 1
-	for i := 0; i < len(LeoK); i++ {
-		LeoK[i] = b
+	for i := 0; i < len(EsspK); i++ {
+		EsspK[i] = b
 		s *= 1.0 + 1.0/float64(b)
 		a, b = b, 1+a+b
 	}
-	for i := 0; i < len(LeoScale); i++ {
-		LeoScale[i] = s
-		s /= 1.0 + 1.0/float64(LeoK[i])
-		//fmt.Printf("%d %d %d %.15f\n", i, LeoK[i], LeoK[i*2], LeoScale[i])
+	for i := 0; i < len(EsspScale); i++ {
+		EsspScale[i] = s
+		s /= 1.0 + 1.0/float64(EsspK[i])
+		//fmt.Printf("%d %d %d %.15f\n", i, EsspK[i], EsspK[i*2], EsspScale[i])
 	}
 }
