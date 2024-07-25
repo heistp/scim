@@ -169,11 +169,11 @@ const (
 
 // Slow-Start: Leo params
 const (
-	LeoHalfKExit      = true  // if true, exit earlier, at K(i*2) instead of K(i)
-	Leo2xDelayAdvance = true  // if true, advance stage when sRTT > 2x minRTT
-	LeoCWNDTargeting  = true  // if true, target CWND on advance
-	LeoCENoResponse   = false // if true, skip normal response to CE
-	LeoSCENoResponse  = false // if true, skip normal response to SCE
+	LeoHalfKExit      = true // if true, exit earlier, at K(i*2) instead of K(i)
+	Leo2xDelayAdvance = true // if true, advance stage when sRTT > 2x minRTT
+	LeoCWNDTargeting  = true // if true, target CWND on advance
+	LeoCENoResponse   = true // if true, skip normal response to CE
+	LeoSCENoResponse  = true // if true, skip normal response to SCE
 )
 
 // Sender: TCP params
