@@ -368,7 +368,9 @@ func (f *Flow) handleSynAck(pkt Packet, node Node) {
 	f.receiveNext = pkt.ACKNum
 	f.latestAcked = pkt.ACKNum - 1
 	f.updateRTT(pkt, node)
-	f.slowStart.init(f, node)
+	if i, ok := f.slowStart.(initer); ok {
+		i.init(f, node)
+	}
 	f.send(node)
 }
 

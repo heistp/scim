@@ -7,12 +7,16 @@ import (
 	"fmt"
 )
 
-// A SlowStart implements the slow-start state for a sender.
+// A SlowStart implements slow-start for a sender.
 type SlowStart interface {
-	init(*Flow, Node)
 	reactToCE(*Flow, Node) (exit bool)
 	reactToSCE(*Flow, Node) (exit bool)
 	grow(acked Bytes, flow *Flow, node Node) (exit bool)
+}
+
+// An initer an initialize a SlowStart algorithm.
+type initer interface {
+	init(*Flow, Node)
 }
 
 // StdSS implements standard slow-start mostly according to RFC 5681.
@@ -25,11 +29,6 @@ func NewStdSS() *StdSS {
 	return &StdSS{
 		0, // sceCtr
 	}
-}
-
-// init implements SlowStart.
-func (*StdSS) init(flow *Flow, node Node) {
-	return
 }
 
 // reactToCE implements SlowStart.
@@ -91,11 +90,6 @@ func NewHyStartPP() *HyStartPP {
 		false,         // conservative
 		0,             // sceCtr
 	}
-}
-
-// init implements SlowStart.
-func (*HyStartPP) init(flow *Flow, node Node) {
-	return
 }
 
 // reactToCE implements SlowStart.
@@ -201,11 +195,6 @@ func NewSlick(burst Clock) *Slick {
 		0,               // burstStart
 		DefaultSSGrowth, // divisor
 	}
-}
-
-// init implements SlowStart.
-func (*Slick) init(flow *Flow, node Node) {
-	return
 }
 
 // reactToCE implements SlowStart.
