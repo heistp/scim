@@ -154,7 +154,6 @@ type Flow struct {
 	receiveNext Seq // RCV.NXT
 	latestAcked Seq
 	state       FlowState
-	rtt         Clock
 	srtt        Clock
 	minRtt      Clock
 	maxRtt      Clock
@@ -222,7 +221,6 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 		0,                    // receiveNext
 		-1,                   // latestAcked
 		FlowStateSS,          // state
-		ClockInfinity,        // rtt
 		0,                    // srtt
 		ClockInfinity,        // minRtt
 		0,                    // maxRtt
@@ -431,23 +429,25 @@ func (f *Flow) updateRTT(pkt Packet, node Node) {
 	if pkt.Delayed {
 		return
 	}
-	f.rtt = node.Now() - pkt.Sent
-	if f.rtt < f.minRtt {
-		f.minRtt = f.rtt
+	rtt := node.Now() - pkt.Sent
+	switch f.state {
+	case FlowStateSS:
+		if r, ok := f.slowStart.(updateRtter); ok {
+			r.updateRtt(rtt)
+		}
+		//case FlowStateCA:
+	}
+	if rtt < f.minRtt {
+		f.minRtt = rtt
 	}
 	if f.srtt == 0 {
-		f.srtt = f.rtt
+		f.srtt = rtt
 	} else {
-		f.srtt = Clock(RTTAlpha*float64(f.rtt) + (1-RTTAlpha)*float64(f.srtt))
+		f.srtt = Clock(RTTAlpha*float64(rtt) + (1-RTTAlpha)*float64(f.srtt))
 	}
-	if f.rtt > f.maxRtt {
-		f.maxRtt = f.rtt
+	if rtt > f.maxRtt {
+		f.maxRtt = rtt
 	}
-}
-
-// resetMaxRTT reset the maximum RTT to the minimum RTT.
-func (f *Flow) resetMaxRTT() {
-	f.maxRtt = f.minRtt
 }
 
 // inFlightWindow stores inFlight samples for cwnd targeting.

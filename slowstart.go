@@ -7,7 +7,8 @@ import (
 	"fmt"
 )
 
-// A SlowStart implements slow-start for a sender.
+// A SlowStart implements slow-start for a sender.  SlowStart implementations
+// may also implement initer or updateRtter, as necessary.
 type SlowStart interface {
 	reactToCE(*Flow, Node) (exit bool)
 	reactToSCE(*Flow, Node) (exit bool)
@@ -17,6 +18,11 @@ type SlowStart interface {
 // An initer an initialize a SlowStart algorithm.
 type initer interface {
 	init(*Flow, Node)
+}
+
+// An updateRtter receives updated RTT samples.
+type updateRtter interface {
+	updateRtt(Clock)
 }
 
 // StdSS implements standard slow-start mostly according to RFC 5681.
@@ -69,6 +75,7 @@ func (s *StdSS) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 
 // HyStartPP implements slow-start according to HyStart++ RFC 9406.
 type HyStartPP struct {
+	rtt                Clock
 	lastRoundMinRTT    Clock
 	currentRoundMinRTT Clock
 	cssBaselineMinRTT  Clock
@@ -81,6 +88,7 @@ type HyStartPP struct {
 
 func NewHyStartPP() *HyStartPP {
 	return &HyStartPP{
+		0,             // rtt
 		ClockInfinity, // lastRoundMinRTT
 		ClockInfinity, // currentRoundMinRTT
 		ClockInfinity, // cssBaselineMinRTT
@@ -167,11 +175,16 @@ func (h *HyStartPP) hystartRound(flow *Flow) (end bool) {
 		h.windowEnd = flow.seq
 		end = true
 	}
-	if flow.rtt < h.currentRoundMinRTT {
-		h.currentRoundMinRTT = flow.rtt
+	if h.rtt < h.currentRoundMinRTT {
+		h.currentRoundMinRTT = h.rtt
 	}
 	h.rttSampleCount++
 	return
+}
+
+// rtt implements updateRtter.
+func (h *HyStartPP) updateRtt(rtt Clock) {
+	h.rtt = rtt
 }
 
 // Slick attempts to use an increase in RTT to reduce slow-start growth and exit
@@ -252,6 +265,9 @@ type Leo struct {
 	priorCEResponse Clock
 	signalNext      Seq
 	ackedRem        Bytes
+	sRtt            Clock
+	maxRtt          Clock
+	maxsRtt         Clock // NOTE remove if not needed
 }
 
 // NewLeo returns a new Leo.
@@ -262,6 +278,9 @@ func NewLeo(sce Responder) *Leo {
 		0,   // priorCEResponse
 		0,   // signalnext
 		0,   // ackedRem
+		0,   // sRtt
+		0,   // maxRtt
+		0,   // maxsRtt
 	}
 }
 
@@ -316,17 +335,14 @@ func (l *Leo) advance(flow *Flow, node Node, why string) (exit bool) {
 	r0 := flow.pacingRate()
 	if LeoCWNDTargeting && l.stage > 0 {
 		f := flow.inFlightWindow.at(node.Now() - flow.srtt)
-		c := f * Bytes(flow.minRtt) / Bytes(flow.maxRtt)
-		//node.Logf("target min:%d srtt:%d max:%d",
-		//	flow.minRtt, flow.srtt, flow.maxRtt)
-		// NOTE should we target based on current cwnd, or in-flight bytes
-		// one RTT ago?
-		//c := flow.cwnd * Bytes(flow.minRtt) / Bytes(flow.maxRtt)
+		c := f * Bytes(flow.minRtt) / Bytes(l.maxRtt)
 		c = Bytes(float64(c) * l.scale())
+		//node.Logf("target min:%d srtt:%d max:%d maxs:%d",
+		//	flow.minRtt, l.sRtt, l.maxRtt, l.maxsRtt)
 		if flow.cwnd > c {
 			flow.cwnd = c
 		}
-		flow.resetMaxRTT()
+		l.resetRtt()
 	}
 	if exit = Bytes(l.exitK()) >= flow.cwnd/MSS; exit {
 		flow.pacingSSRatio = DefaultPacingSSRatio
@@ -335,7 +351,8 @@ func (l *Leo) advance(flow *Flow, node Node, why string) (exit bool) {
 		l.signalNext = flow.seq
 	}
 	r := flow.pacingRate()
-	node.Logf("flow:%d stage:%d k:%d scale:%.3f cwnd:%d->%d rate:%.2f->%.2f (%s)",
+	node.Logf(
+		"flow:%d stage:%d k:%d scale:%.3f cwnd:%d->%d rate:%.2f->%.2f (%s)",
 		flow.id, l.stage, l.k(), l.scale(), c0, flow.cwnd, r0.Mbps(), r.Mbps(), why)
 	return
 }
@@ -368,6 +385,28 @@ func (l *Leo) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 	l.ackedRem = a % Bytes(l.k())
 	//node.Logf("grow cwnd0:%d cwnd:%d", c0, flow.cwnd)
 	return
+}
+
+// updateRtt implements updateRtter.
+func (l *Leo) updateRtt(rtt Clock) {
+	if rtt > l.maxRtt {
+		l.maxRtt = rtt
+	}
+	if l.sRtt == 0 {
+		l.sRtt = rtt
+	} else {
+		l.sRtt = Clock(RTTAlpha*float64(rtt) + (1-RTTAlpha)*float64(l.sRtt))
+	}
+	if l.sRtt > l.maxsRtt {
+		l.maxsRtt = l.sRtt
+	}
+}
+
+// resetRtt resets the RTT stats upon advancing the stage.
+func (l *Leo) resetRtt() {
+	l.sRtt = 0
+	l.maxRtt = 0
+	l.maxsRtt = 0
 }
 
 // LeoStageMax is the maximum number of Leo stages.
