@@ -328,6 +328,8 @@ func (l *Leo) advance(flow *Flow, node Node, why string) (exit bool) {
 	if LeoCWNDTargeting && l.stage > 0 {
 		f := flow.inFlightWindow.at(node.Now() - flow.srtt)
 		c := f * Bytes(flow.minRtt) / Bytes(flow.maxRtt)
+		//node.Logf("target min:%d srtt:%d max:%d",
+		//	flow.minRtt, flow.srtt, flow.maxRtt)
 		// NOTE should we target based on current cwnd, or in-flight bytes
 		// one RTT ago?
 		//c := flow.cwnd * Bytes(flow.minRtt) / Bytes(flow.maxRtt)
