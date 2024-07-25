@@ -3,18 +3,10 @@
 
 package main
 
-import (
-	"strconv"
-)
-
 type Iface struct {
 	rate     Bitrate
 	schedule []RateAt
 	aqm      AQM
-	sojourn  Xplot
-	qlen     Xplot
-	ceTotal  int
-	sceTotal int
 	empty    bool
 }
 
@@ -35,44 +27,12 @@ func NewIface(rate Bitrate, schedule []RateAt, aqm AQM) *Iface {
 		rate,
 		schedule,
 		aqm,
-		Xplot{
-			Title: "Queue Sojourn Time",
-			X: Axis{
-				Label: "Time (S)",
-			},
-			Y: Axis{
-				Label: "Sojourn time (ms)",
-			},
-			Decimation: PlotSojournInterval,
-		},
-		Xplot{
-			Title: "Queue Length",
-			X: Axis{
-				Label: "Time (S)",
-			},
-			Y: Axis{
-				Label: "Length (packets)",
-			},
-			Decimation: PlotQueueLengthInterval,
-		},
-		0,
-		0,
 		true,
 	}
 }
 
 // Start implements Starter.
 func (i *Iface) Start(node Node) (err error) {
-	if PlotSojourn {
-		if err = i.sojourn.Open("sojourn.xpl"); err != nil {
-			return
-		}
-	}
-	if PlotQueueLength {
-		if err = i.qlen.Open("queue-length.xpl"); err != nil {
-			return
-		}
-	}
 	if s, ok := i.aqm.(Starter); ok {
 		if err = s.Start(node); err != nil {
 			return
@@ -87,9 +47,6 @@ func (i *Iface) Start(node Node) (err error) {
 // Handle implements Handler.
 func (i *Iface) Handle(pkt Packet, node Node) error {
 	i.aqm.Enqueue(pkt, node)
-	if PlotQueueLength {
-		i.qlen.Dot(node.Now(), strconv.Itoa(i.aqm.Len()), 0)
-	}
 	if i.empty {
 		i.empty = false
 		i.timer(node, pkt)
@@ -117,21 +74,6 @@ func (i *Iface) Ding(data any, node Node) error {
 	} else {
 		i.empty = true
 	}
-	if PlotQueueLength {
-		c := colorWhite
-		if i.aqm.Len() == 0 {
-			c = colorRed
-		}
-		i.qlen.Dot(node.Now(), strconv.Itoa(i.aqm.Len()), c)
-	}
-	if PlotSojourn {
-		s := node.Now() - p.Enqueue
-		c := colorWhite
-		if i.empty {
-			c = colorRed
-		}
-		i.sojourn.Dot(node.Now(), s.StringMS(), c)
-	}
 	return nil
 }
 
@@ -143,12 +85,6 @@ func (i *Iface) timer(node Node, pkt Packet) {
 
 // Stop implements Stopper.
 func (i *Iface) Stop(node Node) (err error) {
-	if PlotSojourn {
-		i.sojourn.Close()
-	}
-	if PlotQueueLength {
-		i.qlen.Close()
-	}
 	if s, ok := i.aqm.(Stopper); ok {
 		if err = s.Stop(node); err != nil {
 			return

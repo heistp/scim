@@ -55,6 +55,7 @@ func (d *Deltim) Enqueue(pkt Packet, node Node) {
 	}
 	pkt.Enqueue = node.Now()
 	d.queue = append(d.queue, pkt)
+	d.plotLength(len(d.queue), node.Now())
 }
 
 // Dequeue implements AQM.
@@ -89,9 +90,12 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 		pkt.CE = true
 	}
 
-	d.plotMark(m, node.Now())
 	d.idleTime = 0
 	d.priorTime = node.Now()
+
+	d.plotSojourn(node.Now()-pkt.Enqueue, len(d.queue) == 0, node.Now())
+	d.plotLength(len(d.queue), node.Now())
+	d.plotMark(m, node.Now())
 
 	return
 }

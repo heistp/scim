@@ -41,6 +41,7 @@ func (d *Deltic) Start(node Node) error {
 func (d *Deltic) Enqueue(pkt Packet, node Node) {
 	pkt.Enqueue = node.Now()
 	d.queue = append(d.queue, pkt)
+	d.plotLength(len(d.queue), node.Now())
 }
 
 // Dequeue implements AQM.
@@ -77,8 +78,11 @@ func (d *Deltic) Dequeue(node Node) (pkt Packet, ok bool) {
 		}
 	}
 
-	d.plotMark(m, node.Now())
 	d.priorTime = node.Now()
+
+	d.plotSojourn(s, len(d.queue) == 0, node.Now())
+	d.plotLength(len(d.queue), node.Now())
+	d.plotMark(m, node.Now())
 
 	return
 }

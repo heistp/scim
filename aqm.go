@@ -15,6 +15,8 @@ type aqmPlot struct {
 	noCE         int
 	noDrop       int
 	emitMarksCtr int
+	sojourn      Xplot
+	qlen         Xplot
 }
 
 // newAqmPlot returns a new DelticMDS.
@@ -33,6 +35,26 @@ func newAqmPlot() aqmPlot {
 		0, // noCE
 		0, // noDrop
 		0, // emitMarksCtr
+		Xplot{
+			Title: "Queue Sojourn Time",
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Sojourn time (ms)",
+			},
+			Decimation: PlotSojournInterval,
+		},
+		Xplot{
+			Title: "Queue Length",
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Length (packets)",
+			},
+			Decimation: PlotQueueLengthInterval,
+		},
 	}
 }
 
@@ -43,6 +65,16 @@ func (a *aqmPlot) Start(node Node) (err error) {
 			return
 		}
 	}
+	if PlotSojourn {
+		if err = a.sojourn.Open("sojourn.xpl"); err != nil {
+			return
+		}
+	}
+	if PlotQueueLength {
+		if err = a.qlen.Open("queue-length.xpl"); err != nil {
+			return
+		}
+	}
 	return nil
 }
 
@@ -50,6 +82,12 @@ func (a *aqmPlot) Start(node Node) (err error) {
 func (a *aqmPlot) Stop(node Node) error {
 	if PlotMarks {
 		a.marksPlot.Close()
+	}
+	if PlotSojourn {
+		a.sojourn.Close()
+	}
+	if PlotQueueLength {
+		a.qlen.Close()
 	}
 	if EmitMarks && a.emitMarksCtr != 0 {
 		fmt.Println()
@@ -110,5 +148,27 @@ func (a *aqmPlot) emitMark(m mark) {
 	if a.emitMarksCtr == 64 {
 		fmt.Println()
 		a.emitMarksCtr = 0
+	}
+}
+
+// plotLength plots the queue length, in packets.
+func (a *aqmPlot) plotLength(length int, now Clock) {
+	if PlotQueueLength {
+		c := colorWhite
+		if length == 0 {
+			c = colorRed
+		}
+		a.qlen.Dot(now, strconv.Itoa(length), c)
+	}
+}
+
+// plotSojourn plots the sojourn time.
+func (a *aqmPlot) plotSojourn(sojourn Clock, empty bool, now Clock) {
+	if PlotSojourn {
+		c := colorWhite
+		if empty {
+			c = colorRed
+		}
+		a.sojourn.Dot(now, sojourn.StringMS(), c)
 	}
 }
