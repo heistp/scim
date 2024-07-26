@@ -113,6 +113,7 @@ const (
 	PlotSojournInterval     = Clock(100 * time.Microsecond)
 	PlotQueueLength         = false
 	PlotQueueLengthInterval = Clock(100 * time.Microsecond)
+	PlotDeltaSigma          = true
 )
 
 // AQM: plots
@@ -201,13 +202,9 @@ const (
 )
 
 // Sender: pacing params
-//
-// ThrottleSCEResponse only responds to SCE every RTT/Tau, and only when pacing
-// is enabled.
 const (
 	DefaultPacingSSRatio = 1.0 // Linux default == 2.0
 	DefaultPacingCARatio = 1.0 // Linux default == 1.2
-	ThrottleSCEResponse  = false
 )
 
 // Sender: HyStart++ (RFC 9406)

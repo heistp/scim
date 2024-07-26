@@ -18,19 +18,20 @@ type Deltic struct {
 	jit       jitterEstimator
 	priorTime Clock
 	// Plots
-	aqmPlot
+	*aqmPlot
 }
 
 // NewDeltic returns a new Deltic.
 func NewDeltic(sceTarget, ceTarget, dropTarget Clock) *Deltic {
+	p := newAqmPlot()
 	return &Deltic{
-		make([]Packet, 0),     // queue
-		newDeltic(sceTarget),  // sce
-		newDeltic(ceTarget),   // ce
-		newDeltic(dropTarget), // drop
-		jitterEstimator{},     // jit
-		0,                     // priorTime
-		newAqmPlot(),          // aqmPlot
+		make([]Packet, 0),        // queue
+		newDeltic(sceTarget, p),  // sce
+		newDeltic(ceTarget, p),   // ce
+		newDeltic(dropTarget, p), // drop
+		jitterEstimator{},        // jit
+		0,                        // priorTime
+		p,                        // aqmPlot
 	}
 }
 
@@ -126,16 +127,19 @@ type deltic struct {
 	acc          Clock
 	osc          Clock
 	priorSojourn Clock
+	// for plotting
+	*aqmPlot
 }
 
 // newDeltic returns a new deltic.
-func newDeltic(target Clock) deltic {
+func newDeltic(target Clock, plot *aqmPlot) deltic {
 	return deltic{
 		target,                      // target
 		Clock(time.Second) / target, // resonance
 		0,                           // acc
 		0,                           // osc
 		0,                           // priorSojourn
+		plot,                        // aqmPlot
 	}
 }
 
@@ -169,6 +173,7 @@ func (d *deltic) control(sojourn Clock, dt Clock, node Node) (mark bool) {
 			}
 		}
 	}
+	d.plotDeltaSigma(delta, sigma, d.acc, node.Now())
 	//node.Logf("sojourn:%d dt:%d delta:%d sigma:%d acc:%d osc:%d",
 	//	sojourn, dt, delta, sigma, d.acc, d.osc)
 	return

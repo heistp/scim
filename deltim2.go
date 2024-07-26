@@ -44,7 +44,7 @@ type Deltim2 struct {
 	updateEnd   Clock
 	idleTime    Clock
 	// Plots
-	aqmPlot
+	*aqmPlot
 }
 
 func NewDeltim2(burst, update Clock) *Deltim2 {

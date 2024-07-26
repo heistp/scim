@@ -17,11 +17,12 @@ type aqmPlot struct {
 	emitMarksCtr int
 	sojourn      Xplot
 	qlen         Xplot
+	deltaSigma   Xplot
 }
 
 // newAqmPlot returns a new DelticMDS.
-func newAqmPlot() aqmPlot {
-	return aqmPlot{
+func newAqmPlot() *aqmPlot {
+	return &aqmPlot{
 		Xplot{
 			Title: "Congestion Signals - SCE:white, CE:yellow, drop:red",
 			X: Axis{
@@ -55,6 +56,16 @@ func newAqmPlot() aqmPlot {
 			},
 			Decimation: PlotQueueLengthInterval,
 		},
+		Xplot{
+			Title: "Delta-Sigma - delta:red, sigma:yellow, acc/1000:white",
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Value",
+			},
+			NonzeroAxis: true,
+		},
 	}
 }
 
@@ -75,6 +86,11 @@ func (a *aqmPlot) Start(node Node) (err error) {
 			return
 		}
 	}
+	if PlotDeltaSigma {
+		if err = a.deltaSigma.Open("delta-sigma.xpl"); err != nil {
+			return
+		}
+	}
 	return nil
 }
 
@@ -88,6 +104,9 @@ func (a *aqmPlot) Stop(node Node) error {
 	}
 	if PlotQueueLength {
 		a.qlen.Close()
+	}
+	if PlotDeltaSigma {
+		a.deltaSigma.Close()
 	}
 	if EmitMarks && a.emitMarksCtr != 0 {
 		fmt.Println()
@@ -170,5 +189,19 @@ func (a *aqmPlot) plotSojourn(sojourn Clock, empty bool, now Clock) {
 			c = colorRed
 		}
 		a.sojourn.Dot(now, sojourn.StringMS(), c)
+	}
+}
+
+// plotDeltaSigma plots the delta, sigma and accumulator/1000 values.
+func (a *aqmPlot) plotDeltaSigma(delta Clock, sigma Clock,
+	acc Clock, now Clock) {
+	f := a.deltaSigma.Dot
+	//if !mark {
+	//	f = a.deltaSigma.PlotX
+	//}
+	if PlotDeltaSigma {
+		f(now, strconv.FormatInt(int64(delta), 10), colorRed)
+		f(now, strconv.FormatInt(int64(sigma), 10), colorYellow)
+		f(now, strconv.FormatInt(int64(acc/1000), 10), colorWhite)
 	}
 }

@@ -22,7 +22,7 @@ type DelticMDS struct {
 	priorTime    Clock
 	priorSojourn Clock
 	// Plots
-	aqmPlot
+	*aqmPlot
 }
 
 // NewDelticMDS returns a new DelticMDS.

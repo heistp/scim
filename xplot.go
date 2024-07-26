@@ -104,6 +104,8 @@ func (p *Xplot) PlotX(now Clock, y any, color color) {
 	}
 }
 
+type pointFunc func(Clock, any, color)
+
 func (p *Xplot) Line(x0, y0, x1, y1 any, color color) {
 	fmt.Fprintf(p.writer, "line %s %s %s %s %d\n", x0, y0, x1, y1, color)
 }

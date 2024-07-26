@@ -24,7 +24,7 @@ type Deltim struct {
 	priorError Clock
 	idleTime   Clock
 	// Plots
-	aqmPlot
+	*aqmPlot
 }
 
 // NewDeltim returns a new Deltim.
