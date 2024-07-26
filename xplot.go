@@ -53,7 +53,7 @@ type Xplot struct {
 type symbology int
 
 const (
-	symbologyDot symbology = iota * 1024
+	symbologyDot symbology = (iota + 1) * 1024
 	symbologyPlus
 	symbologyX
 )
