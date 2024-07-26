@@ -20,7 +20,6 @@ type Reno struct {
 	sce         Responder
 	caAcked     Bytes
 	priorGrowth Clock
-	priorCEMD   Clock
 	sceHistory  *clockRing
 }
 
@@ -30,30 +29,28 @@ func NewReno(sce Responder) *Reno {
 		sce,               // sce
 		0,                 // caAcked
 		0,                 // priorGrowth
-		0,                 // priorCEMD
 		newClockRing(Tau), // sceHistory
 	}
 }
 
 // slowStartExit implements CCA.
 func (r *Reno) slowStartExit(flow *Flow, node Node) {
-	r.priorCEMD = node.Now()
 }
 
 // reactToCE implements CCA.
 func (r *Reno) reactToCE(flow *Flow, node Node) {
-	if node.Now()-r.priorCEMD > flow.srtt {
+	if flow.receiveNext > flow.signalNext {
 		if flow.cwnd = Bytes(float64(flow.cwnd) * CEMD); flow.cwnd < MSS {
 			flow.cwnd = MSS
 		}
-		r.priorCEMD = node.Now()
+		flow.signalNext = flow.seq
 	}
 }
 
 // reactToSCE implements CCA.
 func (r *Reno) reactToSCE(flow *Flow, node Node) {
 	if r.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
-		(node.Now()-r.priorCEMD) > flow.srtt {
+		flow.receiveNext > flow.signalNext {
 		if flow.cwnd = r.sce.Respond(flow, node); flow.cwnd < MSS {
 			flow.cwnd = MSS
 		}
@@ -86,8 +83,6 @@ func (r *Reno) handleAck(acked Bytes, flow *Flow, node Node) {
 // CUBIC implements a basic version of RFC9438 CUBIC.
 type CUBIC struct {
 	sce        Responder
-	priorCEMD  Clock
-	priorSCEMD Clock
 	tEpoch     Clock
 	cwndEpoch  Bytes
 	wMax       Bytes
@@ -99,8 +94,6 @@ type CUBIC struct {
 func NewCUBIC(sce Responder) *CUBIC {
 	return &CUBIC{
 		sce,               // sce
-		0,                 // priorCEMD
-		0,                 // priorSCEMD
 		0,                 // tEpoch
 		0,                 // cwndEpoch
 		0,                 // wMax
@@ -114,7 +107,6 @@ var CubicBetaSCE = math.Pow(CubicBeta, 1.0/Tau)
 
 // slowStartExit implements CCA.
 func (c *CUBIC) slowStartExit(flow *Flow, node Node) {
-	c.priorCEMD = node.Now()
 	c.tEpoch = node.Now()
 	c.cwndEpoch = flow.cwnd
 	c.wEst = c.cwndEpoch
@@ -123,15 +115,15 @@ func (c *CUBIC) slowStartExit(flow *Flow, node Node) {
 
 // reactToCE implements CCA.
 func (c *CUBIC) reactToCE(flow *Flow, node Node) {
-	if node.Now()-c.priorCEMD > flow.srtt {
+	if flow.receiveNext > flow.signalNext {
 		c.updateWmax(flow.cwnd)
 		if flow.cwnd = Bytes(float64(flow.cwnd) * CubicBeta); flow.cwnd < MSS {
 			flow.cwnd = MSS
 		}
-		c.priorCEMD = node.Now()
 		c.tEpoch = node.Now()
 		c.cwndEpoch = flow.cwnd
 		c.wEst = c.cwndEpoch
+		flow.signalNext = flow.seq
 	}
 }
 
@@ -148,7 +140,7 @@ func (c *CUBIC) updateWmax(cwnd Bytes) {
 // reactToSCE implements CCA.
 func (c *CUBIC) reactToSCE(flow *Flow, node Node) {
 	if c.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
-		(node.Now()-c.priorCEMD) > flow.srtt {
+		flow.receiveNext > flow.signalNext {
 		c.updateWmax(flow.cwnd)
 		if flow.cwnd = c.sce.Respond(flow, node); flow.cwnd < MSS {
 			flow.cwnd = MSS

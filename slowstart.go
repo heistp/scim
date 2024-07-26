@@ -262,7 +262,6 @@ type Essp struct {
 	sce             Responder
 	stage           int
 	priorCEResponse Clock
-	signalNext      Seq
 	ackedRem        Bytes
 	sRtt            Clock
 	maxRtt          Clock
@@ -275,7 +274,6 @@ func NewEssp(sce Responder) *Essp {
 		sce, // sce
 		-1,  // stage
 		0,   // priorCEResponse
-		0,   // signalnext
 		0,   // ackedRem
 		0,   // sRtt
 		0,   // maxRtt
@@ -299,7 +297,7 @@ func (l *Essp) reactToCE(flow *Flow, node Node) (exit bool) {
 		}
 		l.priorCEResponse = node.Now()
 	}
-	if flow.receiveNext <= l.signalNext {
+	if flow.receiveNext <= flow.signalNext {
 		return
 	}
 	exit = l.advance(flow, node, "CE")
@@ -347,7 +345,7 @@ func (l *Essp) advance(flow *Flow, node Node, why string) (exit bool) {
 		flow.pacingSSRatio = DefaultPacingSSRatio
 	} else {
 		flow.pacingSSRatio = l.scale()
-		l.signalNext = flow.seq
+		flow.signalNext = flow.seq
 	}
 	r := flow.pacingRate()
 	node.Logf(
@@ -363,7 +361,7 @@ func (l *Essp) reactToSCE(flow *Flow, node Node) (exit bool) {
 			flow.cwnd = MSS
 		}
 	}
-	if flow.receiveNext <= l.signalNext {
+	if flow.receiveNext <= flow.signalNext {
 		return
 	}
 	exit = l.advance(flow, node, "SCE")
@@ -373,7 +371,7 @@ func (l *Essp) reactToSCE(flow *Flow, node Node) (exit bool) {
 // grow implements SlowStart.
 func (l *Essp) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 	if Essp2xDelayAdvance && flow.srtt > 2*flow.minRtt &&
-		flow.receiveNext > l.signalNext {
+		flow.receiveNext > flow.signalNext {
 		if exit = l.advance(flow, node, "delay"); exit {
 			return
 		}

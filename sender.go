@@ -152,6 +152,7 @@ type Flow struct {
 
 	seq         Seq // SND.NXT
 	receiveNext Seq // RCV.NXT
+	signalNext  Seq
 	state       FlowState
 	srtt        Clock
 	minRtt      Clock
@@ -218,6 +219,7 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 		sce,                  // sce
 		0,                    // seq
 		0,                    // receiveNext
+		0,                    // signalNext
 		FlowStateSS,          // state
 		0,                    // srtt
 		ClockInfinity,        // minRtt
@@ -382,6 +384,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 		case FlowStateSS:
 			if f.slowStart.reactToCE(f, node) {
 				f.exitSlowStart(node, "CE")
+				f.signalNext = f.seq
 			}
 		case FlowStateCA:
 			f.cca.reactToCE(f, node)
@@ -391,6 +394,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 		case FlowStateSS:
 			if f.slowStart.reactToSCE(f, node) {
 				f.exitSlowStart(node, "SCE")
+				f.signalNext = f.seq
 			}
 		case FlowStateCA:
 			f.cca.reactToSCE(f, node)
@@ -401,6 +405,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	case FlowStateSS:
 		if f.slowStart.grow(acked, f, node) {
 			f.exitSlowStart(node, fmt.Sprintf("%T", f.slowStart))
+			f.signalNext = f.seq
 		}
 	case FlowStateCA:
 		f.cca.handleAck(acked, f, node)
