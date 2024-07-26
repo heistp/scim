@@ -110,7 +110,7 @@ func (c *CUBIC) slowStartExit(flow *Flow, node Node) {
 	c.tEpoch = node.Now()
 	c.cwndEpoch = flow.cwnd
 	c.wEst = c.cwndEpoch
-	c.wMax = Bytes(float64(flow.cwnd) / CubicBeta)
+	c.updateWmax(flow.cwnd)
 }
 
 // reactToCE implements CCA.
