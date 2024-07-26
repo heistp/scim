@@ -21,7 +21,6 @@ type Reno struct {
 	caAcked     Bytes
 	priorGrowth Clock
 	priorCEMD   Clock
-	priorSCEMD  Clock
 	sceHistory  *clockRing
 }
 
@@ -32,7 +31,6 @@ func NewReno(sce Responder) *Reno {
 		0,                 // caAcked
 		0,                 // priorGrowth
 		0,                 // priorCEMD
-		0,                 // priorSCEMD
 		newClockRing(Tau), // sceHistory
 	}
 }
@@ -54,19 +52,11 @@ func (r *Reno) reactToCE(flow *Flow, node Node) {
 
 // reactToSCE implements CCA.
 func (r *Reno) reactToSCE(flow *Flow, node Node) {
-	var b bool
-	if flow.pacing && ThrottleSCEResponse {
-		b = node.Now()-r.priorSCEMD > flow.srtt/Tau &&
-			node.Now()-r.priorCEMD > flow.srtt
-	} else {
-		b = r.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
-			(node.Now()-r.priorCEMD) > flow.srtt
-	}
-	if b {
+	if r.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
+		(node.Now()-r.priorCEMD) > flow.srtt {
 		if flow.cwnd = r.sce.Respond(flow, node); flow.cwnd < MSS {
 			flow.cwnd = MSS
 		}
-		r.priorSCEMD = node.Now()
 	} else {
 		//node.Logf("ignore SCE")
 	}
@@ -157,20 +147,12 @@ func (c *CUBIC) updateWmax(cwnd Bytes) {
 
 // reactToSCE implements CCA.
 func (c *CUBIC) reactToSCE(flow *Flow, node Node) {
-	var b bool
-	if flow.pacing && ThrottleSCEResponse {
-		b = node.Now()-c.priorSCEMD > flow.srtt/Tau &&
-			node.Now()-c.priorCEMD > flow.srtt
-	} else {
-		b = c.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
-			(node.Now()-c.priorCEMD) > flow.srtt
-	}
-	if b {
+	if c.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
+		(node.Now()-c.priorCEMD) > flow.srtt {
 		c.updateWmax(flow.cwnd)
 		if flow.cwnd = c.sce.Respond(flow, node); flow.cwnd < MSS {
 			flow.cwnd = MSS
 		}
-		c.priorSCEMD = node.Now()
 		c.tEpoch = node.Now()
 		c.cwndEpoch = flow.cwnd
 		c.wEst = c.cwndEpoch
