@@ -105,6 +105,8 @@ const (
 	PlotCwndInterval     = Clock(100 * time.Microsecond)
 	PlotRTT              = false
 	PlotRTTInterval      = Clock(100 * time.Microsecond)
+	PlotSeq              = false
+	PlotSeqInterval      = Clock(100 * time.Microsecond)
 )
 
 // Iface: plots
@@ -113,7 +115,7 @@ const (
 	PlotSojournInterval     = Clock(100 * time.Microsecond)
 	PlotQueueLength         = false
 	PlotQueueLengthInterval = Clock(100 * time.Microsecond)
-	PlotDeltaSigma          = true
+	PlotDeltaSigma          = false
 )
 
 // AQM: plots

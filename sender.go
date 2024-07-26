@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -87,6 +88,9 @@ func (s *Sender) Start(node Node) (err error) {
 	}
 	for i := range s.flow {
 		f := &s.flow[i]
+		if err = f.Start(node); err != nil {
+			return
+		}
 		f.setActive(f.active, node)
 	}
 	return nil
@@ -128,7 +132,7 @@ func (s *Sender) Ding(data any, node Node) error {
 }
 
 // Stop implements Stopper.
-func (s *Sender) Stop(node Node) error {
+func (s *Sender) Stop(node Node) (err error) {
 	if PlotInFlight {
 		s.inFlight.Close()
 	}
@@ -138,7 +142,13 @@ func (s *Sender) Stop(node Node) error {
 	if PlotRTT {
 		s.rtt.Close()
 	}
-	return nil
+	for i := range s.flow {
+		f := &s.flow[i]
+		if err = f.Stop(node); err != nil {
+			return
+		}
+	}
+	return
 }
 
 // Flow represents the state for a single Flow.
@@ -170,6 +180,8 @@ type Flow struct {
 	pacingWait    bool
 	pacingSSRatio float64
 	pacingCARatio float64
+
+	seqPlot Xplot
 }
 
 // FlowState represents the congestion control state of the Flow.
@@ -234,6 +246,16 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 		false,                // pacingWait
 		DefaultPacingSSRatio, // pacingSSRatio
 		DefaultPacingCARatio, // pacingCARatio
+		Xplot{
+			Title: "Sequence Numbers - send:red ack:white",
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Number",
+			},
+			Decimation: PlotSeqInterval,
+		},
 	}
 }
 
@@ -248,6 +270,25 @@ func AddFlow(ecn ECNCapable, sce SCECapable, ss SlowStart, ssExit Responder,
 
 // FlowID is the currently assigned flow ID, incremented as flows are added.
 var flowID FlowID = 0
+
+// Start implements Starter.
+func (f *Flow) Start(node Node) (err error) {
+	if PlotSeq {
+		n := fmt.Sprintf("seq.%d.xpl", f.id)
+		if err = f.seqPlot.Open(n); err != nil {
+			return
+		}
+	}
+	return
+}
+
+// Stop implements Stopper.
+func (f *Flow) Stop(node Node) (err error) {
+	if PlotSeq {
+		f.seqPlot.Close()
+	}
+	return
+}
 
 // setActive sets the active field, and starts sending if active.
 func (f *Flow) setActive(active bool, node Node) {
@@ -315,7 +356,10 @@ func (f *Flow) sendPacket(pkt Packet, node Node) bool {
 	pkt.ECNCapable = f.ecn
 	pkt.SCECapable = f.sce
 	pkt.Sent = node.Now()
-	//node.Logf("snd %d", pkt.Seq)
+	if PlotSeq {
+		f.seqPlot.Dot(node.Now(), strconv.FormatInt(int64(pkt.Seq), 10),
+			colorRed)
+	}
 	node.Send(pkt)
 	f.addInFlight(pkt.Len, node.Now())
 	f.seq += Seq(pkt.Len)
@@ -374,6 +418,10 @@ func (f *Flow) handleSynAck(pkt Packet, node Node) {
 
 // receive handles an incoming non-SYN ACK packet.
 func (f *Flow) handleAck(pkt Packet, node Node) {
+	if PlotSeq {
+		f.seqPlot.Dot(node.Now(), strconv.FormatInt(int64(pkt.ACKNum), 10),
+			colorWhite)
+	}
 	//node.Logf("ack %d", pkt.ACKNum)
 	acked := Bytes(pkt.ACKNum - f.receiveNext)
 	f.addInFlight(-acked, node.Now())
