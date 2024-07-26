@@ -408,7 +408,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			f.signalNext = f.seq
 		}
 	case FlowStateCA:
-		f.cca.handleAck(acked, f, node)
+		f.cca.grow(acked, f, node)
 	}
 }
 

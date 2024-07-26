@@ -12,7 +12,7 @@ type CCA interface {
 	slowStartExit(*Flow, Node)
 	reactToCE(*Flow, Node)
 	reactToSCE(*Flow, Node)
-	handleAck(Bytes, *Flow, Node)
+	grow(Bytes, *Flow, Node)
 }
 
 // Reno implements TCP Reno.
@@ -60,8 +60,8 @@ func (r *Reno) reactToSCE(flow *Flow, node Node) {
 	r.caAcked = 0
 }
 
-// handleAck implements CCA.
-func (r *Reno) handleAck(acked Bytes, flow *Flow, node Node) {
+// grow implements CCA.
+func (r *Reno) grow(acked Bytes, flow *Flow, node Node) {
 	r.caAcked += acked
 	if RenoFractionalGrowth {
 		// NOTE this is faster than RFC 5681 Reno-linear growth
@@ -153,8 +153,8 @@ func (c *CUBIC) reactToSCE(flow *Flow, node Node) {
 	}
 }
 
-// handleAck implements CCA.
-func (c *CUBIC) handleAck(acked Bytes, flow *Flow, node Node) {
+// grow implements CCA.
+func (c *CUBIC) grow(acked Bytes, flow *Flow, node Node) {
 	t := node.Now() - c.tEpoch
 	u := c.wCubic(t)
 	e := c.updateWest(acked, flow.cwnd)
