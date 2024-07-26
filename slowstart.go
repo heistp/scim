@@ -167,8 +167,7 @@ func (h *HyStartPP) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 // hystartRound checks if the current round has ended and if so, starts the next
 // round.
 func (h *HyStartPP) hystartRound(flow *Flow) (end bool) {
-	// TODO can latestAcked be removed? only in Flow for HyStart
-	if flow.latestAcked > h.windowEnd {
+	if flow.receiveNext-1 > h.windowEnd {
 		h.lastRoundMinRTT = h.currentRoundMinRTT
 		h.currentRoundMinRTT = ClockInfinity
 		h.rttSampleCount = 0

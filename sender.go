@@ -152,7 +152,6 @@ type Flow struct {
 
 	seq         Seq // SND.NXT
 	receiveNext Seq // RCV.NXT
-	latestAcked Seq
 	state       FlowState
 	srtt        Clock
 	minRtt      Clock
@@ -219,7 +218,6 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 		sce,                  // sce
 		0,                    // seq
 		0,                    // receiveNext
-		-1,                   // latestAcked
 		FlowStateSS,          // state
 		0,                    // srtt
 		ClockInfinity,        // minRtt
@@ -364,7 +362,6 @@ func (f *Flow) handleSynAck(pkt Packet, node Node) {
 	f.open = true
 	f.seq = pkt.ACKNum
 	f.receiveNext = pkt.ACKNum
-	f.latestAcked = pkt.ACKNum - 1
 	f.updateRTT(pkt, node)
 	if i, ok := f.slowStart.(initer); ok {
 		i.init(f, node)
@@ -377,7 +374,6 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	acked := Bytes(pkt.ACKNum - f.receiveNext)
 	f.addInFlight(-acked, node.Now())
 	f.receiveNext = pkt.ACKNum
-	f.latestAcked = pkt.ACKNum - 1
 	f.updateRTT(pkt, node)
 	// react to congestion signals
 	// NOTE check for ECN support after drop logic implemented
