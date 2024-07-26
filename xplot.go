@@ -62,8 +62,14 @@ type color int
 
 const (
 	colorWhite color = iota
-	_
+	colorGreen
 	colorRed
+	colorBlue
+	colorYellow
+	colorPurple
+	colorOrange
+	colorMagenta
+	colorPink
 )
 
 func (p *Xplot) Open(name string) (err error) {
