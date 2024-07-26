@@ -315,6 +315,7 @@ func (f *Flow) sendPacket(pkt Packet, node Node) bool {
 	pkt.ECNCapable = f.ecn
 	pkt.SCECapable = f.sce
 	pkt.Sent = node.Now()
+	//node.Logf("snd %d", pkt.Seq)
 	node.Send(pkt)
 	f.addInFlight(pkt.Len, node.Now())
 	f.seq += Seq(pkt.Len)
@@ -373,6 +374,7 @@ func (f *Flow) handleSynAck(pkt Packet, node Node) {
 
 // receive handles an incoming non-SYN ACK packet.
 func (f *Flow) handleAck(pkt Packet, node Node) {
+	//node.Logf("ack %d", pkt.ACKNum)
 	acked := Bytes(pkt.ACKNum - f.receiveNext)
 	f.addInFlight(-acked, node.Now())
 	f.receiveNext = pkt.ACKNum
