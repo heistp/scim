@@ -174,7 +174,7 @@ type Flow struct {
 	cca            CCA
 	cwnd           Bytes
 	inFlight       Bytes
-	inFlightWindow inFlightWindow
+	inFlightWindow bytesWindow
 	ssSCECtr       int
 
 	pacingWait    bool
@@ -244,7 +244,7 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 		cca,                  // cca
 		IW,                   // cwnd
 		0,                    // inFlight
-		inFlightWindow{},     // inFlightWindow
+		bytesWindow{},        // inFlightWindow
 		0,                    // ssSCECtr
 		false,                // pacingWait
 		DefaultPacingSSRatio, // pacingSSRatio
@@ -535,12 +535,12 @@ func (f *Flow) updateRTT(pkt Packet, node Node) {
 	}
 }
 
-// inFlightWindow stores inFlight samples for cwnd targeting.
-type inFlightWindow []inFlightSample
+// bytesWindow stores a value in bytes over time.
+type bytesWindow []bytesSample
 
-// add adds in in-flight bytes value.
-func (w *inFlightWindow) add(time Clock, inFlight Bytes, earliest Clock) {
-	*w = append(*w, inFlightSample{time, inFlight})
+// add adds a bytes value.
+func (w *bytesWindow) add(time Clock, value Bytes, earliest Clock) {
+	*w = append(*w, bytesSample{time, value})
 	var i int
 	for i = range *w {
 		if (*w)[i].time >= earliest {
@@ -550,24 +550,24 @@ func (w *inFlightWindow) add(time Clock, inFlight Bytes, earliest Clock) {
 	*w = (*w)[i:]
 }
 
-// at returns the closest in-flight bytes value for the given time.
-func (w inFlightWindow) at(time Clock) Bytes {
+// at returns the closest bytes value for the given time.
+func (w bytesWindow) at(time Clock) Bytes {
 	for i, s := range w {
 		if s.time >= time {
 			if i == 0 {
-				return s.inFlight
+				return s.value
 			}
 			if s.time-time > time-w[i-1].time {
-				return w[i-1].inFlight
+				return w[i-1].value
 			}
-			return s.inFlight
+			return s.value
 		}
 	}
-	return w[len(w)-1].inFlight
+	return w[len(w)-1].value
 }
 
-// inFlightSample is one data point in the inFlightWindow.
-type inFlightSample struct {
-	time     Clock
-	inFlight Bytes
+// bytesSample is one data point in the bytesWindow.
+type bytesSample struct {
+	time  Clock
+	value Bytes
 }
