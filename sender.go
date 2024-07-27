@@ -181,7 +181,10 @@ type Flow struct {
 	pacingSSRatio float64
 	pacingCARatio float64
 
-	seqPlot Xplot
+	seqPlot  Xplot
+	sentPlot Xplot
+	sent     Bytes
+	acked    Bytes
 }
 
 // FlowState represents the congestion control state of the Flow.
@@ -255,7 +258,19 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 				Label: "Number",
 			},
 			Decimation: PlotSeqInterval,
-		},
+		}, // seqPlot
+		Xplot{
+			Title: fmt.Sprintf("Flow %d - Sent and Acked Bytes - sent:red acked:white", id),
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Bytes",
+			},
+			Decimation: PlotSentInterval,
+		}, // sentPlot
+		0, // sent
+		0, // acked
 	}
 }
 
@@ -279,6 +294,12 @@ func (f *Flow) Start(node Node) (err error) {
 			return
 		}
 	}
+	if PlotSent {
+		n := fmt.Sprintf("sent.%d.xpl", f.id)
+		if err = f.sentPlot.Open(n); err != nil {
+			return
+		}
+	}
 	return
 }
 
@@ -286,6 +307,9 @@ func (f *Flow) Start(node Node) (err error) {
 func (f *Flow) Stop(node Node) (err error) {
 	if PlotSeq {
 		f.seqPlot.Close()
+	}
+	if PlotSent {
+		f.sentPlot.Close()
 	}
 	return
 }
@@ -356,11 +380,16 @@ func (f *Flow) sendPacket(pkt Packet, node Node) bool {
 	pkt.ECNCapable = f.ecn
 	pkt.SCECapable = f.sce
 	pkt.Sent = node.Now()
+	node.Send(pkt)
 	if PlotSeq {
 		f.seqPlot.Dot(node.Now(), strconv.FormatInt(int64(pkt.Seq), 10),
 			colorRed)
 	}
-	node.Send(pkt)
+	if PlotSent {
+		f.sent += pkt.Len
+		f.sentPlot.Dot(node.Now(), strconv.FormatUint(uint64(f.sent), 10),
+			colorRed)
+	}
 	f.addInFlight(pkt.Len, node.Now())
 	f.seq += Seq(pkt.Len)
 	return true
@@ -427,6 +456,11 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	f.addInFlight(-acked, node.Now())
 	f.receiveNext = pkt.ACKNum
 	f.updateRTT(pkt, node)
+	if PlotSent {
+		f.acked += acked
+		f.sentPlot.Dot(node.Now(), strconv.FormatUint(uint64(f.acked), 10),
+			colorWhite)
+	}
 	// react to congestion signals
 	// NOTE check for ECN support after drop logic implemented
 	if pkt.ECE {

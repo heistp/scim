@@ -18,7 +18,8 @@ const Duration = 60 * time.Second
 var (
 	Flows = []Flow{
 		AddFlow(ECN, SCE, NewEssp(SqrtP{}), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, true),
-		//AddFlow(ECN, SCE, NewLeo(SqrtP{}), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, false),
+		//AddFlow(ECN, SCE, NewEssp(SqrtP{}), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, false),
+		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, false),
 	}
 	FlowSchedule = []FlowAt{
@@ -71,17 +72,17 @@ var RateSchedule = []RateAt{
 //}
 
 // Iface: DelTiC AQM config
-//var UseAQM = NewDeltic(
-//	Clock(5*time.Millisecond),   // SCE
-//	Clock(25*time.Millisecond),  // CE
-//	Clock(125*time.Millisecond), // drop
-//)
+var UseAQM = NewDeltic(
+	Clock(5*time.Millisecond),   // SCE
+	Clock(25*time.Millisecond),  // CE
+	Clock(125*time.Millisecond), // drop
+)
 
 // Iface: DelTiC-MDS AQM config
 //var UseAQM = NewDelticMDS(Clock(5000 * time.Microsecond))
 
 // Iface: DelTiM AQM config
-var UseAQM = NewDeltim(Clock(5000 * time.Microsecond))
+//var UseAQM = NewDeltim(Clock(5000 * time.Microsecond))
 
 //var UseAQM = NewDeltim2(Clock(5000*time.Microsecond),
 //	Clock(10*time.Microsecond))
@@ -107,6 +108,8 @@ const (
 	PlotRTTInterval      = Clock(100 * time.Microsecond)
 	PlotSeq              = false
 	PlotSeqInterval      = Clock(100 * time.Microsecond)
+	PlotSent             = false
+	PlotSentInterval     = Clock(100 * time.Microsecond)
 )
 
 // Iface: plots
