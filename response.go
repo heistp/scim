@@ -76,7 +76,7 @@ type TargetCWND struct {
 // Respond implements Responder.
 func (TargetCWND) Respond(flow *Flow, node Node) (cwnd Bytes) {
 	cwnd0 := flow.cwnd
-	flight := flow.inFlightWindow.at(node.Now() - flow.srtt)
+	flight := flow.inFlightWin.at(node.Now() - flow.srtt)
 	cwnd = flight * Bytes(flow.minRtt) / Bytes(flow.srtt)
 	node.Logf("target cwnd:%d cwnd0:%d flight:%d minRtt:%.2fms srtt:%.2fms",
 		cwnd, cwnd0, flight,
@@ -93,7 +93,7 @@ type TargetResponse struct {
 // Respond implements Responder.
 func (TargetResponse) Respond(flow *Flow, node Node) (cwnd Bytes) {
 	//cwnd0 := flow.cwnd
-	flight := flow.inFlightWindow.at(node.Now() - flow.srtt)
+	flight := flow.inFlightWin.at(node.Now() - flow.srtt)
 	//cwnd = flight * Bytes(flow.minRtt+flow.srtt) / Bytes(2*flow.srtt)
 	cwnd = flight * Bytes(flow.minRtt) / Bytes(flow.srtt)
 	m := 1.0 - math.Sqrt(float64(cwnd))/float64(cwnd)

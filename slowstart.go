@@ -69,7 +69,7 @@ func (s *StdSS) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 	if d > 1 {
 		i /= Bytes(d)
 	}
-	flow.cwnd += i
+	flow.setCWND(flow.cwnd + i)
 	return
 }
 
@@ -138,7 +138,7 @@ func (h *HyStartPP) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 		case SSGrowthABC2:
 			i = acked
 		}
-		flow.cwnd += i
+		flow.setCWND(flow.cwnd + i)
 	} else {
 		if h.hystartRound(flow) {
 			h.cssRounds++
@@ -155,9 +155,10 @@ func (h *HyStartPP) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 			return
 		}
 		if flow.pacing == NoPacing {
-			flow.cwnd += min(acked, HyStartLNoPacing*MSS) / HyCSSGrowthDivisor
+			flow.setCWND(flow.cwnd +
+				min(acked, HyStartLNoPacing*MSS)/HyCSSGrowthDivisor)
 		} else {
-			flow.cwnd += acked / HyCSSGrowthDivisor
+			flow.setCWND(flow.cwnd + acked/HyCSSGrowthDivisor)
 		}
 	}
 
@@ -248,7 +249,7 @@ func (s *Slick) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 		s.burstStart = node.Now()
 		//node.Logf("divisor:%d", s.divisor)
 	}
-	flow.cwnd += acked / Bytes(s.divisor)
+	flow.setCWND(flow.cwnd + acked/Bytes(s.divisor))
 	return
 }
 
@@ -292,9 +293,7 @@ func (l *Essp) init(flow *Flow, node Node) {
 // reactToCE implements SlowStart.
 func (l *Essp) reactToCE(flow *Flow, node Node) (exit bool) {
 	if !EsspCENoResponse && node.Now()-l.priorCEResponse > flow.srtt {
-		if flow.cwnd = Bytes(float64(flow.cwnd) / l.scale()); flow.cwnd < MSS {
-			flow.cwnd = MSS
-		}
+		flow.setCWND(Bytes(float64(flow.cwnd) / l.scale()))
 		l.priorCEResponse = node.Now()
 	}
 	if flow.receiveNext <= flow.signalNext {
@@ -331,13 +330,13 @@ func (l *Essp) advance(flow *Flow, node Node, why string) (exit bool) {
 	c0 := flow.cwnd
 	r0 := flow.pacingRate()
 	if EsspCWNDTargeting && l.stage > 0 {
-		f := flow.inFlightWindow.at(node.Now() - flow.srtt)
+		f := flow.inFlightWin.at(node.Now() - flow.srtt)
 		c := f * Bytes(flow.minRtt) / Bytes(l.maxRtt)
 		c = Bytes(float64(c) * l.scale())
 		//node.Logf("target min:%d srtt:%d max:%d maxs:%d",
 		//	flow.minRtt, l.sRtt, l.maxRtt, l.maxsRtt)
 		if flow.cwnd > c {
-			flow.cwnd = c
+			flow.setCWND(c)
 		}
 		l.resetRtt()
 	}
@@ -357,9 +356,7 @@ func (l *Essp) advance(flow *Flow, node Node, why string) (exit bool) {
 // reactToSCE implements SlowStart.
 func (l *Essp) reactToSCE(flow *Flow, node Node) (exit bool) {
 	if !EsspSCENoResponse {
-		if flow.cwnd = l.sce.Respond(flow, node); flow.cwnd < MSS {
-			flow.cwnd = MSS
-		}
+		flow.setCWND(l.sce.Respond(flow, node))
 	}
 	if flow.receiveNext <= flow.signalNext {
 		return
@@ -378,7 +375,7 @@ func (l *Essp) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 	}
 	a := acked + l.ackedRem
 	//c0 := flow.cwnd
-	flow.cwnd += a / Bytes(l.k())
+	flow.setCWND(flow.cwnd + a/Bytes(l.k()))
 	l.ackedRem = a % Bytes(l.k())
 	//node.Logf("grow cwnd0:%d cwnd:%d", c0, flow.cwnd)
 	return

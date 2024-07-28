@@ -8,7 +8,7 @@ fi
 
 rm -f *.xpl
 go build
-$realtime ./scemds
+$realtime ./scim
 if command -v xplot &> /dev/null; then
     xplot *.xpl &>/dev/null &
 fi

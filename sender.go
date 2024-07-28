@@ -171,20 +171,26 @@ type Flow struct {
 	slowStart     SlowStart
 	slowStartExit Responder
 
-	cca            CCA
-	cwnd           Bytes
-	inFlight       Bytes
-	inFlightWindow bytesWindow
-	ssSCECtr       int
+	cca         CCA
+	cwnd        Bytes
+	inFlight    Bytes
+	inFlightWin bytesWindow
+	ssSCECtr    int
 
 	pacingWait    bool
 	pacingSSRatio float64
 	pacingCARatio float64
 
-	seqPlot  Xplot
-	sentPlot Xplot
-	sent     Bytes
-	acked    Bytes
+	seqPlot      Xplot
+	sentPlot     Xplot
+	sent         Bytes
+	acked        Bytes
+	ratePlot     Xplot
+	sentWin      bytesWindow
+	ackedWin     bytesWindow
+	accelPlot    Xplot
+	sentRateWin  bytesWindow
+	ackedRateWin bytesWindow
 }
 
 // FlowState represents the congestion control state of the Flow.
@@ -271,6 +277,30 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 		}, // sentPlot
 		0, // sent
 		0, // acked
+		Xplot{
+			Title: fmt.Sprintf("Flow %d - Sent and Acked Rate - sent:red acked:white", id),
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Rate (bytes/sec)",
+			},
+			Decimation: PlotRateInterval,
+		}, // ratePlot
+		bytesWindow{}, // sentWin
+		bytesWindow{}, // ackedWin
+		Xplot{
+			Title: fmt.Sprintf("Flow %d - Sent and Acked Rate Acceleration - sent:red acked:white", id),
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Acceleration (bytes/sec^2)",
+			},
+			Decimation: PlotRateInterval,
+		}, // accelPlot
+		bytesWindow{}, // sentRateWin
+		bytesWindow{}, // ackedRateWin
 	}
 }
 
@@ -300,6 +330,16 @@ func (f *Flow) Start(node Node) (err error) {
 			return
 		}
 	}
+	if PlotRate {
+		n := fmt.Sprintf("rate.%d.xpl", f.id)
+		if err = f.ratePlot.Open(n); err != nil {
+			return
+		}
+		n = fmt.Sprintf("accel.%d.xpl", f.id)
+		if err = f.accelPlot.Open(n); err != nil {
+			return
+		}
+	}
 	return
 }
 
@@ -310,6 +350,10 @@ func (f *Flow) Stop(node Node) (err error) {
 	}
 	if PlotSent {
 		f.sentPlot.Close()
+	}
+	if PlotRate {
+		f.ratePlot.Close()
+		f.accelPlot.Close()
 	}
 	return
 }
@@ -385,10 +429,23 @@ func (f *Flow) sendPacket(pkt Packet, node Node) bool {
 		f.seqPlot.Dot(node.Now(), strconv.FormatInt(int64(pkt.Seq), 10),
 			colorRed)
 	}
+	f.sent += pkt.Len
 	if PlotSent {
-		f.sent += pkt.Len
 		f.sentPlot.Dot(node.Now(), strconv.FormatUint(uint64(f.sent), 10),
 			colorRed)
+	}
+	if PlotRate {
+		f.sentWin.add(node.Now(), f.sent, node.Now()-f.srtt)
+		if f.srtt > 0 {
+			ds := f.sent - f.sentWin.at(node.Now()-f.srtt)
+			r := ds * Bytes(time.Second) / Bytes(f.srtt)
+			f.ratePlot.Dot(node.Now(), strconv.FormatUint(uint64(r), 10),
+				colorRed)
+			f.sentRateWin.add(node.Now(), r, node.Now()-f.srtt)
+			dr := int64(r) - int64(f.sentRateWin.at(node.Now()-f.srtt))
+			a := dr * int64(time.Second) / int64(f.srtt)
+			f.accelPlot.Dot(node.Now(), strconv.FormatInt(a, 10), colorRed)
+		}
 	}
 	f.addInFlight(pkt.Len, node.Now())
 	f.seq += Seq(pkt.Len)
@@ -398,7 +455,8 @@ func (f *Flow) sendPacket(pkt Packet, node Node) bool {
 // addInFlight adds the given number of bytes to the in-flight bytes.
 func (f *Flow) addInFlight(b Bytes, now Clock) {
 	f.inFlight += b
-	f.inFlightWindow.add(now, f.inFlight, now-f.srtt)
+	//f.inFlightWin.add(now, f.inFlight, now-f.srtt)
+	f.inFlightWin.add(now, f.cwnd, now-f.srtt)
 }
 
 // pacingDelay returns the Clock time to wait to pace the given bytes.
@@ -456,10 +514,23 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	f.addInFlight(-acked, node.Now())
 	f.receiveNext = pkt.ACKNum
 	f.updateRTT(pkt, node)
+	f.acked += acked
 	if PlotSent {
-		f.acked += acked
 		f.sentPlot.Dot(node.Now(), strconv.FormatUint(uint64(f.acked), 10),
 			colorWhite)
+	}
+	if PlotRate {
+		f.ackedWin.add(node.Now(), f.acked, node.Now()-f.srtt)
+		if f.srtt > 0 {
+			da := f.acked - f.ackedWin.at(node.Now()-f.srtt)
+			r := da * Bytes(time.Second) / Bytes(f.srtt)
+			f.ratePlot.Dot(node.Now(), strconv.FormatUint(uint64(r), 10),
+				colorWhite)
+			f.ackedRateWin.add(node.Now(), r, node.Now()-f.srtt)
+			dr := int64(r) - int64(f.ackedRateWin.at(node.Now()-f.srtt))
+			a := int64(dr) * int64(time.Second) / int64(f.srtt)
+			f.accelPlot.Dot(node.Now(), strconv.FormatInt(a, 10), colorWhite)
+		}
 	}
 	// react to congestion signals
 	// NOTE check for ECN support after drop logic implemented
@@ -499,17 +570,15 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 // exitSlowStart adjusts cwnd for slow-start exit and changes state to CA.
 func (f *Flow) exitSlowStart(node Node, reason string) {
 	cwnd0 := f.cwnd
-	if f.cwnd = f.slowStartExit.Respond(f, node); f.cwnd < MSS {
-		f.cwnd = MSS
-	}
+	f.setCWND(f.slowStartExit.Respond(f, node))
 	node.Logf("flow:%d slow-start exit %s cwnd:%d cwnd0:%d",
 		f.id, reason, f.cwnd, cwnd0)
 	f.cca.slowStartExit(f, node)
 	f.state = FlowStateCA
 }
 
-// updateRTT updates the rtt from the given packet, if its Delayed flag is not
-// set.
+// updateRTT updates the RTT and its statistics from the given packet, if its
+// Delayed flag is not set.
 func (f *Flow) updateRTT(pkt Packet, node Node) {
 	if pkt.Delayed {
 		return
@@ -533,6 +602,15 @@ func (f *Flow) updateRTT(pkt Packet, node Node) {
 	if rtt > f.maxRtt {
 		f.maxRtt = rtt
 	}
+}
+
+// setCWND updates the congestion window to the given value and performs
+// clamping so that it doesn't fall below MSS.
+func (f *Flow) setCWND(cwnd Bytes) {
+	if cwnd < MSS {
+		cwnd = MSS
+	}
+	f.cwnd = cwnd
 }
 
 // bytesWindow stores a value in bytes over time.

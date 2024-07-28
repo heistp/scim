@@ -40,9 +40,7 @@ func (r *Reno) slowStartExit(flow *Flow, node Node) {
 // reactToCE implements CCA.
 func (r *Reno) reactToCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
-		if flow.cwnd = Bytes(float64(flow.cwnd) * CEMD); flow.cwnd < MSS {
-			flow.cwnd = MSS
-		}
+		flow.setCWND(Bytes(float64(flow.cwnd) * CEMD))
 		flow.signalNext = flow.seq
 	}
 }
@@ -51,9 +49,7 @@ func (r *Reno) reactToCE(flow *Flow, node Node) {
 func (r *Reno) reactToSCE(flow *Flow, node Node) {
 	if r.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
 		flow.receiveNext > flow.signalNext {
-		if flow.cwnd = r.sce.Respond(flow, node); flow.cwnd < MSS {
-			flow.cwnd = MSS
-		}
+		flow.setCWND(r.sce.Respond(flow, node))
 	} else {
 		//node.Logf("ignore SCE")
 	}
@@ -73,7 +69,7 @@ func (r *Reno) grow(acked Bytes, flow *Flow, node Node) {
 		r.priorGrowth = node.Now()
 	} else {
 		if r.caAcked >= flow.cwnd && node.Now()-r.priorGrowth > flow.srtt {
-			flow.cwnd += MSS
+			flow.setCWND(flow.cwnd + MSS)
 			r.caAcked = 0
 			r.priorGrowth = node.Now()
 		}
@@ -117,9 +113,7 @@ func (c *CUBIC) slowStartExit(flow *Flow, node Node) {
 func (c *CUBIC) reactToCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
 		c.updateWmax(flow.cwnd)
-		if flow.cwnd = Bytes(float64(flow.cwnd) * CubicBeta); flow.cwnd < MSS {
-			flow.cwnd = MSS
-		}
+		flow.setCWND(Bytes(float64(flow.cwnd) * CubicBeta))
 		c.tEpoch = node.Now()
 		c.cwndEpoch = flow.cwnd
 		c.wEst = c.cwndEpoch
@@ -142,9 +136,7 @@ func (c *CUBIC) reactToSCE(flow *Flow, node Node) {
 	if c.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
 		flow.receiveNext > flow.signalNext {
 		c.updateWmax(flow.cwnd)
-		if flow.cwnd = c.sce.Respond(flow, node); flow.cwnd < MSS {
-			flow.cwnd = MSS
-		}
+		flow.setCWND(c.sce.Respond(flow, node))
 		c.tEpoch = node.Now()
 		c.cwndEpoch = flow.cwnd
 		c.wEst = c.cwndEpoch
@@ -161,11 +153,11 @@ func (c *CUBIC) grow(acked Bytes, flow *Flow, node Node) {
 	//c0 := flow.cwnd
 	//node.Logf("t:%d u:%d e:%d beta:%f", t, u, e, c.beta)
 	if u < e { // Reno-friendly region
-		flow.cwnd = e
+		flow.setCWND(e)
 		//node.Logf("  friendly cwnd0:%d cwnd:%d", c0, flow.cwnd)
 	} else { // concave and convex regions
 		r := c.target(flow.cwnd, t+flow.srtt)
-		flow.cwnd += MSS * (r - flow.cwnd) / flow.cwnd
+		flow.setCWND(flow.cwnd + MSS*(r-flow.cwnd)/flow.cwnd)
 		/*
 			if flow.cwnd < c.wMax {
 				node.Logf("  concave cwnd:%d cwnd0:%d r:%d t:%d srtt:%d",
@@ -175,9 +167,6 @@ func (c *CUBIC) grow(acked Bytes, flow *Flow, node Node) {
 					flow.cwnd, c0, r, t, flow.srtt)
 			}
 		*/
-	}
-	if flow.cwnd < MSS {
-		flow.cwnd = MSS
 	}
 }
 

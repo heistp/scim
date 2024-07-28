@@ -110,6 +110,8 @@ const (
 	PlotSeqInterval      = Clock(100 * time.Microsecond)
 	PlotSent             = false
 	PlotSentInterval     = Clock(100 * time.Microsecond)
+	PlotRate             = false
+	PlotRateInterval     = Clock(100 * time.Microsecond)
 )
 
 // Iface: plots
@@ -160,7 +162,7 @@ const (
 // Sender: Slow-Start defaults
 const (
 	DefaultSSGrowth        = SSGrowthABC2
-	DefaultSSBaseReduction = true
+	DefaultSSBaseReduction = false
 	DefaultSSExitThreshold = Tau / 2 // e.g. 0, Tau, Tau/2 or Tau/4
 )
 

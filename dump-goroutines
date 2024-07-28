@@ -1,9 +1,9 @@
 #!/bin/bash
 
-p=$(pidof scemds)
+p=$(pidof scim)
 
 if [[ $p ]]; then
     /bin/kill --verbose -s IOT $p
 else
-    echo "scemds not running"
+    echo "scim not running"
 fi
