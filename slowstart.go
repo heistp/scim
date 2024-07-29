@@ -64,10 +64,19 @@ func (s *StdSS) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 		i = acked
 	}
 	if DefaultSSBaseReduction {
-		d += s.sceCtr
+		//d += s.sceCtr
+		if s.sceCtr >= len(EsspK) {
+			d += EsspK[len(EsspK)-1]
+		} else {
+			d += EsspK[s.sceCtr]
+		}
 	}
 	if d > 1 {
 		i /= Bytes(d)
+	}
+	if flow.cwnd/Bytes(d) <= MSS {
+		exit = true
+		return
 	}
 	flow.setCWND(flow.cwnd + i)
 	return
