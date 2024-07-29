@@ -83,8 +83,11 @@ func (d *DelticMDS) Dequeue(node Node) (pkt Packet, ok bool) {
 		}
 	}
 
-	d.plotMark(m, node.Now())
 	d.priorTime = node.Now()
+
+	d.plotSojourn(node.Now()-pkt.Enqueue, len(d.queue) == 0, node.Now())
+	d.plotLength(len(d.queue), node.Now())
+	d.plotMark(m, node.Now())
 
 	return
 }
