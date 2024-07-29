@@ -17,10 +17,10 @@ const Duration = 60 * time.Second
 // Sender and Delay: flows
 var (
 	Flows = []Flow{
-		AddFlow(ECN, SCE, NewEssp(SqrtP{}), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, true),
-		//AddFlow(ECN, SCE, NewEssp(SqrtP{}), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, false),
+		AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, true),
+		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewCUBIC(CMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
-		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, false),
+		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{1, Clock(10 * time.Second), true},
@@ -162,7 +162,7 @@ const (
 // Sender: Slow-Start defaults
 const (
 	DefaultSSGrowth        = SSGrowthABC2
-	DefaultSSBaseReduction = false
+	DefaultSSBaseReduction = true
 	DefaultSSExitThreshold = Tau / 2 // e.g. 0, Tau, Tau/2 or Tau/4
 )
 

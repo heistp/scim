@@ -3,8 +3,8 @@
 .tags
 .exrc
 
-# scemds binary and profiling output
-scemds
+# scim binary and profiling output
+scim
 *.prof
 
 # private directory

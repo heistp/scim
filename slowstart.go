@@ -269,25 +269,23 @@ func (s *Slick) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 //
 // TODO improve doc
 type Essp struct {
-	sce             Responder
-	stage           int
-	priorCEResponse Clock
-	ackedRem        Bytes
-	sRtt            Clock
-	maxRtt          Clock
-	maxsRtt         Clock // NOTE remove if not needed
+	stage    int
+	ackedRem Bytes
+	rtt      Clock
+	sRtt     Clock
+	maxRtt   Clock
+	maxsRtt  Clock // NOTE remove if not needed
 }
 
 // NewEssp returns a new Essp.
-func NewEssp(sce Responder) *Essp {
+func NewEssp() *Essp {
 	return &Essp{
-		sce, // sce
-		-1,  // stage
-		0,   // priorCEResponse
-		0,   // ackedRem
-		0,   // sRtt
-		0,   // maxRtt
-		0,   // maxsRtt
+		-1, // stage
+		0,  // ackedRem
+		0,  // iRtt
+		0,  // sRtt
+		0,  // maxRtt
+		0,  // maxsRtt
 	}
 }
 
@@ -301,10 +299,6 @@ func (l *Essp) init(flow *Flow, node Node) {
 
 // reactToCE implements SlowStart.
 func (l *Essp) reactToCE(flow *Flow, node Node) (exit bool) {
-	if !EsspCENoResponse && node.Now()-l.priorCEResponse > flow.srtt {
-		flow.setCWND(Bytes(float64(flow.cwnd) / l.scale()))
-		l.priorCEResponse = node.Now()
-	}
 	if flow.receiveNext <= flow.signalNext {
 		return
 	}
@@ -364,9 +358,6 @@ func (l *Essp) advance(flow *Flow, node Node, why string) (exit bool) {
 
 // reactToSCE implements SlowStart.
 func (l *Essp) reactToSCE(flow *Flow, node Node) (exit bool) {
-	if !EsspSCENoResponse {
-		flow.setCWND(l.sce.Respond(flow, node))
-	}
 	if flow.receiveNext <= flow.signalNext {
 		return
 	}
@@ -376,7 +367,7 @@ func (l *Essp) reactToSCE(flow *Flow, node Node) (exit bool) {
 
 // grow implements SlowStart.
 func (l *Essp) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
-	if Essp2xDelayAdvance && flow.srtt > 2*flow.minRtt &&
+	if Essp2xDelayAdvance && l.rtt > 2*flow.minRtt &&
 		flow.receiveNext > flow.signalNext {
 		if exit = l.advance(flow, node, "delay"); exit {
 			return
@@ -392,6 +383,7 @@ func (l *Essp) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 
 // updateRtt implements updateRtter.
 func (l *Essp) updateRtt(rtt Clock) {
+	l.rtt = rtt
 	if rtt > l.maxRtt {
 		l.maxRtt = rtt
 	}
