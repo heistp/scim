@@ -87,6 +87,13 @@ var UseAQM = NewDeltic(
 //var UseAQM = NewDeltim2(Clock(5000*time.Microsecond),
 //	Clock(10*time.Microsecond))
 
+// Iface: Brickwall AQM config
+//var UseAQM = NewBrickwall(
+//	Clock(0*time.Millisecond),   // SCE
+//	Clock(120*time.Millisecond), // CE
+//	Clock(0*time.Millisecond),   // drop
+//)
+
 // Iface: Ramp AQM config
 var (
 	//UseAQM     = NewRamp()
@@ -106,6 +113,8 @@ const (
 	PlotCwndInterval     = Clock(100 * time.Microsecond)
 	PlotRTT              = false
 	PlotRTTInterval      = Clock(100 * time.Microsecond)
+	PlotPacing           = true
+	PlotPacingInterval   = Clock(100 * time.Microsecond)
 	PlotSeq              = false
 	PlotSeqInterval      = Clock(100 * time.Microsecond)
 	PlotSent             = false
