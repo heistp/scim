@@ -49,6 +49,7 @@ func (d *DelticMDS) Start(node Node) error {
 func (d *DelticMDS) Enqueue(pkt Packet, node Node) {
 	pkt.Enqueue = node.Now()
 	d.queue = append(d.queue, pkt)
+	d.plotLength(len(d.queue), node.Now())
 }
 
 // Dequeue implements AQM.
