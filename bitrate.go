@@ -15,6 +15,7 @@ type Bitrate int64
 
 const (
 	Bps  Bitrate = 1
+	Yps          = 8 * Bps
 	Kbps         = 1000 * Bps
 	Mbps         = 1000 * Kbps
 	Gbps         = 1000 * Mbps
@@ -64,6 +65,11 @@ func MinBitrate(bitrate ...Bitrate) (min Bitrate) {
 // Bps returns the Bitrate in bits per second.
 func (b Bitrate) Bps() float64 {
 	return float64(b) / float64(Bps)
+}
+
+// Yps returns the Bitrate in bytes per second.
+func (b Bitrate) Yps() float64 {
+	return float64(b) / float64(Yps)
 }
 
 // Kbps returns the Bitrate in kilobits per second.
