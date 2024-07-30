@@ -331,11 +331,16 @@ func (l *Essp) advance(flow *Flow, node Node, why string) (exit bool) {
 		panic(fmt.Sprintf("max ESSP stage reached: %d", l.stage))
 	}
 	c0 := flow.cwnd
-	r0 := flow.pacingRate()
+	r0 := flow.getPacingRate()
 	if EsspCWNDTargeting && l.stage > 0 {
-		f := flow.inFlightWin.at(node.Now() - flow.srtt)
-		c := f * Bytes(flow.minRtt) / Bytes(l.maxRtt)
-		c = Bytes(float64(c) * l.scale())
+		c := c0 * Bytes(flow.minRtt) / Bytes(l.maxRtt)
+		// NOTE we now do CWND targeting with the current CWND, as above.
+		// we used to use in-flight bytes one sRTT ago, scaled by the
+		// pacing factor, as below, but CWND targeting doesn't work that well
+		// with scaled pacing, even with this pacing factor.
+		//f := flow.inFlightWin.at(node.Now() - flow.srtt)
+		//c := f * Bytes(flow.minRtt) / Bytes(l.maxRtt)
+		//c = Bytes(float64(c) * l.scale())
 		//node.Logf("target min:%d srtt:%d max:%d maxs:%d",
 		//	flow.minRtt, l.sRtt, l.maxRtt, l.maxsRtt)
 		if flow.cwnd > c {
@@ -349,7 +354,7 @@ func (l *Essp) advance(flow *Flow, node Node, why string) (exit bool) {
 		flow.pacingSSRatio = l.scale()
 		flow.signalNext = flow.seq
 	}
-	r := flow.pacingRate()
+	r := flow.getPacingRate()
 	node.Logf(
 		"flow:%d stage:%d k:%d scale:%.3f cwnd:%d->%d rate:%.2f->%.2f (%s)",
 		flow.id, l.stage, l.k(), l.scale(), c0, flow.cwnd, r0.Mbps(), r.Mbps(), why)
@@ -367,8 +372,8 @@ func (l *Essp) reactToSCE(flow *Flow, node Node) (exit bool) {
 
 // grow implements SlowStart.
 func (l *Essp) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
-	if Essp2xDelayAdvance && l.rtt > 2*flow.minRtt &&
-		flow.receiveNext > flow.signalNext {
+	if EsspDelayThreshold > 1.0 && flow.receiveNext > flow.signalNext &&
+		l.rtt > Clock(float64(flow.minRtt)*EsspDelayThreshold) {
 		if exit = l.advance(flow, node, "delay"); exit {
 			return
 		}
