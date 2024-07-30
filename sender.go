@@ -18,6 +18,7 @@ type Sender struct {
 	inFlight Xplot
 	cwnd     Xplot
 	rtt      Xplot
+	pacing   Xplot
 }
 
 // FlowAt is used to mark flows active or inactive to start and stop them.
@@ -63,6 +64,16 @@ func NewSender(schedule []FlowAt) *Sender {
 			NonzeroAxis: true,
 			Decimation:  PlotRTTInterval,
 		},
+		Xplot{
+			Title: "Pacing Rate",
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Rate (Mbps)",
+			},
+			Decimation: PlotPacingInterval,
+		},
 	}
 }
 
@@ -80,6 +91,11 @@ func (s *Sender) Start(node Node) (err error) {
 	}
 	if PlotRTT {
 		if err = s.rtt.Open("tcp-rtt.xpl"); err != nil {
+			return
+		}
+	}
+	if PlotPacing {
+		if err = s.pacing.Open("pacing.xpl"); err != nil {
 			return
 		}
 	}
@@ -108,6 +124,11 @@ func (s *Sender) Handle(pkt Packet, node Node) error {
 	}
 	if PlotRTT {
 		s.rtt.Dot(node.Now(), s.flow[pkt.Flow].srtt.StringMS(), color(pkt.Flow))
+	}
+	if PlotPacing {
+		r := s.flow[pkt.Flow].getPacingRate()
+		s.pacing.Dot(node.Now(), strconv.FormatFloat(r.Mbps(), 'f', -1, 64),
+			color(pkt.Flow))
 	}
 	if node.Now() > Clock(Duration) {
 		node.Shutdown()
@@ -141,6 +162,9 @@ func (s *Sender) Stop(node Node) (err error) {
 	}
 	if PlotRTT {
 		s.rtt.Close()
+	}
+	if PlotPacing {
+		s.pacing.Close()
 	}
 	for i := range s.flow {
 		f := &s.flow[i]
@@ -180,6 +204,7 @@ type Flow struct {
 	pacingWait    bool
 	pacingSSRatio float64
 	pacingCARatio float64
+	pacingRate    float64
 
 	seqPlot      Xplot
 	sentPlot     Xplot
@@ -255,6 +280,7 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 		false,                // pacingWait
 		DefaultPacingSSRatio, // pacingSSRatio
 		DefaultPacingCARatio, // pacingCARatio
+		0,                    // pacingRate
 		Xplot{
 			Title: "Sequence Numbers - send:red ack:white",
 			X: Axis{
@@ -455,12 +481,15 @@ func (f *Flow) sendPacket(pkt Packet, node Node) bool {
 // addInFlight adds the given number of bytes to the in-flight bytes.
 func (f *Flow) addInFlight(b Bytes, now Clock) {
 	f.inFlight += b
-	//f.inFlightWin.add(now, f.inFlight, now-f.srtt)
-	f.inFlightWin.add(now, f.cwnd, now-f.srtt)
+	f.inFlightWin.add(now, f.inFlight, now-f.srtt)
+	//f.inFlightWin.add(now, f.cwnd, now-f.srtt)
 }
 
 // pacingDelay returns the Clock time to wait to pace the given bytes.
 func (f *Flow) pacingDelay(size Bytes) Clock {
+	if f.pacingRate > 0 {
+		return Clock(float64(size) / f.pacingRate)
+	}
 	if f.srtt == 0 {
 		return 0
 	}
@@ -474,9 +503,18 @@ func (f *Flow) pacingDelay(size Bytes) Clock {
 	return Clock(float64(size) / r)
 }
 
-// pacingRate returns the current pacing rate.
-func (f *Flow) pacingRate() Bitrate {
+// getPacingRate returns the current pacing rate.
+func (f *Flow) getPacingRate() Bitrate {
+	if f.pacingRate > 0 {
+		return Bitrate(f.pacingRate * float64(Mbps))
+	}
 	return CalcBitrate(MSS, time.Duration(f.pacingDelay(MSS)))
+}
+
+// useExplicitPacing converts the calculated pacing rate to an explicit pacing
+// rate in the pacingRate field.
+func (f *Flow) useExplicitPacing() {
+	f.pacingRate = CalcBitrate(MSS, time.Duration(f.pacingDelay(MSS))).Mbps()
 }
 
 // receive handles an incoming packet.
