@@ -5,6 +5,7 @@ package main
 
 import (
 	"math"
+	"time"
 )
 
 // A CCA implements a congestion control algorithm.
@@ -12,7 +13,7 @@ type CCA interface {
 	slowStartExit(*Flow, Node)
 	reactToCE(*Flow, Node)
 	reactToSCE(*Flow, Node)
-	grow(Bytes, *Flow, Node)
+	grow(Bytes, Packet, *Flow, Node)
 }
 
 // Reno implements TCP Reno.
@@ -57,7 +58,7 @@ func (r *Reno) reactToSCE(flow *Flow, node Node) {
 }
 
 // grow implements CCA.
-func (r *Reno) grow(acked Bytes, flow *Flow, node Node) {
+func (r *Reno) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	r.caAcked += acked
 	if RenoFractionalGrowth {
 		// NOTE this is faster than RFC 5681 Reno-linear growth
@@ -146,7 +147,7 @@ func (c *CUBIC) reactToSCE(flow *Flow, node Node) {
 }
 
 // grow implements CCA.
-func (c *CUBIC) grow(acked Bytes, flow *Flow, node Node) {
+func (c *CUBIC) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	t := node.Now() - c.tEpoch
 	u := c.wCubic(t)
 	e := c.updateWest(acked, flow.cwnd)
@@ -201,6 +202,60 @@ func (c *CUBIC) target(cwnd Bytes, t Clock) Bytes {
 		return cwnd * 3 / 2
 	}
 	return w
+}
+
+// Maslo implements the MASLO TCP CCA.
+type Maslo struct {
+	stage int
+}
+
+// NewMaslo returns a new Maslo.
+func NewMaslo() *Maslo {
+	return &Maslo{
+		4, // results in a K of 15
+	}
+}
+
+// slowStartExit implements CCA.
+func (m *Maslo) slowStartExit(flow *Flow, node Node) {
+	flow.useExplicitPacing()
+}
+
+// reactToCE implements CCA.
+func (m *Maslo) reactToCE(flow *Flow, node Node) {
+	flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloCEMD)
+	m.syncCWND(flow)
+}
+
+// reactToSCE implements CCA.
+func (m *Maslo) reactToSCE(flow *Flow, node Node) {
+	//r0 := flow.pacingRate
+	flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloSCEMD[m.stage])
+	//node.Logf("r0:%.3f r:%.3f", r0.Mbps(), flow.pacingRate.Mbps())
+	m.syncCWND(flow)
+}
+
+// grow implements CCA.
+func (m *Maslo) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
+	if pkt.CE || pkt.SCE {
+		return
+	}
+	flow.pacingRate += Bitrate(Yps * Bitrate(acked) / Bitrate(m.k()))
+	m.syncCWND(flow)
+	//node.Logf("rate:%.2f cwnd:%d k:%d sce-md:%f", flow.pacingRate.Mbps(),
+	//	flow.cwnd, m.k(), MasloSCEMD[m.stage])
+}
+
+// syncCWND synchronizes the CWND with the pacing rate.
+func (m *Maslo) syncCWND(flow *Flow) {
+	y := flow.pacingRate.Yps()              // rate in bytes/sec.
+	r := time.Duration(flow.srtt).Seconds() // smoothed RTT in seconds
+	flow.setCWND(Bytes(2.0 * y * r))
+}
+
+// k returns the current value of K for the
+func (m *Maslo) k() int {
+	return LeoK[m.stage]
 }
 
 // clockRing is a ring buffer of Clock values.

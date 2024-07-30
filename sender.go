@@ -204,7 +204,7 @@ type Flow struct {
 	pacingWait    bool
 	pacingSSRatio float64
 	pacingCARatio float64
-	pacingRate    float64
+	pacingRate    Bitrate
 
 	seqPlot      Xplot
 	sentPlot     Xplot
@@ -488,7 +488,7 @@ func (f *Flow) addInFlight(b Bytes, now Clock) {
 // pacingDelay returns the Clock time to wait to pace the given bytes.
 func (f *Flow) pacingDelay(size Bytes) Clock {
 	if f.pacingRate > 0 {
-		return Clock(float64(size) / f.pacingRate)
+		return Clock(TransferTime(f.pacingRate, size))
 	}
 	if f.srtt == 0 {
 		return 0
@@ -506,7 +506,7 @@ func (f *Flow) pacingDelay(size Bytes) Clock {
 // getPacingRate returns the current pacing rate.
 func (f *Flow) getPacingRate() Bitrate {
 	if f.pacingRate > 0 {
-		return Bitrate(f.pacingRate * float64(Mbps))
+		return f.pacingRate
 	}
 	return CalcBitrate(MSS, time.Duration(f.pacingDelay(MSS)))
 }
@@ -514,7 +514,8 @@ func (f *Flow) getPacingRate() Bitrate {
 // useExplicitPacing converts the calculated pacing rate to an explicit pacing
 // rate in the pacingRate field.
 func (f *Flow) useExplicitPacing() {
-	f.pacingRate = CalcBitrate(MSS, time.Duration(f.pacingDelay(MSS))).Mbps()
+	f.pacingRate = Bitrate(float64(f.cwnd) * float64(Yps) /
+		time.Duration(f.srtt).Seconds())
 }
 
 // receive handles an incoming packet.
@@ -601,7 +602,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			f.signalNext = f.seq
 		}
 	case FlowStateCA:
-		f.cca.grow(acked, f, node)
+		f.cca.grow(acked, pkt, f, node)
 	}
 }
 

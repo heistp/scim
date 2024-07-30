@@ -19,8 +19,8 @@ var (
 	Flows = []Flow{
 		AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, true),
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewCUBIC(CMD), Pacing, true),
-		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
-		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
+		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), NoPacing, true),
+		//AddFlow(ECN, SCE, NewStdSS(), HalfCWND{}, NewCUBIC(CMD), NoPacing, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{1, Clock(10 * time.Second), true},
@@ -90,7 +90,7 @@ var UseAQM = NewDeltic(
 // Iface: Brickwall AQM config
 //var UseAQM = NewBrickwall(
 //	Clock(0*time.Millisecond),   // SCE
-//	Clock(120*time.Millisecond), // CE
+//	Clock(400*time.Millisecond), // CE
 //	Clock(0*time.Millisecond),   // drop
 //)
 
@@ -187,7 +187,7 @@ const (
 // Slow-Start: ESSP params
 const (
 	EsspHalfKExit      = true // if true, exit earlier, at K(i*2) instead of K(i)
-	Essp2xDelayAdvance = true // if true, advance stage when sRTT > 2x minRTT
+	EsspDelayThreshold = 1.25 // if > 1, advance stage when sRTT > x * minRTT
 	EsspCWNDTargeting  = true // if true, target CWND on advance
 	EsspCENoResponse   = true // if true, skip normal response to CE
 	EsspSCENoResponse  = true // if true, skip normal response to SCE
@@ -215,6 +215,11 @@ const (
 	CubicBeta            = 0.7  // RFC 9438 Section 4.6
 	CubicC               = 0.4  // RFC 9438 Section 5
 	CubicFastConvergence = true // RFC 9438 Section 4.7
+)
+
+// Sender: MASLO params
+const (
+	MasloCEMD = 0.85 // rate MD on CE
 )
 
 // Sender: pacing params

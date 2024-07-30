@@ -65,10 +65,10 @@ func (s *StdSS) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 	}
 	if DefaultSSBaseReduction {
 		//d += s.sceCtr
-		if s.sceCtr >= len(EsspK) {
-			d += EsspK[len(EsspK)-1]
+		if s.sceCtr >= len(LeoK) {
+			d += LeoK[len(LeoK)-1]
 		} else {
-			d += EsspK[s.sceCtr]
+			d += LeoK[s.sceCtr]
 		}
 	}
 	if d > 1 {
@@ -308,15 +308,15 @@ func (l *Essp) reactToCE(flow *Flow, node Node) (exit bool) {
 
 // k returns the growth term K for the current stage.
 func (l *Essp) k() int {
-	return EsspK[l.stage]
+	return LeoK[l.stage]
 }
 
 // exitK returns the K at which slow-start exit should occur.
 func (l *Essp) exitK() int {
 	if EsspHalfKExit {
-		return EsspK[l.stage*2]
+		return LeoK[l.stage*2]
 	}
-	return EsspK[l.stage]
+	return LeoK[l.stage]
 }
 
 // scale returns the pacing scale factor for the current stage.
@@ -327,7 +327,7 @@ func (l *Essp) scale() float64 {
 // advance moves to the next stage, and returns true if K would result in
 // Reno-linear growth or slower, meaning it's time to exit slow-start.
 func (l *Essp) advance(flow *Flow, node Node, why string) (exit bool) {
-	if l.stage++; l.stage >= EsspStageMax {
+	if l.stage++; l.stage >= LeoStageMax {
 		panic(fmt.Sprintf("max ESSP stage reached: %d", l.stage))
 	}
 	c0 := flow.cwnd
@@ -407,28 +407,4 @@ func (l *Essp) resetRtt() {
 	l.sRtt = 0
 	l.maxRtt = 0
 	l.maxsRtt = 0
-}
-
-// EsspStageMax is the maximum number of ESSP stages.
-const EsspStageMax = 22
-
-var (
-	EsspK     [EsspStageMax*2 - 1]int // K for each stage (n+1 Leonardo numbers)
-	EsspScale [EsspStageMax]float64   // scale factors for each stage
-)
-
-func init() {
-	s := 1.0
-	a := 1
-	b := 1
-	for i := 0; i < len(EsspK); i++ {
-		EsspK[i] = b
-		s *= 1.0 + 1.0/float64(b)
-		a, b = b, 1+a+b
-	}
-	for i := 0; i < len(EsspScale); i++ {
-		EsspScale[i] = s
-		s /= 1.0 + 1.0/float64(EsspK[i])
-		//fmt.Printf("%d %d %d %.15f\n", i, EsspK[i], EsspK[i*2], EsspScale[i])
-	}
 }
