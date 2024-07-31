@@ -119,6 +119,7 @@ func (d *Deltim) deltim(err Clock, dt Clock, node Node) {
 		// note: clamping oscillators not found to help, and if it's done, then
 		// the ratio between the SCE and CE oscillators needs to be maintained
 	}
+	d.plotDeltaSigma(delta, sigma, d.acc, node.Now())
 }
 
 // oscillate increments the oscillator and returns any resulting mark.
