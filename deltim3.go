@@ -71,16 +71,16 @@ func (d *Deltim3) Dequeue(node Node) (pkt Packet, ok bool) {
 	// pop from head
 	pkt, d.queue = d.queue[0], d.queue[1:]
 
-	/*
-		// deltim error is sojourn time down to one packet, or negative idle time
+	// deltim error is sojourn time down to one packet, or negative idle time
+	if d.idleTime > 0 {
+		d.deltimIdle(node)
+	} else {
 		var e Clock
-		if d.idleTime > 0 {
-			e = -d.idleTime
-		} else if len(d.queue) > 0 {
+		if len(d.queue) > 0 {
 			e = node.Now() - d.queue[0].Enqueue
 		}
 		d.deltim(e, node.Now()-d.priorTime, node)
-	*/
+	}
 
 	// advance oscillator for non-idle time and mark
 	var m mark
@@ -130,6 +130,22 @@ func (d *Deltim3) deltim(err Clock, dt Clock, node Node) {
 		// the ratio between the SCE and CE oscillators needs to be maintained
 	}
 	d.plotDeltaSigma(delta, sigma, d.acc, node.Now())
+}
+
+// deltimIdle scales the accumulator by the utilization after an idle event.
+func (d *Deltim3) deltimIdle(node Node) {
+	i := min(d.idleTime, DeltimIdleWindow)
+	a := min(d.activeTime, DeltimIdleWindow-i)
+	p := time.Duration(a + i).Seconds()
+	//u := float64(a) / float64(a+i)
+	//a0 := d.acc
+	//d.acc = Clock(float64(d.acc)*u*p +
+	//	float64(d.acc)*(DeltimIdleWindow.Seconds()-p))
+	d.acc = Clock(float64(d.acc)*time.Duration(a).Seconds() +
+		float64(d.acc)*(DeltimIdleWindow.Seconds()-p))
+	d.plotDeltaSigma(0, 0, d.acc, node.Now())
+	//node.Logf("i:%d a:%d p:%.9f u:%.3f acc0:%d acc:%d",
+	//	i, a, p, u, a0, d.acc)
 }
 
 // oscillate increments the oscillator and returns any resulting mark.
