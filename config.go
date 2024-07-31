@@ -19,7 +19,7 @@ var (
 	Flows = []Flow{
 		AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, true),
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewCUBIC(CMD), Pacing, true),
-		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), NoPacing, true),
+		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), HalfCWND{}, NewCUBIC(CMD), NoPacing, true),
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewMaslo(), Pacing, true),
 	}
@@ -90,10 +90,10 @@ var UseAQM = NewDeltic(
 //	Clock(10*time.Microsecond))
 
 // Iface: DelTiM3 AQM config
-//var (
-//	UseAQM           = NewDeltim3(Clock(5000 * time.Microsecond))
-//	DeltimIdleWindow = Clock(1000 * time.Millisecond)
-//)
+var (
+	//UseAQM           = NewDeltim3(Clock(5000 * time.Microsecond))
+	DeltimIdleWindow = Clock(1000 * time.Millisecond)
+)
 
 // Iface: Brickwall AQM config
 //var UseAQM = NewBrickwall(
