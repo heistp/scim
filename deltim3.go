@@ -25,6 +25,7 @@ type Deltim3 struct {
 	activeStart Clock
 	activeTime  Clock
 	idleTime    Clock
+	jit         jitterEstimator
 	// Plots
 	*aqmPlot
 }
@@ -43,6 +44,7 @@ func NewDeltim3(burst Clock) *Deltim3 {
 		0,                          // activeStart
 		0,                          // activeTime
 		0,                          // idleTime
+		jitterEstimator{},          // jit
 		newAqmPlot(),               // aqmPlot
 	}
 }
@@ -57,6 +59,9 @@ func (d *Deltim3) Enqueue(pkt Packet, node Node) {
 	if len(d.queue) == 0 {
 		d.idleTime = node.Now() - d.priorTime
 		d.activeStart = node.Now()
+		if JitterCompensation {
+			d.jit.prior = node.Now()
+		}
 	}
 	pkt.Enqueue = node.Now()
 	d.queue = append(d.queue, pkt)
@@ -78,6 +83,10 @@ func (d *Deltim3) Dequeue(node Node) (pkt Packet, ok bool) {
 		var e Clock
 		if len(d.queue) > 0 {
 			e = node.Now() - d.queue[0].Enqueue
+			if JitterCompensation {
+				d.jit.estimate(node.Now())
+				e = d.jit.adjustSojourn(e)
+			}
 		}
 		d.deltim(e, node.Now()-d.priorTime, node)
 	}
@@ -119,11 +128,13 @@ func (d *Deltim3) deltim(err Clock, dt Clock, node Node) {
 	delta = err - d.priorError
 	sigma = err.MultiplyScaled(dt)
 	d.priorError = err
-	if err < 0 {
-		d.priorError = 0
-		//node.Logf("err:%d acc:%d delta:%d sigma:%d",
-		//	err, d.acc, delta, sigma)
-	}
+	/*
+		if err < 0 {
+			d.priorError = 0
+			//node.Logf("err:%d acc:%d delta:%d sigma:%d",
+			//	err, d.acc, delta, sigma)
+		}
+	*/
 	if d.acc += ((delta + sigma) * d.resonance); d.acc < 0 {
 		d.acc = 0
 		// note: clamping oscillators not found to help, and if it's done, then
@@ -136,13 +147,10 @@ func (d *Deltim3) deltim(err Clock, dt Clock, node Node) {
 func (d *Deltim3) deltimIdle(node Node) {
 	i := min(d.idleTime, DeltimIdleWindow)
 	a := min(d.activeTime, DeltimIdleWindow-i)
-	p := time.Duration(a + i).Seconds()
-	//u := float64(a) / float64(a+i)
+	p := float64(a+i) / float64(DeltimIdleWindow)
+	u := float64(a) / float64(a+i)
 	//a0 := d.acc
-	//d.acc = Clock(float64(d.acc)*u*p +
-	//	float64(d.acc)*(DeltimIdleWindow.Seconds()-p))
-	d.acc = Clock(float64(d.acc)*time.Duration(a).Seconds() +
-		float64(d.acc)*(DeltimIdleWindow.Seconds()-p))
+	d.acc = Clock(float64(d.acc)*u*p + float64(d.acc)*(1.0-p))
 	d.plotDeltaSigma(0, 0, d.acc, node.Now())
 	//node.Logf("i:%d a:%d p:%.9f u:%.3f acc0:%d acc:%d",
 	//	i, a, p, u, a0, d.acc)
