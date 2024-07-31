@@ -23,6 +23,7 @@ type Deltim struct {
 	priorTime  Clock
 	priorError Clock
 	idleTime   Clock
+	jit        jitterEstimator
 	// Plots
 	*aqmPlot
 }
@@ -39,6 +40,7 @@ func NewDeltim(burst Clock) *Deltim {
 		0,                          // priorTime
 		0,                          // priorError
 		0,                          // idleTime
+		jitterEstimator{},          // jit
 		newAqmPlot(),               // aqmPlot
 	}
 }
@@ -52,6 +54,9 @@ func (d *Deltim) Start(node Node) error {
 func (d *Deltim) Enqueue(pkt Packet, node Node) {
 	if len(d.queue) == 0 {
 		d.idleTime = node.Now() - d.priorTime
+		if JitterCompensation {
+			d.jit.prior = node.Now()
+		}
 	}
 	pkt.Enqueue = node.Now()
 	d.queue = append(d.queue, pkt)
@@ -72,6 +77,10 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 		e = -d.idleTime
 	} else if len(d.queue) > 0 {
 		e = node.Now() - d.queue[0].Enqueue
+		if JitterCompensation {
+			d.jit.estimate(node.Now())
+			e = d.jit.adjustSojourn(e)
+		}
 	}
 	d.deltim(e, node.Now()-d.priorTime, node)
 
