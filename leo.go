@@ -28,7 +28,7 @@ func init() {
 	for i := 0; i < len(EsspScale); i++ {
 		EsspScale[i] = s
 		x := 1.0 + 1.0/float64(LeoK[i])
-		MasloSCEMD[i] = 1.0 / math.Pow(x, 1.0/16.0)
+		MasloSCEMD[i] = 1.0 / math.Pow(x, 1.0/MasloM)
 		s /= x
 		//fmt.Printf("%d %d %d %.10f %.10f\n",
 		//	i, LeoK[i], LeoK[i*2], EsspScale[i], MasloSCEMD[i])

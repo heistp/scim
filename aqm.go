@@ -6,36 +6,53 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"time"
 )
 
 // aqmPlot makes plots for AQM algorithms.
 type aqmPlot struct {
-	marksPlot    Xplot
-	noSCE        int
-	noCE         int
-	noDrop       int
-	emitMarksCtr int
-	sojourn      Xplot
-	qlen         Xplot
-	deltaSigma   Xplot
+	propPlot   Xplot
+	noSCE      int
+	noCE       int
+	noDrop     int
+	freqPlot   Xplot
+	priorSCE   Clock
+	priorCE    Clock
+	priorDrop  Clock
+	emitSigCtr int
+	sojourn    Xplot
+	qlen       Xplot
+	deltaSigma Xplot
 }
 
 // newAqmPlot returns a new DelticMDS.
 func newAqmPlot() *aqmPlot {
 	return &aqmPlot{
 		Xplot{
-			Title: "Congestion Signals - SCE:white, CE:yellow, drop:red",
+			Title: "Mark Proportion - SCE:white, CE:yellow, drop:red",
 			X: Axis{
 				Label: "Time (S)",
 			},
 			Y: Axis{
 				Label: "Proportion",
 			},
-		}, // marksPlot
+		}, // propPlot
 		0, // noSCE
 		0, // noCE
 		0, // noDrop
-		0, // emitMarksCtr
+		Xplot{
+			Title: "Mark Frequency - SCE:white, CE:yellow, drop:red",
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Frequency (Hz)",
+			},
+		}, // freqPlot
+		0, // priorSCE
+		0, // priorCE
+		0, // priorDrop
+		0, // emitSigCtr
 		Xplot{
 			Title: "Queue Sojourn Time",
 			X: Axis{
@@ -71,8 +88,13 @@ func newAqmPlot() *aqmPlot {
 
 // Start implements Starter.
 func (a *aqmPlot) Start(node Node) (err error) {
-	if PlotMarks {
-		if err = a.marksPlot.Open("marks.xpl"); err != nil {
+	if PlotMarkProportion {
+		if err = a.propPlot.Open("mark-proportion.xpl"); err != nil {
+			return
+		}
+	}
+	if PlotMarkFrequency {
+		if err = a.freqPlot.Open("mark-frequency.xpl"); err != nil {
 			return
 		}
 	}
@@ -96,8 +118,11 @@ func (a *aqmPlot) Start(node Node) (err error) {
 
 // Stop implements Stopper.
 func (a *aqmPlot) Stop(node Node) error {
-	if PlotMarks {
-		a.marksPlot.Close()
+	if PlotMarkProportion {
+		a.propPlot.Close()
+	}
+	if PlotMarkFrequency {
+		a.freqPlot.Close()
 	}
 	if PlotSojourn {
 		a.sojourn.Close()
@@ -108,7 +133,7 @@ func (a *aqmPlot) Stop(node Node) error {
 	if PlotDeltaSigma {
 		a.deltaSigma.Close()
 	}
-	if EmitMarks && a.emitMarksCtr != 0 {
+	if EmitMark && a.emitSigCtr != 0 {
 		fmt.Println()
 	}
 	return nil
@@ -116,7 +141,7 @@ func (a *aqmPlot) Stop(node Node) error {
 
 // plotMark plots and emits the given mark, as configured.
 func (a *aqmPlot) plotMark(m mark, now Clock) {
-	if PlotMarks {
+	if PlotMarkProportion {
 		switch m {
 		case markNone:
 			a.noSCE++
@@ -125,27 +150,47 @@ func (a *aqmPlot) plotMark(m mark, now Clock) {
 		case markSCE:
 			p := 1.0 / float64(a.noSCE+1)
 			ps := strconv.FormatFloat(p, 'f', -1, 64)
-			a.marksPlot.Dot(now, ps, 0)
+			a.propPlot.Dot(now, ps, 0)
 			a.noSCE = 0
 			a.noCE++
 			a.noDrop++
 		case markCE:
 			p := 1.0 / float64(a.noCE+1)
 			ps := strconv.FormatFloat(p, 'f', -1, 64)
-			a.marksPlot.PlotX(now, ps, 4)
+			a.propPlot.PlotX(now, ps, 4)
 			a.noCE = 0
 			a.noSCE++
 			a.noDrop++
 		case markDrop:
 			p := 1.0 / float64(a.noDrop+1)
 			ps := strconv.FormatFloat(p, 'f', -1, 64)
-			a.marksPlot.PlotX(now, ps, 2)
+			a.propPlot.PlotX(now, ps, 2)
 			a.noDrop = 0
 			a.noCE++
 			a.noSCE++
 		}
 	}
-	if EmitMarks {
+	if PlotMarkFrequency {
+		switch m {
+		case markNone:
+		case markSCE:
+			f := 1.0 / float64(time.Duration(now-a.priorSCE).Seconds())
+			fs := strconv.FormatFloat(f, 'f', -1, 64)
+			a.freqPlot.Dot(now, fs, 0)
+			a.priorSCE = now
+		case markCE:
+			f := 1.0 / float64(time.Duration(now-a.priorCE).Seconds())
+			fs := strconv.FormatFloat(f, 'f', -1, 64)
+			a.freqPlot.Dot(now, fs, 0)
+			a.priorCE = now
+		case markDrop:
+			f := 1.0 / float64(time.Duration(now-a.priorDrop).Seconds())
+			fs := strconv.FormatFloat(f, 'f', -1, 64)
+			a.freqPlot.Dot(now, fs, 0)
+			a.priorDrop = now
+		}
+	}
+	if EmitMark {
 		a.emitMark(m)
 	}
 }
@@ -163,10 +208,10 @@ func (a *aqmPlot) emitMark(m mark) {
 	default:
 		return
 	}
-	a.emitMarksCtr++
-	if a.emitMarksCtr == 64 {
+	a.emitSigCtr++
+	if a.emitSigCtr == 64 {
 		fmt.Println()
-		a.emitMarksCtr = 0
+		a.emitSigCtr = 0
 	}
 }
 

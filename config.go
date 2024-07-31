@@ -21,6 +21,7 @@ var (
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewCUBIC(CMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), NoPacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), HalfCWND{}, NewCUBIC(CMD), NoPacing, true),
+		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewMaslo(), Pacing, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{1, Clock(10 * time.Second), true},
@@ -134,8 +135,9 @@ const (
 
 // AQM: plots
 const (
-	PlotMarks = true
-	EmitMarks = false
+	PlotMarkProportion = false
+	PlotMarkFrequency  = true
+	EmitMark           = false
 )
 
 // Receiver: plots
@@ -220,6 +222,7 @@ const (
 // Sender: MASLO params
 const (
 	MasloCEMD = 0.85 // rate MD on CE
+	MasloM    = 200  // expected steady-state marking frequency, in Hz
 )
 
 // Sender: pacing params
