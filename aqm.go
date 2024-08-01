@@ -150,21 +150,21 @@ func (a *aqmPlot) plotMark(m mark, now Clock) {
 		case markSCE:
 			p := 1.0 / float64(a.noSCE+1)
 			ps := strconv.FormatFloat(p, 'f', -1, 64)
-			a.propPlot.Dot(now, ps, 0)
+			a.propPlot.Dot(now, ps, colorWhite)
 			a.noSCE = 0
 			a.noCE++
 			a.noDrop++
 		case markCE:
 			p := 1.0 / float64(a.noCE+1)
 			ps := strconv.FormatFloat(p, 'f', -1, 64)
-			a.propPlot.PlotX(now, ps, 4)
+			a.propPlot.PlotX(now, ps, colorYellow)
 			a.noCE = 0
 			a.noSCE++
 			a.noDrop++
 		case markDrop:
 			p := 1.0 / float64(a.noDrop+1)
 			ps := strconv.FormatFloat(p, 'f', -1, 64)
-			a.propPlot.PlotX(now, ps, 2)
+			a.propPlot.PlotX(now, ps, colorRed)
 			a.noDrop = 0
 			a.noCE++
 			a.noSCE++
@@ -176,17 +176,17 @@ func (a *aqmPlot) plotMark(m mark, now Clock) {
 		case markSCE:
 			f := 1.0 / float64(time.Duration(now-a.priorSCE).Seconds())
 			fs := strconv.FormatFloat(f, 'f', -1, 64)
-			a.freqPlot.Dot(now, fs, 0)
+			a.freqPlot.Dot(now, fs, colorWhite)
 			a.priorSCE = now
 		case markCE:
 			f := 1.0 / float64(time.Duration(now-a.priorCE).Seconds())
 			fs := strconv.FormatFloat(f, 'f', -1, 64)
-			a.freqPlot.Dot(now, fs, 0)
+			a.freqPlot.PlotX(now, fs, colorYellow)
 			a.priorCE = now
 		case markDrop:
 			f := 1.0 / float64(time.Duration(now-a.priorDrop).Seconds())
 			fs := strconv.FormatFloat(f, 'f', -1, 64)
-			a.freqPlot.Dot(now, fs, 0)
+			a.freqPlot.PlotX(now, fs, colorRed)
 			a.priorDrop = now
 		}
 	}
