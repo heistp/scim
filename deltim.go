@@ -117,11 +117,12 @@ func (d *Deltim) deltim(err Clock, dt Clock, node Node) {
 	var delta, sigma Clock
 	delta = err - d.priorError
 	sigma = err.MultiplyScaled(dt)
-	d.priorError = err
-	if err < 0 {
-		d.priorError = 0
+	if err > 0 {
+		d.priorError = err
 		//node.Logf("err:%d acc:%d delta:%d sigma:%d",
 		//	err, d.acc, delta, sigma)
+	} else {
+		d.priorError = 0
 	}
 	if d.acc += ((delta + sigma) * d.resonance); d.acc < 0 {
 		d.acc = 0
