@@ -9,7 +9,7 @@ import (
 )
 
 // Bytes is a number of bytes.
-type Bytes uint64
+type Bytes int64
 
 const (
 	Byte     Bytes = 1
@@ -23,7 +23,7 @@ const (
 	Gibibyte       = 1024 * Mebibyte
 	Tebibyte       = 1024 * Gibibyte
 	Pebibyte       = 1024 * Tebibyte
-	MaxBytes       = math.MaxUint64
+	MaxBytes       = math.MaxInt64
 )
 
 // Kilobytes returns the Bytes in Kilobytes.
@@ -82,5 +82,5 @@ func (b Bytes) Segments() float64 {
 }
 
 func (b Bytes) String() string {
-	return strconv.FormatUint(uint64(b), 10)
+	return strconv.FormatInt(int64(b), 10)
 }

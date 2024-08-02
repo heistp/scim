@@ -74,7 +74,7 @@ func newAqmPlot() *aqmPlot {
 			Decimation: PlotQueueLengthInterval,
 		},
 		Xplot{
-			Title: "Delta-Sigma - delta:red, sigma:yellow, acc/1000:white",
+			Title: "Delta-Sigma - delta:red, sigma:yellow",
 			X: Axis{
 				Label: "Time (S)",
 			},
@@ -238,8 +238,7 @@ func (a *aqmPlot) plotSojourn(sojourn Clock, empty bool, now Clock) {
 }
 
 // plotDeltaSigma plots the delta, sigma and accumulator/1000 values.
-func (a *aqmPlot) plotDeltaSigma(delta Clock, sigma Clock,
-	acc Clock, now Clock) {
+func (a *aqmPlot) plotDeltaSigma(delta Clock, sigma Clock, now Clock) {
 	if PlotDeltaSigma {
 		f := a.deltaSigma.Dot
 		//if !mark {
@@ -247,6 +246,6 @@ func (a *aqmPlot) plotDeltaSigma(delta Clock, sigma Clock,
 		//}
 		f(now, strconv.FormatInt(int64(delta), 10), colorRed)
 		f(now, strconv.FormatInt(int64(sigma), 10), colorYellow)
-		f(now, strconv.FormatInt(int64(acc/1000), 10), colorWhite)
+		//f(now, strconv.FormatInt(int64(acc/1000), 10), colorWhite)
 	}
 }

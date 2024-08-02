@@ -25,13 +25,13 @@ type Deltic struct {
 func NewDeltic(sceTarget, ceTarget, dropTarget Clock) *Deltic {
 	p := newAqmPlot()
 	return &Deltic{
-		make([]Packet, 0),        // queue
-		newDeltic(sceTarget, p),  // sce
-		newDeltic(ceTarget, p),   // ce
-		newDeltic(dropTarget, p), // drop
-		jitterEstimator{},        // jit
-		0,                        // priorTime
-		p,                        // aqmPlot
+		make([]Packet, 0),          // queue
+		newDeltic(sceTarget, p),    // sce
+		newDeltic(ceTarget, nil),   // ce
+		newDeltic(dropTarget, nil), // drop
+		jitterEstimator{},          // jit
+		0,                          // priorTime
+		p,                          // aqmPlot
 	}
 }
 
@@ -173,7 +173,9 @@ func (d *deltic) control(sojourn Clock, dt Clock, node Node) (mark bool) {
 			}
 		}
 	}
-	d.plotDeltaSigma(delta, sigma, d.acc, node.Now())
+	if d.aqmPlot != nil {
+		d.plotDeltaSigma(delta, sigma, node.Now())
+	}
 	//node.Logf("sojourn:%d dt:%d delta:%d sigma:%d acc:%d osc:%d",
 	//	sojourn, dt, delta, sigma, d.acc, d.osc)
 	return

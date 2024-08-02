@@ -22,7 +22,7 @@ type initer interface {
 
 // An updateRtter receives updated RTT samples.
 type updateRtter interface {
-	updateRtt(Clock)
+	updateRtt(Clock, *Flow, Node)
 }
 
 // StdSS implements standard slow-start mostly according to RFC 5681.
@@ -192,7 +192,7 @@ func (h *HyStartPP) hystartRound(flow *Flow) (end bool) {
 }
 
 // rtt implements updateRtter.
-func (h *HyStartPP) updateRtt(rtt Clock) {
+func (h *HyStartPP) updateRtt(rtt Clock, flow *Flow, node Node) {
 	h.rtt = rtt
 }
 
@@ -387,7 +387,7 @@ func (l *Essp) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 }
 
 // updateRtt implements updateRtter.
-func (l *Essp) updateRtt(rtt Clock) {
+func (l *Essp) updateRtt(rtt Clock, flow *Flow, node Node) {
 	l.rtt = rtt
 	if rtt > l.maxRtt {
 		l.maxRtt = rtt

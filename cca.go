@@ -207,24 +207,30 @@ func (c *CUBIC) target(cwnd Bytes, t Clock) Bytes {
 // Maslo implements the MASLO TCP CCA.
 type Maslo struct {
 	stage int
+	ortt  Clock
 }
 
 // NewMaslo returns a new Maslo.
 func NewMaslo() *Maslo {
 	return &Maslo{
-		4, // results in a K of 15
+		4, // stage - i=3/k=9, i=4/k=15, i=5/k=25, i=6/k=41
+		0, // ortt
 	}
 }
 
 // slowStartExit implements CCA.
 func (m *Maslo) slowStartExit(flow *Flow, node Node) {
 	flow.useExplicitPacing()
+	m.ortt = flow.srtt
 }
 
 // reactToCE implements CCA.
 func (m *Maslo) reactToCE(flow *Flow, node Node) {
-	flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloCEMD)
-	m.syncCWND(flow)
+	if flow.receiveNext > flow.signalNext {
+		flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloCEMD)
+		m.syncCWND(flow)
+		flow.signalNext = flow.seq
+	}
 }
 
 // reactToSCE implements CCA.
@@ -244,6 +250,23 @@ func (m *Maslo) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	m.syncCWND(flow)
 	//node.Logf("rate:%.2f cwnd:%d k:%d sce-md:%f", flow.pacingRate.Mbps(),
 	//	flow.cwnd, m.k(), MasloSCEMD[m.stage])
+}
+
+// updateRtt implements updateRtter.
+func (m *Maslo) updateRtt(rtt Clock, flow *Flow, node Node) {
+	//r0 := flow.pacingRate
+	// NOTE this version works over two RTTs
+	//flow.pacingRate += Bitrate(float64(flow.pacingRate) *
+	//	time.Duration(m.ortt-flow.srtt).Seconds() /
+	//	time.Duration(m.ortt+flow.srtt).Seconds())
+	// NOTE this version works over one RTT
+	flow.pacingRate += Bitrate(float64(flow.pacingRate) *
+		time.Duration(m.ortt-flow.srtt).Seconds() /
+		max(m.ortt, flow.srtt).Seconds())
+	//node.Logf("ortt:%dns srtt:%dns ortt-srtt:%.9fs drate:%.0f bps",
+	//	m.ortt, flow.srtt, dr, flow.pacingRate.Bps()-r0.Bps())
+	m.syncCWND(flow)
+	m.ortt = flow.srtt
 }
 
 // syncCWND synchronizes the CWND with the pacing rate.

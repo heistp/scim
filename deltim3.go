@@ -140,7 +140,7 @@ func (d *Deltim3) deltim(err Clock, dt Clock, node Node) {
 		// note: clamping oscillators not found to help, and if it's done, then
 		// the ratio between the SCE and CE oscillators needs to be maintained
 	}
-	d.plotDeltaSigma(delta, sigma, d.acc, node.Now())
+	d.plotDeltaSigma(delta, sigma, node.Now())
 }
 
 // deltimIdle scales the accumulator by the utilization after an idle event.
@@ -151,7 +151,7 @@ func (d *Deltim3) deltimIdle(node Node) {
 	u := float64(a) / float64(a+i)
 	//a0 := d.acc
 	d.acc = Clock(float64(d.acc)*u*p + float64(d.acc)*(1.0-p))
-	d.plotDeltaSigma(0, 0, d.acc, node.Now())
+	d.plotDeltaSigma(0, 0, node.Now())
 	//node.Logf("i:%d a:%d p:%.9f u:%.3f acc0:%d acc:%d",
 	//	i, a, p, u, a0, d.acc)
 }

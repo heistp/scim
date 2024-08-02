@@ -206,16 +206,19 @@ type Flow struct {
 	pacingCARatio float64
 	pacingRate    Bitrate
 
-	seqPlot      Xplot
-	sentPlot     Xplot
-	sent         Bytes
-	acked        Bytes
-	ratePlot     Xplot
-	sentWin      bytesWindow
-	ackedWin     bytesWindow
-	accelPlot    Xplot
-	sentRateWin  bytesWindow
-	ackedRateWin bytesWindow
+	seqPlot       Xplot
+	sentPlot      Xplot
+	sent          Bytes
+	acked         Bytes
+	ratePlot      Xplot
+	sentWin       bytesWindow
+	ackedWin      bytesWindow
+	accelPlot     Xplot
+	sentRateWin   bytesWindow
+	ackedRateWin  bytesWindow
+	accel2Plot    Xplot
+	sentAccelWin  bytesWindow
+	ackedAccelWin bytesWindow
 }
 
 // FlowState represents the congestion control state of the Flow.
@@ -316,7 +319,7 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 		bytesWindow{}, // sentWin
 		bytesWindow{}, // ackedWin
 		Xplot{
-			Title: fmt.Sprintf("Flow %d - Sent and Acked Rate Acceleration - sent:red acked:white", id),
+			Title: fmt.Sprintf("Flow %d - Sent and Acked Acceleration - sent:red acked:white", id),
 			X: Axis{
 				Label: "Time (S)",
 			},
@@ -327,6 +330,18 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 		}, // accelPlot
 		bytesWindow{}, // sentRateWin
 		bytesWindow{}, // ackedRateWin
+		Xplot{
+			Title: fmt.Sprintf("Flow %d - Sent and Acked Acceleration Derivative - sent:red acked:white", id),
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Acceleration Derivative (bytes/sec^3)",
+			},
+			Decimation: PlotRateInterval,
+		}, // accelPlot
+		bytesWindow{}, // sentAccelWin
+		bytesWindow{}, // ackedAccelWin
 	}
 }
 
@@ -365,6 +380,10 @@ func (f *Flow) Start(node Node) (err error) {
 		if err = f.accelPlot.Open(n); err != nil {
 			return
 		}
+		n = fmt.Sprintf("accel2.%d.xpl", f.id)
+		if err = f.accel2Plot.Open(n); err != nil {
+			return
+		}
 	}
 	return
 }
@@ -380,6 +399,7 @@ func (f *Flow) Stop(node Node) (err error) {
 	if PlotRate {
 		f.ratePlot.Close()
 		f.accelPlot.Close()
+		f.accel2Plot.Close()
 	}
 	return
 }
@@ -463,14 +483,23 @@ func (f *Flow) sendPacket(pkt Packet, node Node) bool {
 	if PlotRate {
 		f.sentWin.add(node.Now(), f.sent, node.Now()-f.srtt)
 		if f.srtt > 0 {
+			// rate
 			ds := f.sent - f.sentWin.at(node.Now()-f.srtt)
 			r := ds * Bytes(time.Second) / Bytes(f.srtt)
 			f.ratePlot.Dot(node.Now(), strconv.FormatUint(uint64(r), 10),
 				colorRed)
+			// acceleration
 			f.sentRateWin.add(node.Now(), r, node.Now()-f.srtt)
-			dr := int64(r) - int64(f.sentRateWin.at(node.Now()-f.srtt))
-			a := dr * int64(time.Second) / int64(f.srtt)
-			f.accelPlot.Dot(node.Now(), strconv.FormatInt(a, 10), colorRed)
+			dr := r - f.sentRateWin.at(node.Now()-f.srtt)
+			a := dr * Bytes(time.Second) / Bytes(f.srtt)
+			f.accelPlot.Dot(node.Now(), strconv.FormatInt(int64(a), 10),
+				colorRed)
+			// acceleration derivative
+			f.sentAccelWin.add(node.Now(), Bytes(a), node.Now()-f.srtt)
+			da := a - f.sentAccelWin.at(node.Now()-f.srtt)
+			a2 := da * Bytes(time.Second) / Bytes(f.srtt)
+			f.accel2Plot.Dot(node.Now(), strconv.FormatInt(int64(a2), 10),
+				colorRed)
 		}
 	}
 	f.addInFlight(pkt.Len, node.Now())
@@ -561,14 +590,23 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	if PlotRate {
 		f.ackedWin.add(node.Now(), f.acked, node.Now()-f.srtt)
 		if f.srtt > 0 {
+			// rate
 			da := f.acked - f.ackedWin.at(node.Now()-f.srtt)
 			r := da * Bytes(time.Second) / Bytes(f.srtt)
 			f.ratePlot.Dot(node.Now(), strconv.FormatUint(uint64(r), 10),
 				colorWhite)
+			// acceleration
 			f.ackedRateWin.add(node.Now(), r, node.Now()-f.srtt)
-			dr := int64(r) - int64(f.ackedRateWin.at(node.Now()-f.srtt))
-			a := int64(dr) * int64(time.Second) / int64(f.srtt)
-			f.accelPlot.Dot(node.Now(), strconv.FormatInt(a, 10), colorWhite)
+			dr := r - f.ackedRateWin.at(node.Now()-f.srtt)
+			a := dr * Bytes(time.Second) / Bytes(f.srtt)
+			f.accelPlot.Dot(node.Now(), strconv.FormatInt(int64(a), 10),
+				colorWhite)
+			// acceleration derivative
+			f.ackedAccelWin.add(node.Now(), Bytes(a), node.Now()-f.srtt)
+			dac := a - f.ackedAccelWin.at(node.Now()-f.srtt)
+			a2 := dac * Bytes(time.Second) / Bytes(f.srtt)
+			f.accel2Plot.Dot(node.Now(), strconv.FormatInt(int64(a2), 10),
+				colorWhite)
 		}
 	}
 	// react to congestion signals
@@ -626,9 +664,12 @@ func (f *Flow) updateRTT(pkt Packet, node Node) {
 	switch f.state {
 	case FlowStateSS:
 		if r, ok := f.slowStart.(updateRtter); ok {
-			r.updateRtt(rtt)
+			r.updateRtt(rtt, f, node)
 		}
-		//case FlowStateCA:
+	case FlowStateCA:
+		if r, ok := f.cca.(updateRtter); ok {
+			r.updateRtt(rtt, f, node)
+		}
 	}
 	if rtt < f.minRtt {
 		f.minRtt = rtt

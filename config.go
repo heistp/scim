@@ -17,11 +17,12 @@ const Duration = 60 * time.Second
 // Sender and Delay: flows
 var (
 	Flows = []Flow{
-		AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, true),
-		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewCUBIC(CMD), Pacing, true),
+		AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewMaslo(), Pacing, true),
+		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, true),
+		//AddFlow(ECN, NoSCE, NewEssp(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
+		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), HalfCWND{}, NewCUBIC(CMD), NoPacing, true),
-		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewMaslo(), Pacing, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{1, Clock(10 * time.Second), true},
@@ -92,7 +93,7 @@ var UseAQM = NewDeltic(
 // Iface: DelTiM3 AQM config
 var (
 	//UseAQM           = NewDeltim3(Clock(5000 * time.Microsecond))
-	DeltimIdleWindow = Clock(1000 * time.Millisecond)
+	DeltimIdleWindow = Clock(100 * time.Millisecond)
 )
 
 // Iface: Brickwall AQM config
@@ -121,7 +122,7 @@ const (
 	PlotCwndInterval     = Clock(100 * time.Microsecond)
 	PlotRTT              = false
 	PlotRTTInterval      = Clock(100 * time.Microsecond)
-	PlotPacing           = false
+	PlotPacing           = true
 	PlotPacingInterval   = Clock(100 * time.Microsecond)
 	PlotSeq              = false
 	PlotSeqInterval      = Clock(100 * time.Microsecond)
