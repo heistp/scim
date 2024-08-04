@@ -3,6 +3,8 @@
 
 package main
 
+import "fmt"
+
 type Iface struct {
 	rate     Bitrate
 	schedule []RateAt
@@ -46,6 +48,10 @@ func (i *Iface) Start(node Node) (err error) {
 
 // Handle implements Handler.
 func (i *Iface) Handle(pkt Packet, node Node) error {
+	if i.aqm.Len() >= IfaceHardQueueLen {
+		panic(fmt.Sprintf("%T reached hard max queue length of %d",
+			i.aqm, i.aqm.Len()))
+	}
 	i.aqm.Enqueue(pkt, node)
 	if i.empty {
 		i.empty = false

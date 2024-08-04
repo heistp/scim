@@ -171,11 +171,9 @@ const (
 
 // Sender: SCE MD-Scaling params
 const (
-	DropMD       = 0.5    // MD done on drop during CA
-	CEMD         = DropMD // MD done on CE during CA
-	Tau          = 64     // SCE-MD scale factor
-	RateFairness = false
-	NominalRTT   = 10 * time.Millisecond
+	DropMD = 0.5    // MD done on drop during CA
+	CEMD   = DropMD // MD done on CE during CA
+	Tau    = 64     // SCE-MD scale factor
 )
 
 // Sender: Slow-Start defaults
@@ -260,10 +258,16 @@ var (
 	Slick10 = NewSlick(Clock(10 * time.Millisecond))
 )
 
+// Iface: AQM queue length restriction at which panic occurs
+const IfaceHardQueueLen = 1000000
+
 // AQM
 const (
 	JitterCompensation = true
 )
 
 // main
-const Profile = false
+const (
+	ProfileCPU    = false
+	ProfileMemory = false
+)

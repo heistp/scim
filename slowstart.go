@@ -356,7 +356,7 @@ func (l *Essp) advance(flow *Flow, node Node, why string) (exit bool) {
 	}
 	r := flow.getPacingRate()
 	node.Logf(
-		"flow:%d stage:%d k:%d scale:%.3f cwnd:%d->%d rate:%.2f->%.2f (%s)",
+		"essp flow:%d stage:%d k:%d scale:%.3f cwnd:%d->%d rate:%.2f->%.2f (%s)",
 		flow.id, l.stage, l.k(), l.scale(), c0, flow.cwnd, r0.Mbps(), r.Mbps(), why)
 	return
 }

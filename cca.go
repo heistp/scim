@@ -4,6 +4,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 	"time"
 )
@@ -69,7 +70,9 @@ func (r *Reno) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 		}
 		r.priorGrowth = node.Now()
 	} else {
-		if r.caAcked >= flow.cwnd && node.Now()-r.priorGrowth > flow.srtt {
+		//if r.caAcked >= flow.cwnd && node.Now()-r.priorGrowth > flow.srtt {
+		//if r.caAcked >= flow.cwnd {
+		if node.Now()-r.priorGrowth > flow.srtt {
 			flow.setCWND(flow.cwnd + MSS)
 			r.caAcked = 0
 			r.priorGrowth = node.Now()
@@ -213,14 +216,15 @@ type Maslo struct {
 // NewMaslo returns a new Maslo.
 func NewMaslo() *Maslo {
 	return &Maslo{
-		4, // stage - i=3/k=9, i=4/k=15, i=5/k=25, i=6/k=41
-		0, // ortt
+		-1, // stage
+		0,  // ortt
 	}
 }
 
 // slowStartExit implements CCA.
 func (m *Maslo) slowStartExit(flow *Flow, node Node) {
 	flow.useExplicitPacing()
+	m.setSafeStage("init", flow, node)
 	m.ortt = flow.srtt
 }
 
@@ -229,6 +233,7 @@ func (m *Maslo) reactToCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
 		flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloCEMD)
 		m.syncCWND(flow)
+		m.setSafeStage("CE", flow, node)
 		flow.signalNext = flow.seq
 	}
 }
@@ -239,6 +244,7 @@ func (m *Maslo) reactToSCE(flow *Flow, node Node) {
 	flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloSCEMD[m.stage])
 	//node.Logf("r0:%.3f r:%.3f", r0.Mbps(), flow.pacingRate.Mbps())
 	m.syncCWND(flow)
+	m.setSafeStage("SCE", flow, node)
 }
 
 // grow implements CCA.
@@ -246,38 +252,108 @@ func (m *Maslo) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	if pkt.CE || pkt.SCE {
 		return
 	}
+	//r0 := flow.pacingRate
+	//c0 := flow.cwnd
 	flow.pacingRate += Bitrate(Yps * Bitrate(acked) / Bitrate(m.k()))
 	m.syncCWND(flow)
-	//node.Logf("rate:%.2f cwnd:%d k:%d sce-md:%f", flow.pacingRate.Mbps(),
-	//	flow.cwnd, m.k(), MasloSCEMD[m.stage])
+	//node.Logf("maslo grow k:%d rate:%.3f->%.3f cwnd:%d->%d", m.k(), r0.Mbps(),
+	//	flow.pacingRate.Mbps(), c0, flow.cwnd)
 }
 
 // updateRtt implements updateRtter.
 func (m *Maslo) updateRtt(rtt Clock, flow *Flow, node Node) {
 	//r0 := flow.pacingRate
-	// NOTE this version works over two RTTs
-	//flow.pacingRate += Bitrate(float64(flow.pacingRate) *
-	//	time.Duration(m.ortt-flow.srtt).Seconds() /
-	//	time.Duration(m.ortt+flow.srtt).Seconds())
-	// NOTE this version works over one RTT
 	flow.pacingRate += Bitrate(float64(flow.pacingRate) *
 		time.Duration(m.ortt-flow.srtt).Seconds() /
 		max(m.ortt, flow.srtt).Seconds())
+	m.syncCWND(flow)
+	//dr := time.Duration(m.ortt - flow.srtt).Seconds()
 	//node.Logf("ortt:%dns srtt:%dns ortt-srtt:%.9fs drate:%.0f bps",
 	//	m.ortt, flow.srtt, dr, flow.pacingRate.Bps()-r0.Bps())
-	m.syncCWND(flow)
 	m.ortt = flow.srtt
+}
+
+// setStage switches to the given stage and logs stage changes.
+func (m *Maslo) setStage(stage int, reason string, flow *Flow, node Node) {
+	if stage != m.stage {
+		m.stage = stage
+		node.Logf("maslo flow:%d stage:%d reason:%s k:%d srtt:%dms",
+			flow.id, m.stage, reason,
+			LeoK[m.stage], time.Duration(flow.srtt).Milliseconds())
+	}
+}
+
+// setSafeStage sets the stage to the current safe stage.
+func (m *Maslo) setSafeStage(reason string, flow *Flow, node Node) {
+	s := m.safeStage(flow.srtt)
+	m.setStage(s, reason, flow, node)
+}
+
+// MasloStageRTT lists the max RTT up to which K for the indexed stage is safe.
+var MasloStageRTT = []Clock{
+	Clock(42 * time.Millisecond),    // stage:0 k:1
+	Clock(65 * time.Millisecond),    // stage:1 k:3
+	Clock(82 * time.Millisecond),    // stage:2 k:5
+	Clock(108 * time.Millisecond),   // stage:3 k:9
+	Clock(139 * time.Millisecond),   // stage:4 k:15
+	Clock(178 * time.Millisecond),   // stage:5 k:25
+	Clock(227 * time.Millisecond),   // stage:6 k:41
+	Clock(290 * time.Millisecond),   // stage:7 k:67
+	Clock(370 * time.Millisecond),   // stage:8 k:109
+	Clock(471 * time.Millisecond),   // stage:9 k:177
+	Clock(599 * time.Millisecond),   // stage:10 k:287
+	Clock(762 * time.Millisecond),   // stage:11 k:465
+	Clock(970 * time.Millisecond),   // stage:12 k:753
+	Clock(1234 * time.Millisecond),  // stage:13 k:1219
+	Clock(1570 * time.Millisecond),  // stage:14 k:1973
+	Clock(1998 * time.Millisecond),  // stage:15 k:3193
+	Clock(2541 * time.Millisecond),  // stage:16 k:5167
+	Clock(3233 * time.Millisecond),  // stage:17 k:8361
+	Clock(4112 * time.Millisecond),  // stage:18 k:13529
+	Clock(5231 * time.Millisecond),  // stage:19 k:21891
+	Clock(6654 * time.Millisecond),  // stage:20 k:35421
+	Clock(8464 * time.Millisecond),  // stage:21 k:57313
+	Clock(10766 * time.Millisecond), // stage:22 k:92735
+	Clock(13695 * time.Millisecond), // stage:23 k:150049
+	Clock(17420 * time.Millisecond), // stage:24 k:242785
+}
+
+// safeStage returns the "safe" stage index for the given RTT.
+func (m *Maslo) safeStage(srtt Clock) (stage int) {
+	var r Clock
+	for stage, r = range MasloStageRTT {
+		if srtt <= r {
+			return
+		}
+	}
+	return
+	panic(fmt.Sprintf("RTT %d ms exceeds MasloStageRTT",
+		time.Duration(srtt).Milliseconds()))
 }
 
 // syncCWND synchronizes the CWND with the pacing rate.
 func (m *Maslo) syncCWND(flow *Flow) {
-	y := flow.pacingRate.Yps()              // rate in bytes/sec.
-	r := time.Duration(flow.srtt).Seconds() // smoothed RTT in seconds
-	flow.setCWND(Bytes(2.0 * y * r))
+	/*
+		// old version
+		y := flow.pacingRate.Yps()              // rate in bytes/sec.
+		r := time.Duration(flow.srtt).Seconds() // smoothed RTT in seconds
+		flow.setCWND(Bytes(2.0 * y * r))
+	*/
+	// new version
+	y := flow.pacingRate.Yps()                  // rate in bytes/sec.
+	r := time.Duration(flow.srtt).Seconds()     // smoothed RTT in seconds
+	ka := float64(m.k())                        // Kactual
+	ks := float64(LeoK[m.safeStage(flow.srtt)]) // Ksafe
+	flow.setCWND(Bytes(y * (2.0 * math.Sqrt(ka/ks)) * r))
 }
 
 // k returns the current value of K for the
 func (m *Maslo) k() int {
+	if m.stage < 0 {
+		return LeoK[0]
+	} else if m.stage >= len(LeoK) {
+		return LeoK[len(LeoK)-1]
+	}
 	return LeoK[m.stage]
 }
 

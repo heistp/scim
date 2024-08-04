@@ -27,6 +27,8 @@ func (m MD) Respond(flow *Flow, node Node) (cwnd Bytes) {
 
 // RateFairMD is a Responder that performs an MD-Scaling multiplicative decrease
 // that results in rate independent fairness with other MD-Scaling flows.
+// Note that for this to work precisely, Reno must increase its CWND once per
+// RTT, rather than once per acked window.
 type RateFairMD struct {
 	MD         float64
 	NominalRTT Clock
@@ -34,16 +36,17 @@ type RateFairMD struct {
 
 // Respond implements Responder.
 func (r RateFairMD) Respond(flow *Flow, node Node) (cwnd Bytes) {
-	t := float64(Tau) * float64(flow.srtt) * float64(flow.srtt) /
-		float64(r.NominalRTT) / float64(r.NominalRTT)
-	m := math.Pow(r.MD, float64(1)/t)
+	t := float64(Tau) * math.Pow(float64(flow.srtt), 2) /
+		math.Pow(float64(r.NominalRTT), 2)
+	m := math.Pow(r.MD, 1.0/t)
 	cwnd = Bytes(float64(flow.cwnd) * m)
 	return
 }
 
 // HybridFairMD is a Responder that performs an MD-Scaling multiplicative
 // decrease that is between rate independent fairness and cwnd convergence with
-// other MD-Scaling flows.
+// other MD-Scaling flows.  Note that for this to work precisely, Reno must
+// increase its CWND once per RTT, rather than once per acked window.
 type HybridFairMD struct {
 	MD         float64
 	NominalRTT Clock
@@ -52,7 +55,7 @@ type HybridFairMD struct {
 // Respond implements Responder.
 func (h HybridFairMD) Respond(flow *Flow, node Node) (cwnd Bytes) {
 	t := float64(Tau) * float64(flow.srtt) / float64(h.NominalRTT)
-	m := math.Pow(h.MD, float64(1)/t)
+	m := math.Pow(h.MD, 1.0/t)
 	cwnd = Bytes(float64(flow.cwnd) * m)
 	return
 }

@@ -6,15 +6,16 @@ package main
 import (
 	"log"
 	"os"
+	"runtime"
 	"runtime/pprof"
 )
 
 func main() {
 	log.SetFlags(0)
-	if Profile {
+	if ProfileCPU {
 		var f *os.File
 		var e error
-		if f, e = os.Create("scim.prof"); e != nil {
+		if f, e = os.Create("scim-cpu.prof"); e != nil {
 			log.Fatal(e)
 		}
 		pprof.StartCPUProfile(f)
@@ -29,5 +30,17 @@ func main() {
 	s := NewSim(h)
 	if err := s.Run(); err != nil {
 		log.Fatal(err)
+	}
+	if ProfileMemory {
+		var f *os.File
+		var e error
+		if f, e = os.Create("scim-mem.prof"); e != nil {
+			log.Fatal(e)
+		}
+		defer f.Close()
+		runtime.GC()
+		if e = pprof.WriteHeapProfile(f); e != nil {
+			log.Fatal(e)
+		}
 	}
 }
