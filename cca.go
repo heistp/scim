@@ -61,23 +61,62 @@ func (r *Reno) reactToSCE(flow *Flow, node Node) {
 // grow implements CCA.
 func (r *Reno) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	r.caAcked += acked
-	if RenoFractionalGrowth {
-		// NOTE this is faster than RFC 5681 Reno-linear growth
-		b := flow.cwnd / MSS
-		for r.caAcked >= b && node.Now()-r.priorGrowth > flow.srtt/Clock(MSS) {
-			flow.cwnd++
-			r.caAcked -= b
-		}
+	//if r.caAcked >= flow.cwnd { // RFC 5681 recommended
+	if node.Now()-r.priorGrowth > flow.srtt {
+		flow.setCWND(flow.cwnd + MSS)
+		r.caAcked = 0
 		r.priorGrowth = node.Now()
-	} else {
-		//if r.caAcked >= flow.cwnd && node.Now()-r.priorGrowth > flow.srtt {
-		//if r.caAcked >= flow.cwnd {
-		if node.Now()-r.priorGrowth > flow.srtt {
-			flow.setCWND(flow.cwnd + MSS)
-			r.caAcked = 0
-			r.priorGrowth = node.Now()
-		}
 	}
+}
+
+// Reno2 implements an experimental version of Reno.
+type Reno2 struct {
+	sce        Responder
+	growPrior  Clock
+	growTimer  Clock
+	sceHistory *clockRing
+}
+
+// NewReno2 returns a new Reno2.
+func NewReno2(sce Responder) *Reno2 {
+	return &Reno2{
+		sce,               // sce
+		0,                 // growPrior
+		0,                 // growTimer
+		newClockRing(Tau), // sceHistory
+	}
+}
+
+// slowStartExit implements CCA.
+func (r *Reno2) slowStartExit(flow *Flow, node Node) {
+}
+
+// reactToCE implements CCA.
+func (r *Reno2) reactToCE(flow *Flow, node Node) {
+	if flow.receiveNext > flow.signalNext {
+		flow.setCWND(Bytes(float64(flow.cwnd) * CEMD))
+		flow.signalNext = flow.seq
+	}
+}
+
+// reactToSCE implements CCA.
+func (r *Reno2) reactToSCE(flow *Flow, node Node) {
+	if r.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
+		flow.receiveNext > flow.signalNext {
+		flow.setCWND(r.sce.Respond(flow, node))
+	} else {
+		//node.Logf("ignore SCE")
+	}
+}
+
+// grow implements CCA.
+func (r *Reno2) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
+	r.growTimer += node.Now() - r.growPrior
+	for r.growTimer >= flow.srtt/Clock(MSS) {
+		flow.setCWND(flow.cwnd + 1)
+		r.growTimer -= flow.srtt / Clock(MSS)
+	}
+	r.growPrior = node.Now()
 }
 
 // CUBIC implements a basic version of RFC9438 CUBIC.
@@ -249,7 +288,7 @@ func (m *Maslo) reactToSCE(flow *Flow, node Node) {
 
 // grow implements CCA.
 func (m *Maslo) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
-	if pkt.CE || pkt.SCE {
+	if pkt.ECE || pkt.ESCE {
 		return
 	}
 	//r0 := flow.pacingRate

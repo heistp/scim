@@ -208,16 +208,6 @@ const (
 	RTTAlpha = 0.125 // RFC 6298
 )
 
-// Sender: Reno params
-//
-// RenoFractionalGrowth: This grows CWND for Reno fractionally based on the
-// number of acked bytes.  This is faster, smoother, and not currently
-// compatible with RFC 5681 Reno-linear growth as it can grow more than one
-// MSS per RTT.
-const (
-	RenoFractionalGrowth = false // NOTE: faster/smoother than RFC 5681 growth
-)
-
 // Sender: CUBIC params
 const (
 	CubicBeta            = 0.7  // RFC 9438 Section 4.6
