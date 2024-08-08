@@ -23,6 +23,7 @@ type aqmPlot struct {
 	sojourn    Xplot
 	qlen       Xplot
 	deltaSigma Xplot
+	byteSec    Xplot
 }
 
 // newAqmPlot returns a new DelticMDS.
@@ -83,6 +84,16 @@ func newAqmPlot() *aqmPlot {
 			},
 			NonzeroAxis: true,
 		},
+		Xplot{
+			Title: "Queue Byte-Seconds",
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Byte-Seconds",
+			},
+			Decimation: PlotByteSecondsInterval,
+		},
 	}
 }
 
@@ -113,6 +124,11 @@ func (a *aqmPlot) Start(node Node) (err error) {
 			return
 		}
 	}
+	if PlotByteSeconds {
+		if err = a.byteSec.Open("queue-bytesec.xpl"); err != nil {
+			return
+		}
+	}
 	return nil
 }
 
@@ -132,6 +148,9 @@ func (a *aqmPlot) Stop(node Node) error {
 	}
 	if PlotDeltaSigma {
 		a.deltaSigma.Close()
+	}
+	if PlotByteSeconds {
+		a.byteSec.Close()
 	}
 	if EmitMark && a.emitSigCtr != 0 {
 		fmt.Println()
@@ -193,6 +212,12 @@ func (a *aqmPlot) plotMark(m mark, now Clock) {
 	if EmitMark {
 		a.emitMark(m)
 	}
+}
+
+// plotByteSeconds plots a byte-seconds value.
+func (a *aqmPlot) plotByteSeconds(byteSec float64, now Clock) {
+	bs := strconv.FormatFloat(byteSec, 'f', -1, 64)
+	a.byteSec.Dot(now, bs, colorWhite)
 }
 
 // emitMark prints marks as characters.

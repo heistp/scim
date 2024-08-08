@@ -77,6 +77,10 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 		e = -d.idleTime
 	} else if len(d.queue) > 0 {
 		e = node.Now() - d.queue[0].Enqueue
+		if PlotByteSeconds {
+			bs := float64(Bytes(len(d.queue))*MSS) * time.Duration(e).Seconds()
+			d.plotByteSeconds(bs, node.Now())
+		}
 		if JitterCompensation {
 			d.jit.estimate(node.Now())
 			e = d.jit.adjustSojourn(e)

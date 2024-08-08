@@ -111,12 +111,116 @@ func (r *Reno2) reactToSCE(flow *Flow, node Node) {
 
 // grow implements CCA.
 func (r *Reno2) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
+	//if !pkt.ECE && !pkt.ESCE {
 	r.growTimer += node.Now() - r.growPrior
 	for r.growTimer >= flow.srtt/Clock(MSS) {
 		flow.setCWND(flow.cwnd + 1)
 		r.growTimer -= flow.srtt / Clock(MSS)
 	}
+	//}
 	r.growPrior = node.Now()
+}
+
+// Scalable implements the Scalable TCP CCA.
+type Scalable struct {
+	sce            Responder
+	growPrior      Clock
+	growOscillator Clock
+	growRem        Bytes
+	alpha          int
+	sceHistory     *clockRing
+	minRtt         Clock
+	maxRtt         Clock
+}
+
+// NewScalable returns a new Scalable.
+func NewScalable(sce Responder, alpha int) *Scalable {
+	return &Scalable{
+		sce,               // sce
+		0,                 // growPrior
+		0,                 // growOscillator
+		0,                 // growRem
+		alpha,             // alpha
+		newClockRing(Tau), // sceHistory
+		ClockInfinity,     // minRtt
+		0,                 // maxRtt
+	}
+}
+
+// slowStartExit implements CCA.
+func (s *Scalable) slowStartExit(flow *Flow, node Node) {
+}
+
+// reactToCE implements CCA.
+func (s *Scalable) reactToCE(flow *Flow, node Node) {
+	if flow.receiveNext > flow.signalNext {
+		c := flow.cwnd
+		if ScalableCWNDTargetingCE && s.minRtt < ClockInfinity && s.maxRtt > 0 {
+			c0 := flow.cwnd
+			cr := flow.inFlightWin.at(node.Now() - flow.srtt)
+			c = cr * Bytes(s.minRtt) / Bytes(s.maxRtt)
+			node.Logf("c0:%d cr:%d c:%d maxRtt:%d minRtt:%d",
+				c0, cr, c, s.maxRtt, s.minRtt)
+			s.maxRtt = 0
+			s.minRtt = ClockInfinity
+		}
+		flow.setCWND(Bytes(float64(c) * ScalableCEMD))
+		//flow.setCWND(Bytes(float64(flow.cwnd) * ScalableCEMD))
+		flow.signalNext = flow.seq
+	}
+}
+
+// reactToSCE implements CCA.
+func (s *Scalable) reactToSCE(flow *Flow, node Node) {
+	if s.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
+		flow.receiveNext > flow.signalNext {
+		flow.setCWND(s.sce.Respond(flow, node))
+	} else {
+		//node.Logf("ignore SCE")
+	}
+}
+
+// grow implements CCA.
+func (s *Scalable) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
+	if ScalableNoGrowthOnSignal && pkt.ECE || pkt.ESCE {
+		return
+	}
+
+	// calculate Reno-linear growth
+	var r Bytes
+	if ScalableRenoFloor {
+		s.growOscillator += node.Now() - s.growPrior
+		for s.growOscillator >= flow.srtt/Clock(MSS) {
+			r++
+			s.growOscillator -= flow.srtt / Clock(MSS)
+		}
+		s.growPrior = node.Now()
+	}
+
+	// calculate Scalable growth
+	a := acked + s.growRem
+	g := a / Bytes(s.alpha)
+	s.growRem = a % Bytes(s.alpha)
+
+	/*
+		if g > r {
+			node.Logf("scal %d", flow.cwnd)
+		} else {
+			node.Logf("reno %d", flow.cwnd)
+		}
+	*/
+
+	flow.setCWND(flow.cwnd + max(r, g))
+}
+
+// updateRtt implements updateRtter.
+func (s *Scalable) updateRtt(rtt Clock, flow *Flow, node Node) {
+	if rtt > s.maxRtt {
+		s.maxRtt = rtt
+	}
+	if rtt < s.minRtt {
+		s.minRtt = rtt
+	}
 }
 
 // CUBIC implements a basic version of RFC9438 CUBIC.

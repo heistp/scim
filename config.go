@@ -18,14 +18,13 @@ const Duration = 60 * time.Second
 var (
 	Flows = []Flow{
 		AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewMaslo(), Pacing, true),
-		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewCUBIC(SqrtP{}), Pacing, true),
-		//AddFlow(ECN, NoSCE, NewEssp(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
+		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewReno(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
-		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
-		//AddFlow(ECN, SCE, NewStdSS(), HalfCWND{}, NewCUBIC(CMD), NoPacing, true),
+		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewScalable(RMF, 200), Pacing, true),
 	}
 	FlowSchedule = []FlowAt{
-		//FlowAt{1, Clock(10 * time.Second), true},
+		//FlowAt{1, Clock(30 * time.Second), true},
+		//FlowAt{1, Clock(60 * time.Second), false},
 	}
 	FlowDelay = []Clock{
 		Clock(20 * time.Millisecond),
@@ -53,17 +52,20 @@ var (
 	CMD = MD(CubicBetaSCE)
 	CRF = RateFairMD{CubicBeta, Clock(10 * time.Millisecond)}
 	CHF = HybridFairMD{CubicBeta, Clock(10 * time.Millisecond)}
+	CMF = MildFairMD{CubicBeta, Clock(10 * time.Millisecond)}
 
 	// Reno-SCE Response
 	RMD = MD(SCE_MD)
 	RRF = RateFairMD{CEMD, Clock(10 * time.Millisecond)}
 	RHF = HybridFairMD{CEMD, Clock(10 * time.Millisecond)}
+	RMF = MildFairMD{CEMD, Clock(10 * time.Millisecond)}
 )
 
 // IFace: initial rate and rate schedule
 var RateInit = 100 * Mbps
 var RateSchedule = []RateAt{
-	//RateAt{Clock(10 * time.Second), 100 * Mbps},
+	//RateAt{Clock(60 * time.Second), 10 * Mbps},
+	//RateAt{Clock(40 * time.Second), 100 * Mbps},
 }
 
 //func init() {
@@ -93,7 +95,7 @@ var UseAQM = NewDeltic(
 // Iface: DelTiM3 AQM config
 var (
 	//UseAQM           = NewDeltim3(Clock(5000 * time.Microsecond))
-	DeltimIdleWindow = Clock(100 * time.Millisecond)
+	DeltimIdleWindow = Clock(20 * time.Millisecond)
 )
 
 // Iface: Brickwall AQM config
@@ -139,6 +141,8 @@ const (
 	PlotQueueLength         = false
 	PlotQueueLengthInterval = Clock(100 * time.Microsecond)
 	PlotDeltaSigma          = false
+	PlotByteSeconds         = false
+	PlotByteSecondsInterval = Clock(100 * time.Microsecond)
 )
 
 // AQM: plots
@@ -213,6 +217,14 @@ const (
 	CubicBeta            = 0.7  // RFC 9438 Section 4.6
 	CubicC               = 0.4  // RFC 9438 Section 5
 	CubicFastConvergence = true // RFC 9438 Section 4.7
+)
+
+// Sender: Scalable params
+const (
+	ScalableCEMD             = 0.7   // RFC 8511
+	ScalableRenoFloor        = false // if true, grow at least by Reno-linear
+	ScalableNoGrowthOnSignal = true  // if true, do not grow on ECE or ESCE
+	ScalableCWNDTargetingCE  = false // if true, do targeting on CE
 )
 
 // Sender: MASLO params

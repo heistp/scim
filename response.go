@@ -43,6 +43,21 @@ func (r RateFairMD) Respond(flow *Flow, node Node) (cwnd Bytes) {
 	return
 }
 
+// MildFairMD is a Responder that performs an MD-Scaling multiplicative
+// decrease that is a mild bias away from full RTT dependence.
+type MildFairMD struct {
+	MD         float64
+	NominalRTT Clock
+}
+
+// Respond implements Responder.
+func (m MildFairMD) Respond(flow *Flow, node Node) (cwnd Bytes) {
+	t := float64(Tau) * math.Sqrt(float64(flow.srtt)/float64(m.NominalRTT))
+	md := math.Pow(m.MD, 1.0/t)
+	cwnd = Bytes(float64(flow.cwnd) * md)
+	return
+}
+
 // HybridFairMD is a Responder that performs an MD-Scaling multiplicative
 // decrease that is between rate independent fairness and cwnd convergence with
 // other MD-Scaling flows.  Note that for this to work precisely, Reno must
