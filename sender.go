@@ -199,7 +199,6 @@ type Flow struct {
 	cwnd        Bytes
 	inFlight    Bytes
 	inFlightWin bytesWindow
-	ssSCECtr    int
 
 	pacingWait    bool
 	pacingSSRatio float64
@@ -279,7 +278,6 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 		IW,                   // cwnd
 		0,                    // inFlight
 		bytesWindow{},        // inFlightWindow
-		0,                    // ssSCECtr
 		false,                // pacingWait
 		DefaultPacingSSRatio, // pacingSSRatio
 		DefaultPacingCARatio, // pacingCARatio
