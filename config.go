@@ -20,7 +20,7 @@ var (
 		AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewMaslo(), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewReno(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
-		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewScalable(RMF, 200), Pacing, true),
+		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewScalable(RMD, 200), Pacing, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{1, Clock(30 * time.Second), true},
@@ -64,7 +64,7 @@ var (
 // IFace: initial rate and rate schedule
 var RateInit = 100 * Mbps
 var RateSchedule = []RateAt{
-	//RateAt{Clock(60 * time.Second), 10 * Mbps},
+	//RateAt{Clock(10 * time.Second), 10 * Mbps},
 	//RateAt{Clock(40 * time.Second), 100 * Mbps},
 }
 
@@ -229,7 +229,7 @@ const (
 
 // Sender: MASLO params
 const (
-	MasloCEMD = 0.85 // rate MD on CE
+	MasloBeta = 0.85 // rate MD on CE
 	MasloM    = 200  // expected steady-state marking frequency, in Hz
 )
 

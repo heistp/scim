@@ -374,7 +374,8 @@ func (m *Maslo) slowStartExit(flow *Flow, node Node) {
 // reactToCE implements CCA.
 func (m *Maslo) reactToCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
-		flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloCEMD)
+		flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloBeta)
+		m.ortt = Clock(float64(m.ortt) * MasloBeta)
 		m.syncCWND(flow)
 		m.setSafeStage("CE", flow, node)
 		flow.signalNext = flow.seq
