@@ -476,13 +476,6 @@ func (m *Maslo) safeStage(srtt Clock) (stage int) {
 
 // syncCWND synchronizes the CWND with the pacing rate.
 func (m *Maslo) syncCWND(flow *Flow) {
-	/*
-		// old version
-		y := flow.pacingRate.Yps()              // rate in bytes/sec.
-		r := time.Duration(flow.srtt).Seconds() // smoothed RTT in seconds
-		flow.setCWND(Bytes(2.0 * y * r))
-	*/
-	// new version
 	y := flow.pacingRate.Yps()                  // rate in bytes/sec.
 	r := time.Duration(flow.srtt).Seconds()     // smoothed RTT in seconds
 	ka := float64(m.k())                        // Kactual
