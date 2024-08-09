@@ -406,9 +406,14 @@ func (m *Maslo) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 // updateRtt implements updateRtter.
 func (m *Maslo) updateRtt(rtt Clock, flow *Flow, node Node) {
 	//r0 := flow.pacingRate
+	// old version
+	//flow.pacingRate += Bitrate(float64(flow.pacingRate) *
+	//	time.Duration(m.ortt-flow.srtt).Seconds() /
+	//	max(m.ortt, flow.srtt).Seconds())
+	// new version
 	flow.pacingRate += Bitrate(float64(flow.pacingRate) *
-		time.Duration(m.ortt-flow.srtt).Seconds() /
-		max(m.ortt, flow.srtt).Seconds())
+		(time.Duration(m.ortt - flow.srtt).Seconds()) /
+		(1.0/MasloM + max(m.ortt, flow.srtt).Seconds()))
 	m.syncCWND(flow)
 	//dr := time.Duration(m.ortt - flow.srtt).Seconds()
 	//node.Logf("ortt:%dns srtt:%dns ortt-srtt:%.9fs drate:%.0f bps",
