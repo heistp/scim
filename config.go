@@ -229,8 +229,9 @@ const (
 
 // Sender: MASLO params
 const (
-	MasloBeta = 0.85 // rate MD on CE
-	MasloM    = 200  // expected steady-state marking frequency, in Hz
+	MasloBeta           = 0.85 // rate MD on CE
+	MasloM              = 200  // expected steady-state marking frequency, in Hz
+	MasloOrttAdjustment = true // if true, adjust oRTT on CE marks
 )
 
 // Sender: pacing params

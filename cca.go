@@ -11,10 +11,14 @@ import (
 
 // A CCA implements a congestion control algorithm.
 type CCA interface {
-	slowStartExit(*Flow, Node)
 	reactToCE(*Flow, Node)
 	reactToSCE(*Flow, Node)
 	grow(Bytes, Packet, *Flow, Node)
+}
+
+// A slowStartExiter can take some action on slow-start exit.
+type slowStartExiter interface {
+	slowStartExit(*Flow, Node)
 }
 
 // Reno implements TCP Reno.
@@ -33,10 +37,6 @@ func NewReno(sce Responder) *Reno {
 		0,                 // priorGrowth
 		newClockRing(Tau), // sceHistory
 	}
-}
-
-// slowStartExit implements CCA.
-func (r *Reno) slowStartExit(flow *Flow, node Node) {
 }
 
 // reactToCE implements CCA.
@@ -85,10 +85,6 @@ func NewReno2(sce Responder) *Reno2 {
 		0,                 // growTimer
 		newClockRing(Tau), // sceHistory
 	}
-}
-
-// slowStartExit implements CCA.
-func (r *Reno2) slowStartExit(flow *Flow, node Node) {
 }
 
 // reactToCE implements CCA.
@@ -145,10 +141,6 @@ func NewScalable(sce Responder, alpha int) *Scalable {
 		ClockInfinity,     // minRtt
 		0,                 // maxRtt
 	}
-}
-
-// slowStartExit implements CCA.
-func (s *Scalable) slowStartExit(flow *Flow, node Node) {
 }
 
 // reactToCE implements CCA.
@@ -375,7 +367,9 @@ func (m *Maslo) slowStartExit(flow *Flow, node Node) {
 func (m *Maslo) reactToCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
 		flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloBeta)
-		m.ortt = Clock(float64(m.ortt) * MasloBeta)
+		if MasloOrttAdjustment {
+			m.ortt = Clock(float64(m.ortt) * MasloBeta)
+		}
 		m.syncCWND(flow)
 		m.setSafeStage("CE", flow, node)
 		flow.signalNext = flow.seq
