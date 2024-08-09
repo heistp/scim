@@ -271,7 +271,7 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 		0,                    // signalNext
 		FlowStateSS,          // state
 		0,                    // srtt
-		ClockInfinity,        // minRtt
+		ClockMax,             // minRtt
 		0,                    // maxRtt
 		ss,                   // slowStart
 		ssExit,               // slowStartExit

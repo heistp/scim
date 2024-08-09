@@ -97,15 +97,15 @@ type HyStartPP struct {
 
 func NewHyStartPP() *HyStartPP {
 	return &HyStartPP{
-		0,             // rtt
-		ClockInfinity, // lastRoundMinRTT
-		ClockInfinity, // currentRoundMinRTT
-		ClockInfinity, // cssBaselineMinRTT
-		0,             // windowEnd
-		0,             // rttSampleCount
-		0,             // cssRounds
-		false,         // conservative
-		0,             // sceCtr
+		0,        // rtt
+		ClockMax, // lastRoundMinRTT
+		ClockMax, // currentRoundMinRTT
+		ClockMax, // cssBaselineMinRTT
+		0,        // windowEnd
+		0,        // rttSampleCount
+		0,        // cssRounds
+		false,    // conservative
+		0,        // sceCtr
 	}
 }
 
@@ -127,8 +127,8 @@ func (h *HyStartPP) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 	if !h.conservative {
 		h.hystartRound(flow)
 		if h.rttSampleCount >= HyNRTTSample &&
-			h.currentRoundMinRTT != ClockInfinity &&
-			h.lastRoundMinRTT != ClockInfinity {
+			h.currentRoundMinRTT != ClockMax &&
+			h.lastRoundMinRTT != ClockMax {
 			t := max(HyMinRTTThresh,
 				min(h.lastRoundMinRTT/HyMinRTTDivisor, HyMaxRTTThresh))
 			if h.currentRoundMinRTT >= h.lastRoundMinRTT+t {
@@ -156,7 +156,7 @@ func (h *HyStartPP) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 		if h.rttSampleCount >= HyNRTTSample &&
 			h.currentRoundMinRTT < h.cssBaselineMinRTT {
 			node.Logf("HyStart: back to SS")
-			h.cssBaselineMinRTT = ClockInfinity
+			h.cssBaselineMinRTT = ClockMax
 			h.conservative = false
 		} else if h.cssRounds >= HyCSSRounds {
 			node.Logf("HyStart: CA")
@@ -179,7 +179,7 @@ func (h *HyStartPP) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 func (h *HyStartPP) hystartRound(flow *Flow) (end bool) {
 	if flow.receiveNext-1 > h.windowEnd {
 		h.lastRoundMinRTT = h.currentRoundMinRTT
-		h.currentRoundMinRTT = ClockInfinity
+		h.currentRoundMinRTT = ClockMax
 		h.rttSampleCount = 0
 		h.windowEnd = flow.seq
 		end = true
@@ -273,6 +273,7 @@ type Essp struct {
 	ackedRem Bytes
 	rtt      Clock
 	sRtt     Clock
+	minRtt   Clock
 	maxRtt   Clock
 	maxsRtt  Clock // NOTE remove if not needed
 }
@@ -280,12 +281,13 @@ type Essp struct {
 // NewEssp returns a new Essp.
 func NewEssp() *Essp {
 	return &Essp{
-		-1, // stage
-		0,  // ackedRem
-		0,  // iRtt
-		0,  // sRtt
-		0,  // maxRtt
-		0,  // maxsRtt
+		-1,       // stage
+		0,        // ackedRem
+		0,        // iRtt
+		0,        // sRtt
+		ClockMax, // minRtt
+		0,        // maxRtt
+		0,        // maxsRtt
 	}
 }
 
@@ -333,16 +335,16 @@ func (l *Essp) advance(flow *Flow, node Node, why string) (exit bool) {
 	c0 := flow.cwnd
 	r0 := flow.getPacingRate()
 	if EsspCWNDTargeting && l.stage > 0 {
-		c := c0 * Bytes(flow.minRtt) / Bytes(l.maxRtt)
+		c := c0 * Bytes(l.minRtt) / Bytes(l.maxRtt)
 		// NOTE we now do CWND targeting with the current CWND, as above.
 		// we used to use in-flight bytes one sRTT ago, scaled by the
 		// pacing factor, as below, but CWND targeting doesn't work that well
 		// with scaled pacing, even with this pacing factor.
 		//f := flow.inFlightWin.at(node.Now() - flow.srtt)
-		//c := f * Bytes(flow.minRtt) / Bytes(l.maxRtt)
+		//c := f * Bytes(l.minRtt) / Bytes(l.maxRtt)
 		//c = Bytes(float64(c) * l.scale())
 		//node.Logf("target min:%d srtt:%d max:%d maxs:%d",
-		//	flow.minRtt, l.sRtt, l.maxRtt, l.maxsRtt)
+		//	l.minRtt, l.sRtt, l.maxRtt, l.maxsRtt)
 		if flow.cwnd > c {
 			flow.setCWND(c)
 		}
@@ -373,7 +375,7 @@ func (l *Essp) reactToSCE(flow *Flow, node Node) (exit bool) {
 // grow implements SlowStart.
 func (l *Essp) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 	if EsspDelayThreshold > 1.0 && flow.receiveNext > flow.signalNext &&
-		l.rtt > Clock(float64(flow.minRtt)*EsspDelayThreshold) {
+		l.rtt > Clock(float64(l.minRtt)*EsspDelayThreshold) {
 		if exit = l.advance(flow, node, "delay"); exit {
 			return
 		}
@@ -389,6 +391,9 @@ func (l *Essp) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 // updateRtt implements updateRtter.
 func (l *Essp) updateRtt(rtt Clock, flow *Flow, node Node) {
 	l.rtt = rtt
+	if rtt < l.minRtt {
+		l.minRtt = rtt
+	}
 	if rtt > l.maxRtt {
 		l.maxRtt = rtt
 	}

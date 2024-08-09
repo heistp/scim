@@ -19,8 +19,8 @@ type nodeID int
 // Clock represents the virtual simulation time.
 type Clock time.Duration
 
-// ClockInfinity is the maximum Clock value.
-const ClockInfinity = Clock(math.MaxInt64)
+// ClockMax is the maximum Clock value.
+const ClockMax = Clock(math.MaxInt64)
 
 // MultiplyScaled multiplies with the given Clock value, scaled to time.Second.
 func (c Clock) MultiplyScaled(c2 Clock) Clock {

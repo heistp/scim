@@ -138,7 +138,7 @@ func NewScalable(sce Responder, alpha int) *Scalable {
 		0,                 // growRem
 		alpha,             // alpha
 		newClockRing(Tau), // sceHistory
-		ClockInfinity,     // minRtt
+		ClockMax,          // minRtt
 		0,                 // maxRtt
 	}
 }
@@ -147,14 +147,14 @@ func NewScalable(sce Responder, alpha int) *Scalable {
 func (s *Scalable) reactToCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
 		c := flow.cwnd
-		if ScalableCWNDTargetingCE && s.minRtt < ClockInfinity && s.maxRtt > 0 {
+		if ScalableCWNDTargetingCE && s.minRtt < ClockMax && s.maxRtt > 0 {
 			c0 := flow.cwnd
 			cr := flow.inFlightWin.at(node.Now() - flow.srtt)
 			c = cr * Bytes(s.minRtt) / Bytes(s.maxRtt)
 			node.Logf("c0:%d cr:%d c:%d maxRtt:%d minRtt:%d",
 				c0, cr, c, s.maxRtt, s.minRtt)
 			s.maxRtt = 0
-			s.minRtt = ClockInfinity
+			s.minRtt = ClockMax
 		}
 		flow.setCWND(Bytes(float64(c) * ScalableCEMD))
 		//flow.setCWND(Bytes(float64(flow.cwnd) * ScalableCEMD))
