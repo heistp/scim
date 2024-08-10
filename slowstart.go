@@ -272,10 +272,7 @@ type Essp struct {
 	stage    int
 	ackedRem Bytes
 	rtt      Clock
-	sRtt     Clock
 	minRtt   Clock
-	maxRtt   Clock
-	maxsRtt  Clock // NOTE remove if not needed
 }
 
 // NewEssp returns a new Essp.
@@ -284,16 +281,13 @@ func NewEssp() *Essp {
 		-1,       // stage
 		0,        // ackedRem
 		0,        // iRtt
-		0,        // sRtt
 		ClockMax, // minRtt
-		0,        // maxRtt
-		0,        // maxsRtt
 	}
 }
 
 // init implements SlowStart.
 func (l *Essp) init(flow *Flow, node Node) {
-	if e := l.advance(flow, node, "init"); e {
+	if e := l.advance("init", flow, node); e {
 		panic(fmt.Sprintf("essp: unexpected slow-start exit on initial advance"))
 	}
 	return
@@ -304,7 +298,7 @@ func (l *Essp) reactToCE(flow *Flow, node Node) (exit bool) {
 	if flow.receiveNext <= flow.signalNext {
 		return
 	}
-	exit = l.advance(flow, node, "CE")
+	exit = l.advance("CE", flow, node)
 	return
 }
 
@@ -328,27 +322,18 @@ func (l *Essp) scale() float64 {
 
 // advance moves to the next stage, and returns true if K would result in
 // Reno-linear growth or slower, meaning it's time to exit slow-start.
-func (l *Essp) advance(flow *Flow, node Node, why string) (exit bool) {
+func (l *Essp) advance(why string, flow *Flow, node Node) (exit bool) {
 	if l.stage++; l.stage >= LeoStageMax {
 		panic(fmt.Sprintf("max ESSP stage reached: %d", l.stage))
 	}
 	c0 := flow.cwnd
 	r0 := flow.getPacingRate()
-	if EsspCWNDTargeting && l.stage > 0 {
-		c := c0 * Bytes(l.minRtt) / Bytes(l.maxRtt)
-		// NOTE we now do CWND targeting with the current CWND, as above.
-		// we used to use in-flight bytes one sRTT ago, scaled by the
-		// pacing factor, as below, but CWND targeting doesn't work that well
-		// with scaled pacing, even with this pacing factor.
-		//f := flow.inFlightWin.at(node.Now() - flow.srtt)
-		//c := f * Bytes(l.minRtt) / Bytes(l.maxRtt)
-		//c = Bytes(float64(c) * l.scale())
-		//node.Logf("target min:%d srtt:%d max:%d maxs:%d",
-		//	l.minRtt, l.sRtt, l.maxRtt, l.maxsRtt)
+	if EsspCWNDTargeting && why != "init" {
+		c := c0 * Bytes(l.minRtt) / Bytes(l.rtt)
 		if flow.cwnd > c {
 			flow.setCWND(c)
 		}
-		l.resetRtt()
+		defer l.resetRtt() // defers to after logging
 	}
 	if exit = Bytes(l.exitK()) >= flow.cwnd/MSS; exit {
 		flow.pacingSSRatio = DefaultPacingSSRatio
@@ -358,8 +343,8 @@ func (l *Essp) advance(flow *Flow, node Node, why string) (exit bool) {
 	}
 	r := flow.getPacingRate()
 	node.Logf(
-		"essp flow:%d stage:%d k:%d scale:%.3f cwnd:%d->%d rate:%.2f->%.2f (%s)",
-		flow.id, l.stage, l.k(), l.scale(), c0, flow.cwnd, r0.Mbps(), r.Mbps(), why)
+		"essp flow:%d stage:%d k:%d scale:%.3f cwnd:%d->%d rate:%.0f->%.0f minRTT:%d rtt:%d (%s)",
+		flow.id, l.stage, l.k(), l.scale(), c0, flow.cwnd, r0.Bps(), r.Bps(), l.minRtt, l.rtt, why)
 	return
 }
 
@@ -368,7 +353,7 @@ func (l *Essp) reactToSCE(flow *Flow, node Node) (exit bool) {
 	if flow.receiveNext <= flow.signalNext {
 		return
 	}
-	exit = l.advance(flow, node, "SCE")
+	exit = l.advance("SCE", flow, node)
 	return
 }
 
@@ -376,7 +361,7 @@ func (l *Essp) reactToSCE(flow *Flow, node Node) (exit bool) {
 func (l *Essp) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 	if EsspDelayThreshold > 1.0 && flow.receiveNext > flow.signalNext &&
 		l.rtt > Clock(float64(l.minRtt)*EsspDelayThreshold) {
-		if exit = l.advance(flow, node, "delay"); exit {
+		if exit = l.advance("delay", flow, node); exit {
 			return
 		}
 	}
@@ -394,22 +379,9 @@ func (l *Essp) updateRtt(rtt Clock, flow *Flow, node Node) {
 	if rtt < l.minRtt {
 		l.minRtt = rtt
 	}
-	if rtt > l.maxRtt {
-		l.maxRtt = rtt
-	}
-	if l.sRtt == 0 {
-		l.sRtt = rtt
-	} else {
-		l.sRtt = Clock(RTTAlpha*float64(rtt) + (1-RTTAlpha)*float64(l.sRtt))
-	}
-	if l.sRtt > l.maxsRtt {
-		l.maxsRtt = l.sRtt
-	}
 }
 
 // resetRtt resets the RTT stats upon advancing the stage.
 func (l *Essp) resetRtt() {
-	l.sRtt = 0
-	l.maxRtt = 0
-	l.maxsRtt = 0
+	l.rtt = 0
 }

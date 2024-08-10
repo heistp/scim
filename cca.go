@@ -344,8 +344,9 @@ func (c *CUBIC) target(cwnd Bytes, t Clock) Bytes {
 
 // Maslo implements the MASLO TCP CCA.
 type Maslo struct {
-	stage int
-	ortt  Clock
+	stage             int
+	ortt              Clock
+	priorRateOnSignal Bitrate
 }
 
 // NewMaslo returns a new Maslo.
@@ -353,18 +354,24 @@ func NewMaslo() *Maslo {
 	return &Maslo{
 		-1, // stage
 		0,  // ortt
+		0,  // priorRateOnSignal
 	}
 }
 
 // slowStartExit implements CCA.
 func (m *Maslo) slowStartExit(flow *Flow, node Node) {
 	flow.useExplicitPacing()
-	m.setSafeStage("init", flow, node)
+	m.stage = -1
 	m.ortt = flow.srtt
+	m.priorRateOnSignal = flow.pacingRate
+	node.Logf("maslo ss-exit rate:%.0f cwnd:%d minrtt:%d srtt:%d",
+		flow.pacingRate.Bps(), flow.cwnd, flow.minRtt, flow.srtt)
+	m.setSafeStage("init", flow, node)
 }
 
 // reactToCE implements CCA.
 func (m *Maslo) reactToCE(flow *Flow, node Node) {
+	m.priorRateOnSignal = flow.pacingRate
 	if flow.receiveNext > flow.signalNext {
 		flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloBeta)
 		if MasloOrttAdjustment {
@@ -378,6 +385,7 @@ func (m *Maslo) reactToCE(flow *Flow, node Node) {
 
 // reactToSCE implements CCA.
 func (m *Maslo) reactToSCE(flow *Flow, node Node) {
+	m.priorRateOnSignal = flow.pacingRate
 	//r0 := flow.pacingRate
 	flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloSCEMD[m.stage])
 	//node.Logf("r0:%.3f r:%.3f", r0.Mbps(), flow.pacingRate.Mbps())
@@ -393,9 +401,52 @@ func (m *Maslo) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	//r0 := flow.pacingRate
 	//c0 := flow.cwnd
 	flow.pacingRate += Bitrate(Yps * Bitrate(acked) / Bitrate(m.k()))
+	if m.startProbe(flow, node) {
+		return
+	}
 	m.syncCWND(flow)
 	//node.Logf("maslo grow k:%d rate:%.3f->%.3f cwnd:%d->%d", m.k(), r0.Mbps(),
 	//	flow.pacingRate.Mbps(), c0, flow.cwnd)
+}
+
+// startProbe starts a bandwidth probe by re-entering slow-start with ESSP.
+func (m *Maslo) startProbe(flow *Flow, node Node) (ok bool) {
+	// skip if probing not enabled or prior rate on signal uninitialized
+	if !MasloBandwidthProbing || m.priorRateOnSignal == 0 {
+		return
+	}
+	// skip if pacing rate hasn't reached threshold
+	t := Bitrate(float64(m.priorRateOnSignal) * MasloProbeThreshold)
+	if flow.pacingRate <= t {
+		return
+	}
+	// init, advance to second stage, and skip if exit indicated
+	e := NewEssp()
+	e.minRtt = flow.srtt
+	e.init(flow, node)
+	if x := e.advance("init", flow, node); x {
+		node.Logf("maslo probe skip")
+		return
+	}
+	// initiate probe
+	ok = true
+	r0 := flow.pacingRate
+	flow.slowStart = e
+	flow.slowStartExit = NoResponse{}
+	flow.state = FlowStateSS
+	y := flow.pacingRate.Yps()              // rate in bytes/sec.
+	r := time.Duration(flow.srtt).Seconds() // smoothed RTT in seconds
+	c0 := flow.cwnd
+	// new version below scales CWND
+	k := Bytes(e.k())
+	flow.cwnd = Bytes(y*r) * (k - 1) / k
+	// old version below does not scale CWND
+	//flow.cwnd = Bytes(y * r)
+	flow.disableExplicitPacing()
+	node.Logf("maslo probe rate:%.0f->%.0f rate(prior-signal):%.0f cwnd:%d->%d",
+		r0.Bps(), flow.getPacingRate().Bps(), m.priorRateOnSignal.Bps(),
+		c0, flow.cwnd)
+	return
 }
 
 // updateRtt implements updateRtter.
@@ -476,11 +527,15 @@ func (m *Maslo) safeStage(srtt Clock) (stage int) {
 
 // syncCWND synchronizes the CWND with the pacing rate.
 func (m *Maslo) syncCWND(flow *Flow) {
-	y := flow.pacingRate.Yps()                  // rate in bytes/sec.
-	r := time.Duration(flow.srtt).Seconds()     // smoothed RTT in seconds
-	ka := float64(m.k())                        // Kactual
-	ks := float64(LeoK[m.safeStage(flow.srtt)]) // Ksafe
-	flow.setCWND(Bytes(y * (2.0 * math.Sqrt(ka/ks)) * r))
+	// new version
+	c := flow.cwndFromPacingRate()
+	flow.setCWND(Bytes(float64(c) * MasloCwndScaleFactor))
+	// old version
+	//y := flow.pacingRate.Yps()                  // rate in bytes/sec.
+	//r := time.Duration(flow.srtt).Seconds()     // smoothed RTT in seconds
+	//ka := float64(m.k())                        // Kactual
+	//ks := float64(LeoK[m.safeStage(flow.srtt)]) // Ksafe
+	//flow.setCWND(Bytes(2.0 * math.Sqrt(ka/ks) * c))
 }
 
 // k returns the current value of K for the

@@ -95,7 +95,7 @@ type TargetCWND struct {
 func (TargetCWND) Respond(flow *Flow, node Node) (cwnd Bytes) {
 	cwnd0 := flow.cwnd
 	flight := flow.inFlightWin.at(node.Now() - flow.srtt)
-	cwnd = flight * Bytes(flow.minRtt) / Bytes(flow.srtt)
+	cwnd = flight * Bytes(flow.minRtt) / Bytes(flow.rtt)
 	node.Logf("target cwnd:%d cwnd0:%d flight:%d minRtt:%.2fms srtt:%.2fms",
 		cwnd, cwnd0, flight,
 		time.Duration(flow.minRtt).Seconds()*1000,

@@ -188,6 +188,7 @@ type Flow struct {
 	receiveNext Seq // RCV.NXT
 	signalNext  Seq
 	state       FlowState
+	rtt         Clock
 	srtt        Clock
 	minRtt      Clock
 	maxRtt      Clock
@@ -269,6 +270,7 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 		0,                    // receiveNext
 		0,                    // signalNext
 		FlowStateSS,          // state
+		0,                    // rtt
 		0,                    // srtt
 		ClockMax,             // minRtt
 		0,                    // maxRtt
@@ -538,11 +540,24 @@ func (f *Flow) getPacingRate() Bitrate {
 	return CalcBitrate(MSS, time.Duration(f.pacingDelay(MSS)))
 }
 
+// cwndFromPacingRate returns a CWND corresponding to the current pacing rate.
+func (f *Flow) cwndFromPacingRate() Bytes {
+	y := f.pacingRate.Yps()              // rate in bytes/sec.
+	r := time.Duration(f.srtt).Seconds() // smoothed RTT in seconds
+	return Bytes(y * r)
+}
+
 // useExplicitPacing converts the calculated pacing rate to an explicit pacing
 // rate in the pacingRate field.
 func (f *Flow) useExplicitPacing() {
 	f.pacingRate = Bitrate(float64(f.cwnd) * float64(Yps) /
 		time.Duration(f.srtt).Seconds())
+}
+
+// disableExplicitPacing sets the pacing rate to zero so it's calculated from
+// CWND and RTT.
+func (f *Flow) disableExplicitPacing() {
+	f.pacingRate = 0
 }
 
 // receive handles an incoming packet.
@@ -661,16 +676,7 @@ func (f *Flow) updateRTT(pkt Packet, node Node) {
 		return
 	}
 	rtt := node.Now() - pkt.Sent
-	switch f.state {
-	case FlowStateSS:
-		if r, ok := f.slowStart.(updateRtter); ok {
-			r.updateRtt(rtt, f, node)
-		}
-	case FlowStateCA:
-		if r, ok := f.cca.(updateRtter); ok {
-			r.updateRtt(rtt, f, node)
-		}
-	}
+	f.rtt = rtt
 	if rtt < f.minRtt {
 		f.minRtt = rtt
 	}
@@ -681,6 +687,16 @@ func (f *Flow) updateRTT(pkt Packet, node Node) {
 	}
 	if rtt > f.maxRtt {
 		f.maxRtt = rtt
+	}
+	switch f.state {
+	case FlowStateSS:
+		if r, ok := f.slowStart.(updateRtter); ok {
+			r.updateRtt(rtt, f, node)
+		}
+	case FlowStateCA:
+		if r, ok := f.cca.(updateRtter); ok {
+			r.updateRtt(rtt, f, node)
+		}
 	}
 }
 
