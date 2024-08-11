@@ -387,7 +387,11 @@ func (m *Maslo) reactToCE(flow *Flow, node Node) {
 func (m *Maslo) reactToSCE(flow *Flow, node Node) {
 	m.priorRateOnSignal = flow.pacingRate
 	//r0 := flow.pacingRate
-	flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloSCEMD[m.stage])
+	if MasloSCEMDApproximation {
+		flow.pacingRate -= flow.pacingRate / Bitrate(m.k()*MasloM)
+	} else {
+		flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloSCEMD[m.stage])
+	}
 	//node.Logf("r0:%.3f r:%.3f", r0.Mbps(), flow.pacingRate.Mbps())
 	m.syncCWND(flow)
 	m.setSafeStage("SCE", flow, node)

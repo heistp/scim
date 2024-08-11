@@ -229,12 +229,13 @@ const (
 
 // Sender: MASLO params
 const (
-	MasloBeta             = 0.85 // rate MD on CE
-	MasloM                = 200  // expected steady-state marking frequency, in Hz
-	MasloOrttAdjustment   = true // if true, adjust oRTT on CE marks
-	MasloProbeThreshold   = 2.0  // multiple of pacing rate since last signal
-	MasloCwndScaleFactor  = 1.25 // scale factor for pacing rate to CWND
-	MasloBandwidthProbing = true // if true, enable bandwidth probing
+	MasloBeta               = 0.85 // rate MD on CE
+	MasloM                  = 200  // expected steady-state marking frequency, in Hz
+	MasloOrttAdjustment     = true // if true, adjust oRTT on CE marks
+	MasloProbeThreshold     = 2.0  // multiple of pacing rate since last signal
+	MasloCwndScaleFactor    = 1.25 // scale factor for pacing rate to CWND
+	MasloBandwidthProbing   = true // if true, enable bandwidth probing
+	MasloSCEMDApproximation = true // if true, approximate SCE response (default)
 )
 
 // Sender: pacing params
