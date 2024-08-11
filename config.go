@@ -19,6 +19,7 @@ var (
 	Flows = []Flow{
 		AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewMaslo(), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewReno(RMD), Pacing, true),
+		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewReno2(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewScalable(RMD, 200), Pacing, true),
 	}
