@@ -452,6 +452,10 @@ func (m *Maslo) startProbe(flow *Flow, node Node) (ok bool) {
 // updateRtt implements updateRtter.
 func (m *Maslo) updateRtt(rtt Clock, flow *Flow, node Node) {
 	//r0 := flow.pacingRate
+	// older version
+	//flow.pacingRate += Bitrate(float64(flow.pacingRate) *
+	//	time.Duration(m.ortt-flow.srtt).Seconds() /
+	//	time.Duration(m.ortt+flow.srtt).Seconds())
 	// old version
 	//flow.pacingRate += Bitrate(float64(flow.pacingRate) *
 	//	time.Duration(m.ortt-flow.srtt).Seconds() /
