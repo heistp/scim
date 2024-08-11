@@ -174,7 +174,7 @@ func (s *Scalable) reactToSCE(flow *Flow, node Node) {
 
 // grow implements CCA.
 func (s *Scalable) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
-	if ScalableNoGrowthOnSignal && pkt.ECE || pkt.ESCE {
+	if ScalableNoGrowthOnSignal && (pkt.ECE || pkt.ESCE) {
 		return
 	}
 
