@@ -157,7 +157,6 @@ func (s *Scalable) reactToCE(flow *Flow, node Node) {
 			s.minRtt = ClockMax
 		}
 		flow.setCWND(Bytes(float64(c) * ScalableCEMD))
-		//flow.setCWND(Bytes(float64(flow.cwnd) * ScalableCEMD))
 		flow.signalNext = flow.seq
 	}
 }
