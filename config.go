@@ -102,7 +102,7 @@ var (
 // Iface: Brickwall AQM config
 //var UseAQM = NewBrickwall(
 //	Clock(0*time.Millisecond),   // SCE
-//	Clock(400*time.Millisecond), // CE
+//	Clock(100*time.Millisecond), // CE
 //	Clock(0*time.Millisecond),   // drop
 //)
 
