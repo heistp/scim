@@ -22,6 +22,8 @@ const (
 // taken as the minimum sojourn time down to one packet, within a given burst.
 // The minimum is tracked using a sliding window over the burst, for sub-burst
 // update times.  Idle time is used as a negative delta.
+//
+// TODO look at DelTiM 2 with low bitrate, like 40 Kbps, and MSS 1500
 type Deltim2 struct {
 	queue []Packet
 
