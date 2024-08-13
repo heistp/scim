@@ -579,7 +579,10 @@ func (f *Flow) handleSynAck(pkt Packet, node Node) {
 	f.receiveNext = pkt.ACKNum
 	f.updateRTT(pkt, node)
 	if i, ok := f.slowStart.(initer); ok {
-		i.init(f, node)
+		if i.init(f, node) {
+			f.exitSlowStart(node, "init")
+			f.signalNext = f.seq
+		}
 	}
 	f.send(node)
 }

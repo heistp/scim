@@ -17,7 +17,7 @@ type SlowStart interface {
 
 // An initer an initialize a SlowStart algorithm.
 type initer interface {
-	init(*Flow, Node)
+	init(*Flow, Node) (exit bool)
 }
 
 // An updateRtter receives updated RTT samples.
@@ -286,11 +286,8 @@ func NewEssp() *Essp {
 }
 
 // init implements SlowStart.
-func (l *Essp) init(flow *Flow, node Node) {
-	if e := l.advance("init", flow, node); e {
-		panic(fmt.Sprintf("essp: unexpected slow-start exit on initial advance"))
-	}
-	return
+func (l *Essp) init(flow *Flow, node Node) bool {
+	return l.advance("init", flow, node)
 }
 
 // reactToCE implements SlowStart.
