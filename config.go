@@ -237,6 +237,7 @@ const (
 	MasloCwndScaleFactor    = 1.25 // scale factor for pacing rate to CWND
 	MasloBandwidthProbing   = true // if true, enable bandwidth probing
 	MasloSCEMDApproximation = true // if true, approximate SCE response (default)
+	MasloAdjustSafeRTT      = true // if true, adjust RTT used for K calculations
 )
 
 // Sender: pacing params

@@ -486,7 +486,7 @@ func (m *Maslo) setStage(stage int, reason string, flow *Flow, node Node) {
 
 // setSafeStage sets the stage to the current safe stage.
 func (m *Maslo) setSafeStage(reason string, flow *Flow, node Node) {
-	s := m.safeStage(flow.srtt)
+	s := m.safeStage(flow.srtt, flow)
 	m.setStage(s, reason, flow, node)
 }
 
@@ -520,7 +520,12 @@ var MasloStageRTT = []Clock{
 }
 
 // safeStage returns the "safe" stage index for the given RTT.
-func (m *Maslo) safeStage(srtt Clock) (stage int) {
+func (m *Maslo) safeStage(srtt Clock, flow *Flow) (stage int) {
+	if MasloAdjustSafeRTT {
+		if p := flow.pacingRate.Yps() / float64(MSS); p < MasloM {
+			srtt = Clock(float64(srtt) * MasloM / p)
+		}
+	}
 	var r Clock
 	for stage, r = range MasloStageRTT {
 		if srtt <= r {
