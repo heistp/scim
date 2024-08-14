@@ -429,6 +429,7 @@ func (m *Maslo) startProbe(flow *Flow, node Node) (ok bool) {
 	e.init(flow, node)
 	if x := e.advance("init", flow, node); x {
 		node.Logf("maslo probe skip")
+		m.priorRateOnSignal = flow.pacingRate
 		return
 	}
 	// initiate probe
