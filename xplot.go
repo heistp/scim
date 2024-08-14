@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strconv"
 	"text/template"
 )
 
@@ -31,6 +32,7 @@ yunits
 {{end -}}
 {{if not .NonzeroAxis -}}
 invisible 0 0
+invisible {{.Duration}} 0
 {{end -}}
 `
 
@@ -45,6 +47,7 @@ type Xplot struct {
 	Y           Axis
 	NonzeroAxis bool
 	Decimation  Clock
+	Duration    string
 	file        *os.File
 	writer      *bufio.Writer
 	prior       map[int]Clock
@@ -80,6 +83,7 @@ func (p *Xplot) Open(name string) (err error) {
 	if p.file, err = os.Create(name); err != nil {
 		return
 	}
+	p.Duration = strconv.FormatFloat(Duration.Seconds(), 'f', -1, 64)
 	p.writer = bufio.NewWriter(p.file)
 	p.prior = make(map[int]Clock)
 	err = t.Execute(p.writer, p)
