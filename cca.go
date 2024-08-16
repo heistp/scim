@@ -470,20 +470,27 @@ func (m *Maslo) updateRtt(rtt Clock, flow *Flow, node Node) {
 	m.ortt = flow.srtt
 }
 
-// setStage switches to the given stage and logs stage changes.
-func (m *Maslo) setStage(stage int, reason string, flow *Flow, node Node) {
-	if stage != m.stage {
-		m.stage = stage
-		node.Logf("flow:%d maslo set-stage stage:%d reason:%s k:%d srtt:%dms",
-			flow.id, m.stage, reason,
-			LeoK[m.stage], time.Duration(flow.srtt).Milliseconds())
-	}
-}
-
 // setSafeStage sets the stage to the current safe stage.
 func (m *Maslo) setSafeStage(reason string, flow *Flow, node Node) {
-	s := m.safeStage(flow.srtt, flow)
-	m.setStage(s, reason, flow, node)
+	r := flow.srtt
+	if MasloAdjustSafeRTT {
+		if p := flow.pacingRate.Yps() / float64(MSS); p < MasloM {
+			r = Clock(float64(r) * MasloM / p)
+		}
+	}
+	s := m.safeStage(r, flow)
+	if s > m.stage || (s < m.stage && r <= m.stageFloor(m.stage)) {
+		node.Logf("flow:%d maslo set stage:%d->%d floor:%dms reason:%s k:%d srtt:%d->%dms",
+			flow.id,
+			m.stage,
+			s,
+			time.Duration(m.stageFloor(m.stage)).Milliseconds(),
+			reason,
+			LeoK[s],
+			time.Duration(flow.srtt).Milliseconds(),
+			time.Duration(r).Milliseconds())
+		m.stage = s
+	}
 }
 
 // MasloStageRTT lists the max RTT up to which K for the indexed stage is safe.
@@ -517,11 +524,6 @@ var MasloStageRTT = []Clock{
 
 // safeStage returns the "safe" stage index for the given RTT.
 func (m *Maslo) safeStage(srtt Clock, flow *Flow) (stage int) {
-	if MasloAdjustSafeRTT {
-		if p := flow.pacingRate.Yps() / float64(MSS); p < MasloM {
-			srtt = Clock(float64(srtt) * MasloM / p)
-		}
-	}
 	var r Clock
 	for stage, r = range MasloStageRTT {
 		if srtt <= r {
@@ -531,6 +533,18 @@ func (m *Maslo) safeStage(srtt Clock, flow *Flow) (stage int) {
 	return
 	panic(fmt.Sprintf("RTT %d ms exceeds MasloStageRTT",
 		time.Duration(srtt).Milliseconds()))
+}
+
+// stageFloor returns the maximum RTT at which a stage transition to a lower
+// stage is allowed,
+func (m *Maslo) stageFloor(stage int) Clock {
+	if stage <= 0 {
+		return 0
+	}
+	if stage == 1 {
+		return MasloStageRTT[0] / 2
+	}
+	return (MasloStageRTT[stage-1] + MasloStageRTT[stage-2]) / 2
 }
 
 // syncCWND synchronizes the CWND with the pacing rate.
