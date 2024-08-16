@@ -56,7 +56,7 @@ type Xplot struct {
 type symbology int
 
 const (
-	symbologyDot symbology = (iota + 1) * 1024
+	symbologyDot symbology = iota
 	symbologyPlus
 	symbologyX
 )
@@ -116,7 +116,7 @@ func (p *Xplot) Line(x0, y0, x1, y1 any, color color) {
 
 // decimate returns true if the given symbology and color may be plotted now.
 func (p *Xplot) decimate(now Clock, sym symbology, color color) bool {
-	i := int(sym) * int(color)
+	i := (1024 * (int(sym) + 1)) * (int(color) + 1)
 	var ok bool
 	var c Clock
 	if c, ok = p.prior[i]; !ok || now-c > p.Decimation {
