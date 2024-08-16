@@ -121,6 +121,9 @@ func (s *Sender) Handle(pkt Packet, node Node) error {
 	}
 	if PlotCwnd {
 		s.cwnd.Dot(node.Now(), s.flow[pkt.Flow].cwnd, color(pkt.Flow))
+		if PlotCwndInFlight {
+			s.cwnd.PlotX(node.Now(), s.flow[pkt.Flow].inFlight, color(pkt.Flow))
+		}
 	}
 	if PlotRTT {
 		s.rtt.Dot(node.Now(), s.flow[pkt.Flow].srtt.StringMS(), color(pkt.Flow))

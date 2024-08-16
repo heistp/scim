@@ -122,6 +122,7 @@ const (
 	PlotInFlight         = false
 	PlotInFlightInterval = Clock(100 * time.Microsecond)
 	PlotCwnd             = true
+	PlotCwndInFlight     = false
 	PlotCwndInterval     = Clock(100 * time.Microsecond)
 	PlotRTT              = false
 	PlotRTTInterval      = Clock(100 * time.Microsecond)
