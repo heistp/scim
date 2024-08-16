@@ -423,13 +423,11 @@ func (m *Maslo) startProbe(flow *Flow, node Node) (ok bool) {
 	if flow.pacingRate <= t {
 		return
 	}
-	// init, advance to second stage, and skip if exit indicated
+	// initiate probe with customized instance of ESSP
 	e := NewEssp()
 	e.stage = 1
 	e.minRtt = flow.srtt
 	e.init(flow, node)
-	// initiate probe
-	ok = true
 	r0 := flow.pacingRate
 	flow.slowStart = e
 	flow.slowStartExit = NoResponse{}
@@ -446,6 +444,7 @@ func (m *Maslo) startProbe(flow *Flow, node Node) (ok bool) {
 	node.Logf("flow:%d maslo probe rate:%.0f->%.0f rate(prior-signal):%.0f cwnd:%d->%d",
 		flow.id, r0.Bps(), flow.getPacingRate().Bps(), m.priorRateOnSignal.Bps(),
 		c0, flow.cwnd)
+	ok = true
 	return
 }
 
