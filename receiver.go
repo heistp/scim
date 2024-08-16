@@ -211,13 +211,14 @@ func (r *Receiver) Stop(node Node) error {
 		for i, t := range r.total {
 			a += t
 			r := CalcBitrate(t, time.Duration(node.Now()))
-			node.Logf("flow %d bytes %d rate %f Mbps", i, t, r.Mbps())
+			node.Logf("flow:%d bytes %d rate %f Mbps", i, t, r.Mbps())
 		}
 		ar := CalcBitrate(a, time.Duration(node.Now()))
 		node.Logf("total  bytes %d rate %f Mbps", a, ar.Mbps())
 	}
 	d := time.Since(r.start)
-	node.Logf("received: %.0f packets/sec, ACK ratio: %f",
-		(float64(r.receivedPackets) / d.Seconds()), r.ackRatio())
+	node.Logf("receiver ACK ratio: %f", r.ackRatio())
+	node.Logf("sim performance: %.0f packets/sec",
+		(float64(r.receivedPackets) / d.Seconds()))
 	return nil
 }

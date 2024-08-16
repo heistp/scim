@@ -17,7 +17,7 @@ type SlowStart interface {
 
 // An initer an initialize a SlowStart algorithm.
 type initer interface {
-	init(*Flow, Node) (exit bool)
+	init(*Flow, Node)
 }
 
 // An updateRtter receives updated RTT samples.
@@ -278,7 +278,7 @@ type Essp struct {
 // NewEssp returns a new Essp.
 func NewEssp() *Essp {
 	return &Essp{
-		-1,       // stage
+		0,        // stage
 		0,        // ackedRem
 		0,        // iRtt
 		ClockMax, // minRtt
@@ -286,8 +286,10 @@ func NewEssp() *Essp {
 }
 
 // init implements SlowStart.
-func (l *Essp) init(flow *Flow, node Node) bool {
-	return l.advance("init", flow, node)
+func (l *Essp) init(flow *Flow, node Node) {
+	flow.pacingSSRatio = l.scale()
+	node.Logf("flow:%d essp init stage:%d k:%d scale:%.3f cwnd:%d rate:%.0f",
+		flow.id, l.stage, l.k(), l.scale(), flow.cwnd, flow.getPacingRate().Bps())
 }
 
 // reactToCE implements SlowStart.
@@ -325,7 +327,7 @@ func (l *Essp) advance(why string, flow *Flow, node Node) (exit bool) {
 	}
 	c0 := flow.cwnd
 	r0 := flow.getPacingRate()
-	if EsspCWNDTargeting && why != "init" {
+	if EsspCWNDTargeting {
 		c := c0 * Bytes(l.minRtt) / Bytes(l.rtt)
 		if flow.cwnd > c {
 			flow.setCWND(c)
@@ -340,7 +342,7 @@ func (l *Essp) advance(why string, flow *Flow, node Node) (exit bool) {
 	}
 	r := flow.getPacingRate()
 	node.Logf(
-		"essp flow:%d stage:%d k:%d scale:%.3f cwnd:%d->%d rate:%.0f->%.0f minRTT:%d rtt:%d (%s)",
+		"flow:%d essp advance stage:%d k:%d scale:%.3f cwnd:%d->%d rate:%.0f->%.0f minRTT:%d rtt:%d (%s)",
 		flow.id, l.stage, l.k(), l.scale(), c0, flow.cwnd, r0.Bps(), r.Bps(), l.minRtt, l.rtt, why)
 	return
 }
@@ -366,7 +368,7 @@ func (l *Essp) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 	//c0 := flow.cwnd
 	flow.setCWND(flow.cwnd + a/Bytes(l.k()))
 	l.ackedRem = a % Bytes(l.k())
-	//node.Logf("grow cwnd0:%d cwnd:%d", c0, flow.cwnd)
+	//node.Logf("flow:%d grow cwnd0:%d cwnd:%d", flow.id, c0, flow.cwnd)
 	return
 }
 

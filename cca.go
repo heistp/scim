@@ -363,8 +363,8 @@ func (m *Maslo) slowStartExit(flow *Flow, node Node) {
 	m.stage = -1
 	m.ortt = flow.srtt
 	m.priorRateOnSignal = flow.pacingRate
-	node.Logf("maslo ss-exit rate:%.0f cwnd:%d minrtt:%d srtt:%d",
-		flow.pacingRate.Bps(), flow.cwnd, flow.minRtt, flow.srtt)
+	node.Logf("flow:%d maslo ss-exit rate:%.0f cwnd:%d minrtt:%d srtt:%d",
+		flow.id, flow.pacingRate.Bps(), flow.cwnd, flow.minRtt, flow.srtt)
 	m.setSafeStage("init", flow, node)
 }
 
@@ -425,13 +425,9 @@ func (m *Maslo) startProbe(flow *Flow, node Node) (ok bool) {
 	}
 	// init, advance to second stage, and skip if exit indicated
 	e := NewEssp()
+	e.stage = 1
 	e.minRtt = flow.srtt
 	e.init(flow, node)
-	if x := e.advance("init", flow, node); x {
-		node.Logf("maslo probe skip")
-		m.priorRateOnSignal = flow.pacingRate
-		return
-	}
 	// initiate probe
 	ok = true
 	r0 := flow.pacingRate
@@ -447,8 +443,8 @@ func (m *Maslo) startProbe(flow *Flow, node Node) (ok bool) {
 	// old version below does not scale CWND
 	//flow.cwnd = Bytes(y * r)
 	flow.disableExplicitPacing()
-	node.Logf("maslo probe rate:%.0f->%.0f rate(prior-signal):%.0f cwnd:%d->%d",
-		r0.Bps(), flow.getPacingRate().Bps(), m.priorRateOnSignal.Bps(),
+	node.Logf("flow:%d maslo probe rate:%.0f->%.0f rate(prior-signal):%.0f cwnd:%d->%d",
+		flow.id, r0.Bps(), flow.getPacingRate().Bps(), m.priorRateOnSignal.Bps(),
 		c0, flow.cwnd)
 	return
 }
@@ -479,7 +475,7 @@ func (m *Maslo) updateRtt(rtt Clock, flow *Flow, node Node) {
 func (m *Maslo) setStage(stage int, reason string, flow *Flow, node Node) {
 	if stage != m.stage {
 		m.stage = stage
-		node.Logf("maslo flow:%d stage:%d reason:%s k:%d srtt:%dms",
+		node.Logf("flow:%d maslo set-stage stage:%d reason:%s k:%d srtt:%dms",
 			flow.id, m.stage, reason,
 			LeoK[m.stage], time.Duration(flow.srtt).Milliseconds())
 	}

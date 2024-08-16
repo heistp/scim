@@ -579,10 +579,7 @@ func (f *Flow) handleSynAck(pkt Packet, node Node) {
 	f.receiveNext = pkt.ACKNum
 	f.updateRTT(pkt, node)
 	if i, ok := f.slowStart.(initer); ok {
-		if i.init(f, node) {
-			f.exitSlowStart(node, "init")
-			f.signalNext = f.seq
-		}
+		i.init(f, node)
 	}
 	f.send(node)
 }
@@ -611,6 +608,12 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			r := da * Bytes(time.Second) / Bytes(f.srtt)
 			f.ratePlot.Dot(node.Now(), strconv.FormatUint(uint64(r), 10),
 				colorWhite)
+
+			dsa := r - f.sentRateWin.at(node.Now()-f.srtt)
+			dsas := float64(r) / float64(f.sentRateWin.at(node.Now()-f.srtt))
+			cr := f.inFlightWin.at(node.Now() - f.srtt)
+			node.Logf("dsa:%d dsas:%.3f c(-rtt):%d", dsa, dsas, cr)
+
 			// acceleration
 			f.ackedRateWin.add(node.Now(), r, node.Now()-f.srtt)
 			dr := r - f.ackedRateWin.at(node.Now()-f.srtt)
