@@ -319,8 +319,8 @@ func (l *Essp) scale() float64 {
 	return EsspScale[l.stage]
 }
 
-// advance moves to the next stage, and returns true if K would result in
-// Reno-linear growth or slower, meaning it's time to exit slow-start.
+// advance moves to the next stage, and returns true if the criteria for exiting
+// slow-start are met.
 func (l *Essp) advance(why string, flow *Flow, node Node) (exit bool) {
 	if l.stage++; l.stage >= LeoStageMax {
 		panic(fmt.Sprintf("max ESSP stage reached: %d", l.stage))
@@ -334,7 +334,7 @@ func (l *Essp) advance(why string, flow *Flow, node Node) (exit bool) {
 		}
 		defer l.resetRtt() // defers to after logging
 	}
-	if exit = Bytes(l.exitK()) >= flow.cwnd/MSS; exit {
+	if exit = Bytes(l.exitK()) >= c0/MSS; exit {
 		flow.pacingSSRatio = DefaultPacingSSRatio
 	} else {
 		flow.pacingSSRatio = l.scale()
