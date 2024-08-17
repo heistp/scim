@@ -84,6 +84,7 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 		if JitterCompensation {
 			d.jit.estimate(node.Now())
 			e = d.jit.adjustSojourn(e)
+			d.plotAdjSojourn(e, len(d.queue) == 0, node.Now())
 		}
 	}
 	d.deltim(e, node.Now()-d.priorTime, node)

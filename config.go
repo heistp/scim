@@ -140,6 +140,8 @@ const (
 const (
 	PlotSojourn             = true
 	PlotSojournInterval     = Clock(100 * time.Microsecond)
+	PlotAdjSojourn          = true
+	PlotAdjSojournInterval  = Clock(100 * time.Microsecond)
 	PlotQueueLength         = false
 	PlotQueueLengthInterval = Clock(100 * time.Microsecond)
 	PlotDeltaSigma          = false

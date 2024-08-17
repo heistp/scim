@@ -91,6 +91,7 @@ func (d *Deltic) Dequeue(node Node) (pkt Packet, ok bool) {
 	d.priorTime = node.Now()
 
 	d.plotSojourn(node.Now()-pkt.Enqueue, len(d.queue) == 0, node.Now())
+	d.plotAdjSojourn(s, len(d.queue) == 0, node.Now())
 	d.plotLength(len(d.queue), node.Now())
 	d.plotMark(m, node.Now())
 

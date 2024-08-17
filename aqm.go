@@ -21,6 +21,7 @@ type aqmPlot struct {
 	priorDrop  Clock
 	emitSigCtr int
 	sojourn    Xplot
+	adjSojourn Xplot
 	qlen       Xplot
 	deltaSigma Xplot
 	byteSec    Xplot
@@ -63,7 +64,17 @@ func newAqmPlot() *aqmPlot {
 				Label: "Sojourn time (ms)",
 			},
 			Decimation: PlotSojournInterval,
-		},
+		}, // sojourn
+		Xplot{
+			Title: "Queue Adjusted Sojourn Time",
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Adj. sojourn time (ms)",
+			},
+			Decimation: PlotAdjSojournInterval,
+		}, // sojourn
 		Xplot{
 			Title: "Queue Length",
 			X: Axis{
@@ -73,7 +84,7 @@ func newAqmPlot() *aqmPlot {
 				Label: "Length (packets)",
 			},
 			Decimation: PlotQueueLengthInterval,
-		},
+		}, // qlen
 		Xplot{
 			Title: "Delta-Sigma - delta:red, sigma:yellow",
 			X: Axis{
@@ -83,7 +94,7 @@ func newAqmPlot() *aqmPlot {
 				Label: "Value",
 			},
 			NonzeroAxis: true,
-		},
+		}, // deltaSigma
 		Xplot{
 			Title: "Queue Byte-Seconds",
 			X: Axis{
@@ -93,7 +104,7 @@ func newAqmPlot() *aqmPlot {
 				Label: "Byte-Seconds",
 			},
 			Decimation: PlotByteSecondsInterval,
-		},
+		}, // byteSec
 	}
 }
 
@@ -111,6 +122,11 @@ func (a *aqmPlot) Start(node Node) (err error) {
 	}
 	if PlotSojourn {
 		if err = a.sojourn.Open("sojourn.xpl"); err != nil {
+			return
+		}
+	}
+	if PlotAdjSojourn {
+		if err = a.adjSojourn.Open("adj-sojourn.xpl"); err != nil {
 			return
 		}
 	}
@@ -142,6 +158,9 @@ func (a *aqmPlot) Stop(node Node) error {
 	}
 	if PlotSojourn {
 		a.sojourn.Close()
+	}
+	if PlotAdjSojourn {
+		a.adjSojourn.Close()
 	}
 	if PlotQueueLength {
 		a.qlen.Close()
@@ -259,6 +278,17 @@ func (a *aqmPlot) plotSojourn(sojourn Clock, empty bool, now Clock) {
 			c = colorRed
 		}
 		a.sojourn.Dot(now, sojourn.StringMS(), c)
+	}
+}
+
+// plotAdjSojourn plots the adjusted sojourn time.
+func (a *aqmPlot) plotAdjSojourn(sojourn Clock, empty bool, now Clock) {
+	if PlotAdjSojourn {
+		c := colorWhite
+		if empty {
+			c = colorRed
+		}
+		a.adjSojourn.Dot(now, sojourn.StringMS(), c)
 	}
 }
 

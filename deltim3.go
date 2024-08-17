@@ -87,6 +87,7 @@ func (d *Deltim3) Dequeue(node Node) (pkt Packet, ok bool) {
 				d.jit.estimate(node.Now())
 				e = d.jit.adjustSojourn(e)
 			}
+			d.plotAdjSojourn(e, len(d.queue) == 0, node.Now())
 		}
 		d.deltim(e, node.Now()-d.priorTime, node)
 	}
