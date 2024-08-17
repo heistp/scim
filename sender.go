@@ -612,10 +612,10 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 			f.ratePlot.Dot(node.Now(), strconv.FormatUint(uint64(r), 10),
 				colorWhite)
 
-			dsa := r - f.sentRateWin.at(node.Now()-f.srtt)
-			dsas := float64(r) / float64(f.sentRateWin.at(node.Now()-f.srtt))
-			cr := f.inFlightWin.at(node.Now() - f.srtt)
-			node.Logf("dsa:%d dsas:%.3f c(-rtt):%d", dsa, dsas, cr)
+			//dsa := r - f.sentRateWin.at(node.Now()-f.srtt)
+			//dsas := float64(r) / float64(f.sentRateWin.at(node.Now()-f.srtt))
+			//cr := f.inFlightWin.at(node.Now() - f.srtt)
+			//node.Logf("dsa:%d dsas:%.3f c(-rtt):%d", dsa, dsas, cr)
 
 			// acceleration
 			f.ackedRateWin.add(node.Now(), r, node.Now()-f.srtt)
