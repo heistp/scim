@@ -360,12 +360,13 @@ func NewMaslo() *Maslo {
 // slowStartExit implements CCA.
 func (m *Maslo) slowStartExit(flow *Flow, node Node) {
 	flow.useExplicitPacing()
-	m.stage = -1
+	m.stage = 0
 	m.ortt = flow.srtt
 	m.priorRateOnSignal = flow.pacingRate
 	node.Logf("flow:%d maslo ss-exit rate:%.0f cwnd:%d minrtt:%d srtt:%d",
 		flow.id, flow.pacingRate.Bps(), flow.cwnd, flow.minRtt, flow.srtt)
 	m.setSafeStage("init", flow, node)
+	//m.adjustStage("init", flow, node)
 }
 
 // reactToCE implements CCA.
@@ -377,7 +378,7 @@ func (m *Maslo) reactToCE(flow *Flow, node Node) {
 			m.ortt = Clock(float64(m.ortt) * MasloBeta)
 		}
 		m.syncCWND(flow)
-		m.setSafeStage("CE", flow, node)
+		m.adjustStage("CE", flow, node)
 		flow.signalNext = flow.seq
 	}
 }
@@ -393,7 +394,7 @@ func (m *Maslo) reactToSCE(flow *Flow, node Node) {
 	}
 	//node.Logf("r0:%.3f r:%.3f", r0.Mbps(), flow.pacingRate.Mbps())
 	m.syncCWND(flow)
-	m.setSafeStage("SCE", flow, node)
+	m.adjustStage("SCE", flow, node)
 }
 
 // grow implements CCA.
@@ -470,17 +471,36 @@ func (m *Maslo) updateRtt(rtt Clock, flow *Flow, node Node) {
 	m.ortt = flow.srtt
 }
 
-// setSafeStage sets the stage to the current safe stage.
+// setSafeStage sets the stage to the current safe stage based on the RTT.
 func (m *Maslo) setSafeStage(reason string, flow *Flow, node Node) {
-	r := flow.srtt
-	if MasloAdjustSafeRTT {
-		if p := flow.pacingRate.Yps() / float64(MSS); p < MasloM {
-			r = Clock(float64(r) * MasloM / p)
-		}
-	}
+	r := m.safeStageRTT(flow)
 	s := m.safeStage(r, flow)
-	if s > m.stage || (s < m.stage && r <= m.stageFloor(m.stage)) {
-		node.Logf("flow:%d maslo set stage:%d->%d floor:%dms reason:%s k:%d srtt:%d->%dms",
+	if s != m.stage {
+		node.Logf("flow:%d maslo set stage:%d->%d reason:%s k:%d srtt:%d->%dms",
+			flow.id,
+			m.stage,
+			s,
+			reason,
+			LeoK[s],
+			time.Duration(flow.srtt).Milliseconds(),
+			time.Duration(r).Milliseconds())
+		m.stage = s
+	}
+}
+
+// adjustSafeStage increments or decrements the current stage based on the RTT.
+func (m *Maslo) adjustStage(reason string, flow *Flow, node Node) {
+	r := m.safeStageRTT(flow)
+	s := m.stage
+	if s < 0 { // TODO remove s < 0 check of stage initialized to -1
+		s = 0
+	} else if r > MasloStageRTT[s] {
+		s++
+	} else if r < m.stageFloor(s) {
+		s--
+	}
+	if s != m.stage {
+		node.Logf("flow:%d maslo adj stage:%d->%d floor:%dms reason:%s k:%d srtt:%d->%dms",
 			flow.id,
 			m.stage,
 			s,
@@ -491,6 +511,18 @@ func (m *Maslo) setSafeStage(reason string, flow *Flow, node Node) {
 			time.Duration(r).Milliseconds())
 		m.stage = s
 	}
+}
+
+// safeStageRTT returns a possibly adjusted RTT for use in determining the safe
+// stage.
+func (m *Maslo) safeStageRTT(flow *Flow) (rtt Clock) {
+	rtt = flow.srtt
+	if MasloAdjustSafeRTT {
+		if p := flow.pacingRate.Yps() / float64(MSS); p < MasloM {
+			rtt = Clock(float64(rtt) * MasloM / p)
+		}
+	}
+	return
 }
 
 // MasloStageRTT lists the max RTT up to which K for the indexed stage is safe.
