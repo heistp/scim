@@ -366,7 +366,6 @@ func (m *Maslo) slowStartExit(flow *Flow, node Node) {
 	node.Logf("flow:%d maslo ss-exit rate:%.0f cwnd:%d minrtt:%d srtt:%d",
 		flow.id, flow.pacingRate.Bps(), flow.cwnd, flow.minRtt, flow.srtt)
 	m.setSafeStage("init", flow, node)
-	//m.adjustStage("init", flow, node)
 }
 
 // reactToCE implements CCA.
@@ -378,7 +377,6 @@ func (m *Maslo) reactToCE(flow *Flow, node Node) {
 			m.ortt = Clock(float64(m.ortt) * MasloBeta)
 		}
 		m.syncCWND(flow)
-		m.adjustStage("CE", flow, node)
 		flow.signalNext = flow.seq
 	}
 }
@@ -394,7 +392,6 @@ func (m *Maslo) reactToSCE(flow *Flow, node Node) {
 	}
 	//node.Logf("r0:%.3f r:%.3f", r0.Mbps(), flow.pacingRate.Mbps())
 	m.syncCWND(flow)
-	m.adjustStage("SCE", flow, node)
 }
 
 // grow implements CCA.
@@ -469,6 +466,7 @@ func (m *Maslo) updateRtt(rtt Clock, flow *Flow, node Node) {
 	//node.Logf("ortt:%dns srtt:%dns ortt-srtt:%.9fs drate:%.0f bps",
 	//	m.ortt, flow.srtt, dr, flow.pacingRate.Bps()-r0.Bps())
 	m.ortt = flow.srtt
+	m.adjustStage(flow, node)
 }
 
 // setSafeStage sets the stage to the current safe stage based on the RTT.
@@ -476,7 +474,7 @@ func (m *Maslo) setSafeStage(reason string, flow *Flow, node Node) {
 	r := m.safeStageRTT(flow)
 	s := m.safeStage(r, flow)
 	if s != m.stage {
-		node.Logf("flow:%d maslo set stage:%d->%d reason:%s k:%d srtt:%d->%dms",
+		node.Logf("flow:%d maslo init stage:%d->%d reason:%s k:%d srtt:%d->%dms",
 			flow.id,
 			m.stage,
 			s,
@@ -489,23 +487,20 @@ func (m *Maslo) setSafeStage(reason string, flow *Flow, node Node) {
 }
 
 // adjustSafeStage increments or decrements the current stage based on the RTT.
-func (m *Maslo) adjustStage(reason string, flow *Flow, node Node) {
+func (m *Maslo) adjustStage(flow *Flow, node Node) {
 	r := m.safeStageRTT(flow)
 	s := m.stage
-	if s < 0 { // TODO remove s < 0 check of stage initialized to -1
-		s = 0
-	} else if r > MasloStageRTT[s] {
+	if r > MasloStageRTT[s] {
 		s++
 	} else if r < m.stageFloor(s) {
 		s--
 	}
 	if s != m.stage {
-		node.Logf("flow:%d maslo adj stage:%d->%d floor:%dms reason:%s k:%d srtt:%d->%dms",
+		node.Logf("flow:%d maslo adj stage:%d->%d floor:%dms k:%d srtt:%d->%dms",
 			flow.id,
 			m.stage,
 			s,
 			time.Duration(m.stageFloor(m.stage)).Milliseconds(),
-			reason,
 			LeoK[s],
 			time.Duration(flow.srtt).Milliseconds(),
 			time.Duration(r).Milliseconds())
