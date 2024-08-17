@@ -119,7 +119,7 @@ func (p *Xplot) decimate(now Clock, sym symbology, color color) bool {
 	i := (1024 * (int(sym) + 1)) * (int(color) + 1)
 	var ok bool
 	var c Clock
-	if c, ok = p.prior[i]; !ok || now-c > p.Decimation {
+	if c, ok = p.prior[i]; !ok || now-c >= p.Decimation {
 		p.prior[i] = now
 		return false
 	}
