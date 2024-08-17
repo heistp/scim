@@ -388,6 +388,16 @@ func (f *Flow) Start(node Node) (err error) {
 			return
 		}
 	}
+	if s, ok := f.slowStart.(Starter); ok {
+		if err = s.Start(node); err != nil {
+			return
+		}
+	}
+	if s, ok := f.cca.(Starter); ok {
+		if err = s.Start(node); err != nil {
+			return
+		}
+	}
 	return
 }
 
@@ -403,6 +413,16 @@ func (f *Flow) Stop(node Node) (err error) {
 		f.ratePlot.Close()
 		f.accelPlot.Close()
 		f.accel2Plot.Close()
+	}
+	if s, ok := f.slowStart.(Stopper); ok {
+		if err = s.Stop(node); err != nil {
+			return
+		}
+	}
+	if s, ok := f.cca.(Stopper); ok {
+		if err = s.Stop(node); err != nil {
+			return
+		}
 	}
 	return
 }
