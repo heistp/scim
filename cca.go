@@ -514,7 +514,7 @@ func (m *Maslo) safeStageRTT(flow *Flow) (rtt Clock) {
 	rtt = flow.srtt
 	if MasloAdjustSafeRTT {
 		if p := flow.pacingRate.Yps() / float64(MSS); p < MasloM {
-			rtt = Clock(float64(rtt) * MasloM / p)
+			rtt = Clock(float64(rtt) * 2 * MasloM / p)
 		}
 	}
 	return
