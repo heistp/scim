@@ -120,9 +120,12 @@ func (s *Sender) Handle(pkt Packet, node Node) error {
 		s.inFlight.Dot(node.Now(), s.flow[pkt.Flow].inFlight, color(pkt.Flow))
 	}
 	if PlotCwnd {
-		s.cwnd.Dot(node.Now(), s.flow[pkt.Flow].cwnd, color(pkt.Flow))
-		if PlotCwndInFlight {
-			s.cwnd.PlotX(node.Now(), s.flow[pkt.Flow].inFlight, color(pkt.Flow))
+		l := s.flow[pkt.Flow].inFlight
+		c := s.flow[pkt.Flow].cwnd
+		if PlotCwndLimit && l+MSS > c {
+			s.cwnd.PlotX(node.Now(), c, color(pkt.Flow+1))
+		} else {
+			s.cwnd.Dot(node.Now(), c, color(pkt.Flow))
 		}
 	}
 	if PlotRTT {
