@@ -578,7 +578,11 @@ func (m *Maslo) stageFloor(stage int) Clock {
 func (m *Maslo) syncCWND(flow *Flow) {
 	// new version
 	c := flow.cwndFromPacingRate()
-	flow.setCWND(Bytes(float64(c) * MasloCwndScaleFactor))
+	c = Bytes(float64(c) * MasloCwndScaleFactor)
+	if c < MasloMinimumCwnd {
+		c = MasloMinimumCwnd
+	}
+	flow.setCWND(c)
 	// old version
 	//y := flow.pacingRate.Yps()                  // rate in bytes/sec.
 	//r := time.Duration(flow.srtt).Seconds()     // smoothed RTT in seconds
