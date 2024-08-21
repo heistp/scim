@@ -390,6 +390,17 @@ func (m *Maslo) reactToSCE(flow *Flow, node Node) {
 	} else {
 		flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloSCEMD[m.stage])
 	}
+
+	// Jon's first attempt to tweak low-rate oscillations (too much):
+	// For each SCE mark received, adjust the send rate as already described,
+	// but also subtract one packet time from oRTT.
+	//d := flow.pacingDelay(MSS)
+	//m.ortt -= d
+	//node.Logf("oRTT:%d MSS(delay):%d", m.ortt, d)
+
+	// Jon's second attempt to tweak low-rate oscillations (still too much):
+	//m.ortt -= m.ortt * Clock(MSS) / Clock(flow.cwnd)
+
 	//node.Logf("r0:%.3f r:%.3f", r0.Mbps(), flow.pacingRate.Mbps())
 	m.syncCWND(flow)
 }
