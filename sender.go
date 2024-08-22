@@ -123,7 +123,7 @@ func (s *Sender) Handle(pkt Packet, node Node) error {
 		l := s.flow[pkt.Flow].inFlight
 		c := s.flow[pkt.Flow].cwnd
 		if PlotCwndLimit && l+MSS > c {
-			s.cwnd.PlotX(node.Now(), c, color(pkt.Flow+1))
+			s.cwnd.PlotX(node.Now(), c, color(pkt.Flow+2))
 		} else {
 			s.cwnd.Dot(node.Now(), c, color(pkt.Flow))
 		}
