@@ -343,7 +343,8 @@ func (c *CUBIC) target(cwnd Bytes, t Clock) Bytes {
 
 // Maslo implements the MASLO TCP CCA.
 type Maslo struct {
-	stage             int
+	stageI            int
+	stageD            int
 	ortt              Clock
 	priorRateOnSignal Bitrate
 }
@@ -351,7 +352,8 @@ type Maslo struct {
 // NewMaslo returns a new Maslo.
 func NewMaslo() *Maslo {
 	return &Maslo{
-		-1, // stage
+		-1, // stageI
+		-1, // stageD
 		0,  // ortt
 		0,  // priorRateOnSignal
 	}
@@ -360,12 +362,13 @@ func NewMaslo() *Maslo {
 // slowStartExit implements CCA.
 func (m *Maslo) slowStartExit(flow *Flow, node Node) {
 	flow.useExplicitPacing()
-	m.stage = 0
+	m.stageI = 0
+	m.stageD = 0
 	m.ortt = flow.srtt
 	m.priorRateOnSignal = flow.pacingRate
 	node.Logf("flow:%d maslo ss-exit rate:%.0f cwnd:%d minrtt:%d srtt:%d",
 		flow.id, flow.pacingRate.Bps(), flow.cwnd, flow.minRtt, flow.srtt)
-	m.setSafeStage("init", flow, node)
+	m.setSafeStage(flow, node)
 }
 
 // reactToCE implements CCA.
@@ -386,9 +389,9 @@ func (m *Maslo) reactToSCE(flow *Flow, node Node) {
 	m.priorRateOnSignal = flow.pacingRate
 	//r0 := flow.pacingRate
 	if MasloSCEMDApproximation {
-		flow.pacingRate -= flow.pacingRate / Bitrate(m.k()*MasloM)
+		flow.pacingRate -= flow.pacingRate / Bitrate(m.kD(flow)*MasloM)
 	} else {
-		flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloSCEMD[m.stage])
+		flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloSCEMD[m.stageD])
 	}
 
 	// Jon's first attempt to tweak low-rate oscillations (too much):
@@ -412,7 +415,7 @@ func (m *Maslo) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	}
 	//r0 := flow.pacingRate
 	//c0 := flow.cwnd
-	flow.pacingRate += Bitrate(Yps * Bitrate(acked) / Bitrate(m.k()))
+	flow.pacingRate += Bitrate(Yps * Bitrate(acked) / Bitrate(m.kI()))
 	if m.startProbe(flow, node) {
 		return
 	}
@@ -481,41 +484,67 @@ func (m *Maslo) updateRtt(rtt Clock, flow *Flow, node Node) {
 }
 
 // setSafeStage sets the stage to the current safe stage based on the RTT.
-func (m *Maslo) setSafeStage(reason string, flow *Flow, node Node) {
+func (m *Maslo) setSafeStage(flow *Flow, node Node) {
 	r := m.safeStageRTT(flow)
 	s := m.safeStage(r, flow)
-	if s != m.stage {
-		node.Logf("flow:%d maslo init stage:%d->%d reason:%s k:%d srtt:%d->%dms",
+	if s != m.stageI {
+		node.Logf("flow:%d maslo init stageI:%d->%d k:%d srtt:%d->%dms",
 			flow.id,
-			m.stage,
+			m.stageI,
 			s,
-			reason,
 			LeoK[s],
 			time.Duration(flow.srtt).Milliseconds(),
 			time.Duration(r).Milliseconds())
-		m.stage = s
+		m.stageI = s
+	}
+	s = m.safeStage(flow.srtt, flow)
+	if s != m.stageD {
+		node.Logf("flow:%d maslo init stageD:%d->%d k:%d srtt:%d",
+			flow.id,
+			m.stageD,
+			s,
+			LeoK[s],
+			time.Duration(flow.srtt).Milliseconds())
+		m.stageD = s
 	}
 }
 
 // adjustSafeStage increments or decrements the current stage based on the RTT.
 func (m *Maslo) adjustStage(flow *Flow, node Node) {
 	r := m.safeStageRTT(flow)
-	s := m.stage
+	s := m.stageI
 	if r > MasloStageRTT[s] {
 		s++
 	} else if r < m.stageFloor(s) {
 		s--
 	}
-	if s != m.stage {
-		node.Logf("flow:%d maslo adj stage:%d->%d floor:%dms k:%d srtt:%d->%dms",
+	if s != m.stageI {
+		node.Logf("flow:%d maslo adj stageI:%d->%d floor:%dms k:%d srtt:%d->%dms",
 			flow.id,
-			m.stage,
+			m.stageI,
 			s,
-			time.Duration(m.stageFloor(m.stage)).Milliseconds(),
+			time.Duration(m.stageFloor(m.stageI)).Milliseconds(),
 			LeoK[s],
 			time.Duration(flow.srtt).Milliseconds(),
 			time.Duration(r).Milliseconds())
-		m.stage = s
+		m.stageI = s
+	}
+	r = flow.srtt
+	s = m.stageD
+	if r > MasloStageRTT[s] {
+		s++
+	} else if r < m.stageFloor(s) {
+		s--
+	}
+	if s != m.stageD {
+		node.Logf("flow:%d maslo adj stageD:%d->%d floor:%dms k:%d srtt:%d",
+			flow.id,
+			m.stageD,
+			s,
+			time.Duration(m.stageFloor(m.stageD)).Milliseconds(),
+			LeoK[s],
+			time.Duration(flow.srtt).Milliseconds())
+		m.stageD = s
 	}
 }
 
@@ -602,14 +631,20 @@ func (m *Maslo) syncCWND(flow *Flow) {
 	//flow.setCWND(Bytes(2.0 * math.Sqrt(ka/ks) * c))
 }
 
-// k returns the current value of K for the
-func (m *Maslo) k() int {
-	if m.stage < 0 {
+// kD returns the current value of Kd.
+func (m *Maslo) kD(flow *Flow) int {
+	p := flow.pacingRate.Yps() / float64(MSS)
+	return int(math.Round(float64(m.kI()) * p / MasloM))
+}
+
+// kI returns the current value of Ki.
+func (m *Maslo) kI() int {
+	if m.stageI < 0 {
 		return LeoK[0]
-	} else if m.stage >= len(LeoK) {
+	} else if m.stageI >= len(LeoK) {
 		return LeoK[len(LeoK)-1]
 	}
-	return LeoK[m.stage]
+	return LeoK[m.stageI]
 }
 
 // clockRing is a ring buffer of Clock values.
