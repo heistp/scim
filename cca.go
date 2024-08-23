@@ -389,19 +389,19 @@ func (m *Maslo) reactToSCE(flow *Flow, node Node) {
 	m.priorRateOnSignal = flow.pacingRate
 	//r0 := flow.pacingRate
 	if MasloSCEMDApproximation {
-		flow.pacingRate -= flow.pacingRate / Bitrate(m.kD(flow)*MasloM)
+		flow.pacingRate -= flow.pacingRate / Bitrate(m.kD()*MasloM)
 	} else {
 		flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloSCEMD[m.stageD])
 	}
 
-	// Jon's first attempt to tweak low-rate oscillations (too much):
+	// first attempt to tweak low-rate oscillations (too much):
 	// For each SCE mark received, adjust the send rate as already described,
 	// but also subtract one packet time from oRTT.
 	//d := flow.pacingDelay(MSS)
 	//m.ortt -= d
 	//node.Logf("oRTT:%d MSS(delay):%d", m.ortt, d)
 
-	// Jon's second attempt to tweak low-rate oscillations (still too much):
+	// second attempt to tweak low-rate oscillations (still too much):
 	//m.ortt -= m.ortt * Clock(MSS) / Clock(flow.cwnd)
 
 	//node.Logf("r0:%.3f r:%.3f", r0.Mbps(), flow.pacingRate.Mbps())
@@ -472,9 +472,10 @@ func (m *Maslo) updateRtt(rtt Clock, flow *Flow, node Node) {
 	//	time.Duration(m.ortt-flow.srtt).Seconds() /
 	//	max(m.ortt, flow.srtt).Seconds())
 	// new version
+	p := flow.pacingRate.Yps() / float64(MSS)
 	flow.pacingRate += Bitrate(float64(flow.pacingRate) *
 		(time.Duration(m.ortt - flow.srtt).Seconds()) /
-		(1.0/MasloM + max(m.ortt, flow.srtt).Seconds()))
+		(1.0/MasloM + 1.0/p + max(m.ortt, flow.srtt).Seconds()))
 	m.syncCWND(flow)
 	//dr := time.Duration(m.ortt - flow.srtt).Seconds()
 	//node.Logf("ortt:%dns srtt:%dns ortt-srtt:%.9fs drate:%.0f bps",
@@ -487,64 +488,66 @@ func (m *Maslo) updateRtt(rtt Clock, flow *Flow, node Node) {
 func (m *Maslo) setSafeStage(flow *Flow, node Node) {
 	r := m.safeStageRTT(flow)
 	s := m.safeStage(r, flow)
-	if s != m.stageI {
-		node.Logf("flow:%d maslo init stageI:%d->%d k:%d srtt:%d->%dms",
-			flow.id,
-			m.stageI,
-			s,
-			LeoK[s],
-			time.Duration(flow.srtt).Milliseconds(),
-			time.Duration(r).Milliseconds())
-		m.stageI = s
-	}
-	s = m.safeStage(flow.srtt, flow)
 	if s != m.stageD {
-		node.Logf("flow:%d maslo init stageD:%d->%d k:%d srtt:%d",
+		node.Logf("flow:%d maslo init stageD:%d->%d k:%d srtt:%d->%dms",
 			flow.id,
 			m.stageD,
 			s,
 			LeoK[s],
-			time.Duration(flow.srtt).Milliseconds())
+			time.Duration(flow.srtt).Milliseconds(),
+			time.Duration(r).Milliseconds())
 		m.stageD = s
+	}
+	s = m.safeStage(flow.srtt, flow)
+	if s != m.stageI {
+		node.Logf("flow:%d maslo init stageI:%d->%d k:%d srtt:%d",
+			flow.id,
+			m.stageI,
+			s,
+			LeoK[s],
+			time.Duration(flow.srtt).Milliseconds())
+		m.stageI = s
 	}
 }
 
 // adjustSafeStage increments or decrements the current stage based on the RTT.
 func (m *Maslo) adjustStage(flow *Flow, node Node) {
 	r := m.safeStageRTT(flow)
-	s := m.stageI
-	if r > MasloStageRTT[s] {
-		s++
-	} else if r < m.stageFloor(s) {
-		s--
-	}
-	if s != m.stageI {
-		node.Logf("flow:%d maslo adj stageI:%d->%d floor:%dms k:%d srtt:%d->%dms",
-			flow.id,
-			m.stageI,
-			s,
-			time.Duration(m.stageFloor(m.stageI)).Milliseconds(),
-			LeoK[s],
-			time.Duration(flow.srtt).Milliseconds(),
-			time.Duration(r).Milliseconds())
-		m.stageI = s
-	}
-	r = flow.srtt
-	s = m.stageD
+	s := m.stageD
 	if r > MasloStageRTT[s] {
 		s++
 	} else if r < m.stageFloor(s) {
 		s--
 	}
 	if s != m.stageD {
-		node.Logf("flow:%d maslo adj stageD:%d->%d floor:%dms k:%d srtt:%d",
+		node.Logf("flow:%d maslo adj stageD:%d->%d stageI:%d floor:%dms Ki:%d srtt:%d->%dms",
 			flow.id,
 			m.stageD,
 			s,
+			m.stageI,
 			time.Duration(m.stageFloor(m.stageD)).Milliseconds(),
 			LeoK[s],
-			time.Duration(flow.srtt).Milliseconds())
+			time.Duration(flow.srtt).Milliseconds(),
+			time.Duration(r).Milliseconds())
 		m.stageD = s
+	}
+	r = flow.srtt
+	s = m.stageI
+	if r > MasloStageRTT[s] {
+		s++
+	} else if r < m.stageFloor(s) {
+		s--
+	}
+	if s != m.stageI {
+		node.Logf("flow:%d maslo adj stageI:%d->%d stageD:%d floor:%dms Kd:%d srtt:%d",
+			flow.id,
+			m.stageI,
+			s,
+			m.stageD,
+			time.Duration(m.stageFloor(m.stageI)).Milliseconds(),
+			LeoK[s],
+			time.Duration(flow.srtt).Milliseconds())
+		m.stageI = s
 	}
 }
 
@@ -632,9 +635,13 @@ func (m *Maslo) syncCWND(flow *Flow) {
 }
 
 // kD returns the current value of Kd.
-func (m *Maslo) kD(flow *Flow) int {
-	p := flow.pacingRate.Yps() / float64(MSS)
-	return int(math.Round(float64(m.kI()) * p / MasloM))
+func (m *Maslo) kD() int {
+	if m.stageD < 0 {
+		return LeoK[0]
+	} else if m.stageD >= len(LeoK) {
+		return LeoK[len(LeoK)-1]
+	}
+	return LeoK[m.stageD]
 }
 
 // kI returns the current value of Ki.
