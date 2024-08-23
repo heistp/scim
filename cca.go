@@ -645,9 +645,12 @@ func (m *Maslo) k(flow *Flow) (k int) {
 	default:
 		k = LeoK[m.stage]
 	}
-	if p := flow.pacingRate.Yps() / float64(MSS); p < MasloM {
-		k = int(math.Round(float64(k) * MasloM / p))
-	}
+	/*
+		// adjustment we tried without the RTT adjustment, didn't work out
+		if p := flow.pacingRate.Yps() / float64(MSS); p < MasloM {
+			k = int(math.Round(float64(k) * MasloM / p))
+		}
+	*/
 	return
 }
 
