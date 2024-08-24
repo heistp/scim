@@ -125,8 +125,6 @@ type Scalable struct {
 	growRem        Bytes
 	alpha          int
 	sceHistory     *clockRing
-	minRtt         Clock
-	maxRtt         Clock
 }
 
 // NewScalable returns a new Scalable.
@@ -138,8 +136,6 @@ func NewScalable(sce Responder, alpha int) *Scalable {
 		0,                 // growRem
 		alpha,             // alpha
 		newClockRing(Tau), // sceHistory
-		ClockMax,          // minRtt
-		0,                 // maxRtt
 	}
 }
 
@@ -147,15 +143,6 @@ func NewScalable(sce Responder, alpha int) *Scalable {
 func (s *Scalable) reactToCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
 		c := flow.cwnd
-		if ScalableCWNDTargetingCE && s.minRtt < ClockMax && s.maxRtt > 0 {
-			c0 := flow.cwnd
-			cr := flow.inFlightWin.at(node.Now() - flow.srtt)
-			c = cr * Bytes(s.minRtt) / Bytes(s.maxRtt)
-			node.Logf("c0:%d cr:%d c:%d maxRtt:%d minRtt:%d",
-				c0, cr, c, s.maxRtt, s.minRtt)
-			s.maxRtt = 0
-			s.minRtt = ClockMax
-		}
 		flow.setCWND(Bytes(float64(c) * ScalableCEMD))
 		flow.signalNext = flow.seq
 	}
@@ -202,16 +189,6 @@ func (s *Scalable) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	*/
 
 	flow.setCWND(flow.cwnd + max(r, g))
-}
-
-// updateRtt implements updateRtter.
-func (s *Scalable) updateRtt(rtt Clock, flow *Flow, node Node) {
-	if rtt > s.maxRtt {
-		s.maxRtt = rtt
-	}
-	if rtt < s.minRtt {
-		s.minRtt = rtt
-	}
 }
 
 // CUBIC implements a basic version of RFC9438 CUBIC.

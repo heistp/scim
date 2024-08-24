@@ -228,7 +228,6 @@ const (
 	ScalableCEMD             = 0.7   // RFC 8511
 	ScalableRenoFloor        = false // if true, grow at least by Reno-linear
 	ScalableNoGrowthOnSignal = true  // if true, do not grow on ECE or ESCE
-	ScalableCWNDTargetingCE  = false // if true, do targeting on CE
 )
 
 // Sender: MASLO params
