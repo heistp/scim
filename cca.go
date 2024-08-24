@@ -387,7 +387,7 @@ func (m *Maslo) reactToSCE(flow *Flow, node Node) {
 	m.priorRateOnSignal = flow.pacingRate
 	//r0 := flow.pacingRate
 	if MasloSCEMDApproximation {
-		flow.pacingRate -= flow.pacingRate / Bitrate(m.k(flow)*MasloM)
+		flow.pacingRate -= flow.pacingRate / Bitrate(m.k()*MasloM)
 	} else {
 		flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloSCEMD[m.stage])
 	}
@@ -413,7 +413,7 @@ func (m *Maslo) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	}
 	//r0 := flow.pacingRate
 	//c0 := flow.cwnd
-	flow.pacingRate += Bitrate(Yps * Bitrate(acked) / Bitrate(m.k(flow)))
+	flow.pacingRate += Bitrate(Yps * Bitrate(acked) / Bitrate(m.k()))
 	if m.startProbe(flow, node) {
 		return
 	}
@@ -636,7 +636,7 @@ func (m *Maslo) syncCWND(flow *Flow) {
 }
 
 // k returns the current value of K.
-func (m *Maslo) k(flow *Flow) (k int) {
+func (m *Maslo) k() (k int) {
 	switch {
 	case m.stage < 0:
 		k = LeoK[0]
