@@ -735,8 +735,8 @@ func (f *Flow) updateRTT(pkt Packet, node Node) {
 // setCWND updates the congestion window to the given value and performs
 // clamping so that it doesn't fall below MSS.
 func (f *Flow) setCWND(cwnd Bytes) {
-	if cwnd < MSS {
-		cwnd = MSS
+	if cwnd < 2*MSS {
+		cwnd = 2 * MSS
 	}
 	f.cwnd = cwnd
 }
