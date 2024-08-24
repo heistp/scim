@@ -447,7 +447,7 @@ func (m *Maslo) startProbe(flow *Flow, node Node) (ok bool) {
 	c0 := flow.cwnd
 	// new version below scales CWND
 	k := Bytes(e.k())
-	flow.cwnd = Bytes(y*r) * (k - 1) / k
+	flow.setCWND(Bytes(y*r) * (k - 1) / k)
 	// old version below does not scale CWND
 	//flow.cwnd = Bytes(y * r)
 	flow.disableExplicitPacing()
