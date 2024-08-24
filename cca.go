@@ -418,8 +418,8 @@ func (m *Maslo) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 		return
 	}
 	m.syncCWND(flow)
-	//node.Logf("maslo grow k:%d rate:%.3f->%.3f cwnd:%d->%d", m.k(), r0.Mbps(),
-	//	flow.pacingRate.Mbps(), c0, flow.cwnd)
+	//node.Logf("maslo grow k:%d acked:%d rate:%.3f->%.3f cwnd:%d->%d", m.k(),
+	//	acked, r0.Mbps(), flow.pacingRate.Mbps(), c0, flow.cwnd)
 }
 
 // startProbe starts a bandwidth probe by re-entering slow-start with ESSP.
@@ -515,7 +515,9 @@ func (m *Maslo) adjustStage(flow *Flow, node Node) {
 	r := m.safeStageRTT(flow)
 	s := m.stage
 	if r > MasloStageRTT[s] {
-		s++
+		if s++; s >= len(MasloStageRTT) {
+			s = len(MasloStageRTT) - 1
+		}
 	} else if r < m.stageFloor(s) {
 		s--
 	}
