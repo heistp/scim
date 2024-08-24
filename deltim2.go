@@ -45,6 +45,7 @@ type Deltim2 struct {
 	updateStart Clock
 	updateEnd   Clock
 	idleTime    Clock
+	jit         jitterEstimator
 	// Plots
 	*aqmPlot
 }
@@ -61,12 +62,13 @@ func NewDeltim2(burst, update Clock) *Deltim2 {
 		0,                          // priorTime
 		0,                          // priorError
 		newErrorWindow(int(burst/update)+2, burst), // win
-		math.MaxInt64, // minDelay
-		0,             // updateIdle
-		0,             // updateStart
-		0,             // updateEnd
-		0,             // idleTime
-		newAqmPlot(),  // aqmPlot
+		math.MaxInt64,     // minDelay
+		0,                 // updateIdle
+		0,                 // updateStart
+		0,                 // updateEnd
+		0,                 // idleTime
+		jitterEstimator{}, // jit
+		newAqmPlot(),      // aqmPlot
 	}
 }
 
@@ -79,6 +81,9 @@ func (d *Deltim2) Start(node Node) error {
 func (d *Deltim2) Enqueue(pkt Packet, node Node) {
 	if len(d.queue) == 0 {
 		d.idleTime = node.Now() - d.priorTime
+		if JitterCompensation {
+			d.jit.prior = node.Now()
+		}
 	}
 	pkt.Enqueue = node.Now()
 	d.queue = append(d.queue, pkt)
@@ -99,6 +104,11 @@ func (d *Deltim2) Dequeue(node Node) (pkt Packet, ok bool) {
 	// update minimum delay from next packet, or 0 if no next packet
 	if len(d.queue) > 0 {
 		s := node.Now() - d.queue[0].Enqueue
+		if JitterCompensation {
+			d.jit.estimate(node.Now())
+			s = d.jit.adjustSojourn(s)
+			d.plotAdjSojourn(s, len(d.queue) == 0, node.Now())
+		}
 		if s < d.minDelay {
 			d.minDelay = s
 		}
