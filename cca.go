@@ -87,6 +87,11 @@ func NewReno2(sce Responder) *Reno2 {
 	}
 }
 
+// slowStartExit implements CCA.
+func (r *Reno2) slowStartExit(flow *Flow, node Node) {
+	r.growPrior = node.Now()
+}
+
 // reactToCE implements CCA.
 func (r *Reno2) reactToCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
@@ -139,6 +144,13 @@ func NewScalable(sce Responder, alpha int) *Scalable {
 	}
 }
 
+// slowStartExit implements CCA.
+func (s *Scalable) slowStartExit(flow *Flow, node Node) {
+	if ScalableRenoFloor {
+		s.growPrior = node.Now()
+	}
+}
+
 // reactToCE implements CCA.
 func (s *Scalable) reactToCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
@@ -182,9 +194,9 @@ func (s *Scalable) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 
 	/*
 		if g > r {
-			node.Logf("scal %d", flow.cwnd)
+			node.Logf("scal +%d %d", g, flow.cwnd)
 		} else {
-			node.Logf("reno %d", flow.cwnd)
+			node.Logf("reno +%d %d", r, flow.cwnd)
 		}
 	*/
 
