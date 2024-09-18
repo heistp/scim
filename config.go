@@ -17,11 +17,11 @@ const Duration = 60 * time.Second
 // Sender and Delay: flows
 var (
 	Flows = []Flow{
-		AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewMaslo(), Pacing, true),
+		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewMaslo(), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewReno(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewReno2(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
-		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewScalable(RMD, 200), Pacing, true),
+		AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewScalable(SMD, 200), Pacing, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{1, Clock(30 * time.Second), true},
@@ -60,13 +60,19 @@ var (
 	RRF = RateFairMD{CEMD, Clock(10 * time.Millisecond)}
 	RHF = HybridFairMD{CEMD, Clock(10 * time.Millisecond)}
 	RMF = MildFairMD{CEMD, Clock(10 * time.Millisecond)}
+
+	// Scalable Response
+	SMD = MD(SCE_MD)
+	SRF = RateFairMD{ScalableCEMD, Clock(10 * time.Millisecond)}
+	SHF = HybridFairMD{ScalableCEMD, Clock(10 * time.Millisecond)}
+	SMF = MildFairMD{ScalableCEMD, Clock(10 * time.Millisecond)}
 )
 
 // IFace: initial rate and rate schedule
 var RateInit = 100 * Mbps
 var RateSchedule = []RateAt{
-	//RateAt{Clock(10 * time.Second), 10 * Mbps},
-	//RateAt{Clock(40 * time.Second), 100 * Mbps},
+	//RateAt{Clock(10 * time.Second), 100 * Mbps},
+	//RateAt{Clock(30 * time.Second), 1000 * Mbps},
 }
 
 //func init() {
@@ -77,11 +83,11 @@ var RateSchedule = []RateAt{
 //}
 
 // Iface: DelTiC AQM config
-var UseAQM = NewDeltic(
-	Clock(5*time.Millisecond),   // SCE
-	Clock(25*time.Millisecond),  // CE
-	Clock(125*time.Millisecond), // drop
-)
+//var UseAQM = NewDeltic(
+//	Clock(5*time.Millisecond),   // SCE
+//	Clock(25*time.Millisecond),  // CE
+//	Clock(125*time.Millisecond), // drop
+//)
 
 // Iface: DelTiC-MDS AQM config
 //var UseAQM = NewDelticMDS(Clock(5000 * time.Microsecond))
@@ -95,7 +101,7 @@ var UseAQM = NewDeltic(
 
 // Iface: DelTiM3 AQM config
 var (
-	//UseAQM           = NewDeltim3(Clock(5000 * time.Microsecond))
+	UseAQM           = NewDeltim3(Clock(5000 * time.Microsecond))
 	DeltimIdleWindow = Clock(20 * time.Millisecond)
 )
 
@@ -226,8 +232,8 @@ const (
 // Sender: Scalable params
 const (
 	ScalableCEMD             = 0.7   // RFC 8511
-	ScalableRenoFloor        = false // if true, grow at least by Reno-linear
-	ScalableNoGrowthOnSignal = true  // if true, do not grow on ECE or ESCE
+	ScalableRenoFloor        = true  // if true, grow at least by Reno-linear
+	ScalableNoGrowthOnSignal = false // if true, do not grow on ECE or ESCE
 )
 
 // Sender: MASLO params
