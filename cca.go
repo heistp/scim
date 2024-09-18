@@ -69,7 +69,8 @@ func (r *Reno) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	}
 }
 
-// Reno2 implements an experimental version of Reno.
+// Reno2 implements an experimental version of Reno that should be nearly
+// equivalent to Reno, but grows smoothly based on time instead of once per RTT.
 type Reno2 struct {
 	sce        Responder
 	growPrior  Clock
@@ -176,7 +177,8 @@ func (s *Scalable) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 		return
 	}
 
-	// calculate Reno-linear growth
+	// calculate Reno-linear growth.  Note that this time-based technique would
+	// need to be modified to handle when the sender is application-limited.
 	var r Bytes
 	if ScalableRenoFloor {
 		s.growOscillator += node.Now() - s.growPrior
@@ -193,6 +195,7 @@ func (s *Scalable) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	s.growRem = a % Bytes(s.alpha)
 
 	/*
+		// growth debugging
 		if g > r {
 			node.Logf("scal +%d %d", g, flow.cwnd)
 		} else {
