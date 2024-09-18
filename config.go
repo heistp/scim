@@ -115,7 +115,7 @@ var (
 // Iface: Ramp AQM config
 var (
 	//UseAQM     = NewRamp()
-	SCERampMin = Clock(TransferTime(RateInit, Bytes(MSS))) * 1
+	SCERampMin = Clock(TransferTime(RateInit, Bytes(MTU))) * 1
 	SCERampMax = Clock(100 * time.Millisecond)
 )
 
@@ -164,8 +164,8 @@ const (
 
 // Receiver: plots
 const (
-	PlotGoodput       = true
-	PlotGoodputPerRTT = 1
+	PlotThroughput       = true
+	PlotThroughputPerRTT = 1
 )
 
 // Receiver: delayed ACKs (>0 enables delayed ACKs)
@@ -217,9 +217,11 @@ const (
 
 // Sender: TCP params
 const (
-	MSS      = Bytes(1500)
-	IW       = 10 * MSS
-	RTTAlpha = 0.125 // RFC 6298
+	MTU       = Bytes(1500)
+	HeaderLen = 20 + 20 + 12 // IPv4 + TCP + timestamps
+	MSS       = MTU - HeaderLen
+	IW        = 10 * MSS
+	RTTAlpha  = 0.125 // RFC 6298
 )
 
 // Sender: CUBIC params

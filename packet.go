@@ -3,9 +3,10 @@
 
 package main
 
-// Packet represents a network packet in the simulation.  For now, this is
-// essentially synonymous with a TCP segment.
+// Packet represents a network packet in the simulation, which for now always
+// includes an approximation of a TCP segment.
 type Packet struct {
+	// IP fields
 	Len Bytes
 
 	// TCP segment fields
@@ -20,9 +21,13 @@ type Packet struct {
 	SCECapable SCECapable
 	SCE        bool
 	ESCE       bool
-	Delayed    bool
-	Enqueue    Clock
 	Sent       Clock
+
+	// non-standard fields for simulation purposes
+	Delayed bool
+
+	// AQM fields
+	Enqueue Clock
 }
 
 // handleSim implements output.
@@ -41,12 +46,17 @@ func (p Packet) handleNode(node *node) (err error) {
 	return node.handler.Handle(p, node)
 }
 
+// SegmentLen returns the size of the payload (IP length minus header bytes).
+func (p Packet) SegmentLen() Bytes {
+	return p.Len - HeaderLen
+}
+
 // NextSeq returns the next expected sequence number after this Packet.
 func (p Packet) NextSeq() Seq {
 	if p.SYN {
 		return p.Seq + 1
 	}
-	return p.Seq + Seq(p.Len)
+	return p.Seq + Seq(p.SegmentLen())
 }
 
 // pktbuf is a buffer for packets, using the heap package.

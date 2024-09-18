@@ -18,7 +18,7 @@ type Receiver struct {
 	ackedPackets    int
 	total           []Bytes
 	maxRTTFlow      FlowID
-	goodput         Xplot
+	thruput         Xplot
 	flow            []rflow
 }
 
@@ -73,21 +73,21 @@ func NewReceiver() *Receiver {
 		make([]Bytes, len(Flows)), // total
 		0,                         // maxRTTFlow
 		Xplot{
-			Title: "Goodput",
+			Title: "IP Throughput",
 			X: Axis{
 				Label: "Time (S)",
 			},
 			Y: Axis{
-				Label: "Goodput (Mbps)",
+				Label: "Throughput (Mbps)",
 			},
-		}, // goodput
+		}, // thruput
 		f, // flow
 	}
 }
 
 // Start implements Starter.
 func (r *Receiver) Start(node Node) (err error) {
-	if PlotGoodput {
+	if PlotThroughput {
 		var m Clock
 		for i := range Flows {
 			d := FlowDelay[i]
@@ -96,7 +96,7 @@ func (r *Receiver) Start(node Node) (err error) {
 				r.maxRTTFlow = FlowID(i)
 			}
 		}
-		if err = r.goodput.Open("goodput.xpl"); err != nil {
+		if err = r.thruput.Open("thruput.xpl"); err != nil {
 			return
 		}
 	}
@@ -108,8 +108,8 @@ func (r *Receiver) Start(node Node) (err error) {
 func (r *Receiver) Handle(pkt Packet, node Node) error {
 	r.receive(pkt, node)
 	r.receivedPackets++
-	if PlotGoodput {
-		r.updateGoodput(pkt, node)
+	if PlotThroughput {
+		r.updateThoughput(pkt, node)
 		r.total[pkt.Flow] += pkt.Len
 	}
 	return nil
@@ -175,13 +175,13 @@ func (r *Receiver) scheduleAck(pkt Packet, node Node) {
 	node.Timer(DelayedACKTime, pkt)
 }
 
-func (r *Receiver) updateGoodput(pkt Packet, node Node) {
+func (r *Receiver) updateThoughput(pkt Packet, node Node) {
 	r.count[pkt.Flow] += pkt.Len
 	r.countAll += pkt.Len
 	e := node.Now() - r.countStart[pkt.Flow]
-	if e > PlotGoodputPerRTT*FlowDelay[pkt.Flow] {
+	if e > PlotThroughputPerRTT*FlowDelay[pkt.Flow] {
 		g := CalcBitrate(r.count[pkt.Flow], time.Duration(e))
-		r.goodput.Dot(
+		r.thruput.Dot(
 			node.Now(),
 			strconv.FormatFloat(g.Mbps(), 'f', -1, 64),
 			color(pkt.Flow))
@@ -190,7 +190,7 @@ func (r *Receiver) updateGoodput(pkt Packet, node Node) {
 
 		if pkt.Flow == r.maxRTTFlow {
 			g := CalcBitrate(r.countAll, time.Duration(e))
-			r.goodput.PlotX(
+			r.thruput.PlotX(
 				node.Now(),
 				strconv.FormatFloat(g.Mbps(), 'f', -1, 64),
 				color(len(Flows)))
@@ -205,8 +205,8 @@ func (r *Receiver) ackRatio() float64 {
 }
 
 func (r *Receiver) Stop(node Node) error {
-	if PlotGoodput {
-		r.goodput.Close()
+	if PlotThroughput {
+		r.thruput.Close()
 		var a Bytes
 		for i, t := range r.total {
 			a += t

@@ -435,7 +435,7 @@ func (f *Flow) setActive(active bool, node Node) {
 	f.active = active
 	if active {
 		if !f.open {
-			f.sendPacket(Packet{SYN: true}, node)
+			f.sendPacket(Packet{Len: HeaderLen, SYN: true}, node)
 		} else {
 			f.send(node)
 		}
@@ -452,7 +452,7 @@ func (f *Flow) send(node Node) {
 	}
 	// no pacing
 	if !f.pacing {
-		for b := true; b; b = f.sendPacket(Packet{Len: MSS}, node) {
+		for b := true; b; b = f.sendPacket(Packet{Len: MTU}, node) {
 		}
 		return
 	}
@@ -460,12 +460,12 @@ func (f *Flow) send(node Node) {
 	if f.pacingWait {
 		return
 	}
-	if !f.sendPacket(Packet{Len: MSS}, node) {
+	if !f.sendPacket(Packet{Len: MTU}, node) {
 		return
 	}
-	d := f.pacingDelay(MSS)
+	d := f.pacingDelay(MTU)
 	if d == 0 {
-		for b := true; b; b = f.sendPacket(Packet{Len: MSS}, node) {
+		for b := true; b; b = f.sendPacket(Packet{Len: MTU}, node) {
 		}
 		return
 	}
@@ -479,16 +479,7 @@ type FlowSend FlowID
 // sendPacket sets relevant fields and sends the given Packet.  It returns
 // false if it wasn't possible to send because cwnd would be exceeded.
 func (f *Flow) sendPacket(pkt Packet, node Node) bool {
-	if pkt.SYN {
-		if pkt.Len > 0 {
-			panic("SYN packet must have length 0")
-		}
-	} else {
-		if pkt.Len <= 0 {
-			panic(fmt.Sprintf("non-SYN packet length %d <= 0", pkt.Len))
-		}
-	}
-	if f.inFlight+pkt.Len > f.cwnd {
+	if f.inFlight+pkt.SegmentLen() > f.cwnd {
 		return false
 	}
 	pkt.Flow = f.id
@@ -501,7 +492,7 @@ func (f *Flow) sendPacket(pkt Packet, node Node) bool {
 		f.seqPlot.Dot(node.Now(), strconv.FormatInt(int64(pkt.Seq), 10),
 			colorRed)
 	}
-	f.sent += pkt.Len
+	f.sent += pkt.SegmentLen()
 	if PlotSent {
 		f.sentPlot.Dot(node.Now(), strconv.FormatUint(uint64(f.sent), 10),
 			colorRed)
@@ -528,8 +519,8 @@ func (f *Flow) sendPacket(pkt Packet, node Node) bool {
 				colorRed)
 		}
 	}
-	f.addInFlight(pkt.Len, node.Now())
-	f.seq += Seq(pkt.Len)
+	f.addInFlight(pkt.SegmentLen(), node.Now())
+	f.seq += Seq(pkt.SegmentLen())
 	return true
 }
 
@@ -537,7 +528,6 @@ func (f *Flow) sendPacket(pkt Packet, node Node) bool {
 func (f *Flow) addInFlight(b Bytes, now Clock) {
 	f.inFlight += b
 	f.inFlightWin.add(now, f.inFlight, now-f.srtt)
-	//f.inFlightWin.add(now, f.cwnd, now-f.srtt)
 }
 
 // pacingDelay returns the Clock time to wait to pace the given bytes.
@@ -733,7 +723,7 @@ func (f *Flow) updateRTT(pkt Packet, node Node) {
 }
 
 // setCWND updates the congestion window to the given value and performs
-// clamping so that it doesn't fall below MSS.
+// clamping so that it doesn't fall below 2x MSS.
 func (f *Flow) setCWND(cwnd Bytes) {
 	if cwnd < 2*MSS {
 		cwnd = 2 * MSS
