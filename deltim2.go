@@ -33,11 +33,13 @@ type Deltim2 struct {
 	// calculated values
 	resonance Clock
 	// DelTiC variables
-	acc        Clock
-	sceOsc     Clock
-	ceOsc      Clock
-	priorTime  Clock
-	priorError Clock
+	acc         Clock
+	sceOsc      Clock
+	ceOsc       Clock
+	priorTime   Clock
+	priorError  Clock
+	activeStart Clock
+	activeTime  Clock
 	// error window variables
 	win         *errorWindow
 	minDelay    Clock
@@ -61,6 +63,8 @@ func NewDeltim2(burst, update Clock) *Deltim2 {
 		Clock(time.Second) / 2,     // ceOsc
 		0,                          // priorTime
 		0,                          // priorError
+		0,                          // activeStart
+		0,                          // activeTime
 		newErrorWindow(int(burst/update)+2, burst), // win
 		math.MaxInt64,     // minDelay
 		0,                 // updateIdle
@@ -81,6 +85,7 @@ func (d *Deltim2) Start(node Node) error {
 func (d *Deltim2) Enqueue(pkt Packet, node Node) {
 	if len(d.queue) == 0 {
 		d.idleTime = node.Now() - d.priorTime
+		d.activeStart = node.Now()
 		if JitterCompensation {
 			d.jit.prior = node.Now()
 		}
@@ -118,9 +123,12 @@ func (d *Deltim2) Dequeue(node Node) (pkt Packet, ok bool) {
 
 	// update after update time
 	if node.Now() > d.updateEnd {
-		// add min delay to window
 		d.win.add(d.minDelay, node.Now())
-		d.deltic(node.Now() - d.updateStart)
+		if d.updateIdle > 0 {
+			d.deltimIdle(node)
+		} else {
+			d.deltim(d.win.minimum(), node.Now()-d.updateStart, node)
+		}
 		// reset update state
 		d.minDelay = math.MaxInt64
 		d.updateIdle = 0
@@ -143,6 +151,9 @@ func (d *Deltim2) Dequeue(node Node) (pkt Packet, ok bool) {
 		pkt.CE = true
 	}
 
+	if len(d.queue) == 0 {
+		d.activeTime = node.Now() - d.activeStart
+	}
 	d.idleTime = 0
 	d.priorTime = node.Now()
 
@@ -153,6 +164,7 @@ func (d *Deltim2) Dequeue(node Node) (pkt Packet, ok bool) {
 	return
 }
 
+/*
 // deltic is the delta-sigma control function, with idle time modification.
 func (d *Deltim2) deltic(dt Clock) {
 	if dt > Clock(time.Second) {
@@ -184,6 +196,44 @@ func (d *Deltim2) deltic(dt Clock) {
 		// note: clamping oscillators not found to help, and if it's done, then
 		// the ratio between the SCE and CE oscillators needs to be maintained
 	}
+}
+*/
+
+// deltim is the delta-sigma control function, with idle time modification.
+func (d *Deltim2) deltim(err Clock, dt Clock, node Node) {
+	if dt > Clock(time.Second) {
+		dt = Clock(time.Second)
+	}
+	var delta, sigma Clock
+	delta = err - d.priorError
+	sigma = err.MultiplyScaled(dt)
+	d.priorError = err
+	/*
+		if err < 0 {
+			d.priorError = 0
+			//node.Logf("err:%d acc:%d delta:%d sigma:%d",
+			//	err, d.acc, delta, sigma)
+		}
+	*/
+	if d.acc += ((delta + sigma) * d.resonance); d.acc < 0 {
+		d.acc = 0
+		// note: clamping oscillators not found to help, and if it's done, then
+		// the ratio between the SCE and CE oscillators needs to be maintained
+	}
+	d.plotDeltaSigma(delta, sigma, node.Now())
+}
+
+// deltimIdle scales the accumulator by the utilization after an idle event.
+func (d *Deltim2) deltimIdle(node Node) {
+	i := min(d.idleTime, DeltimIdleWindow)
+	a := min(d.activeTime, DeltimIdleWindow-i)
+	p := float64(a+i) / float64(DeltimIdleWindow)
+	u := float64(a) / float64(a+i)
+	//a0 := d.acc
+	d.acc = Clock(float64(d.acc)*u*p + float64(d.acc)*(1.0-p))
+	d.plotDeltaSigma(0, 0, node.Now())
+	//node.Logf("i:%d a:%d p:%.9f u:%.3f acc0:%d acc:%d",
+	//	i, a, p, u, a0, d.acc)
 }
 
 // oscillate increments the oscillator and returns any resulting mark.
