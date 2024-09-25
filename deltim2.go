@@ -39,15 +39,15 @@ type Deltim2 struct {
 	priorTime   Clock
 	priorError  Clock
 	activeStart Clock
-	activeTime  Clock
 	// error window variables
-	win         *errorWindow
-	minDelay    Clock
-	updateIdle  Clock
-	updateStart Clock
-	updateEnd   Clock
-	idleTime    Clock
-	jit         jitterEstimator
+	win          *errorWindow
+	minDelay     Clock
+	updateActive Clock
+	updateIdle   Clock
+	updateStart  Clock
+	updateEnd    Clock
+	idleTime     Clock
+	jit          jitterEstimator
 	// Plots
 	*aqmPlot
 }
@@ -64,9 +64,9 @@ func NewDeltim2(burst, update Clock) *Deltim2 {
 		0,                          // priorTime
 		0,                          // priorError
 		0,                          // activeStart
-		0,                          // activeTime
 		newErrorWindow(int(burst/update)+2, burst), // win
 		math.MaxInt64,     // minDelay
+		0,                 // updateActive
 		0,                 // updateIdle
 		0,                 // updateStart
 		0,                 // updateEnd
@@ -103,7 +103,7 @@ func (d *Deltim2) Dequeue(node Node) (pkt Packet, ok bool) {
 	// pop from head
 	pkt, d.queue = d.queue[0], d.queue[1:]
 
-	// handle idle time
+	// add idle time
 	d.updateIdle += d.idleTime
 
 	// update minimum delay from next packet, or 0 if no next packet
@@ -125,12 +125,13 @@ func (d *Deltim2) Dequeue(node Node) (pkt Packet, ok bool) {
 	if node.Now() > d.updateEnd {
 		d.win.add(d.minDelay, node.Now())
 		if d.updateIdle > 0 {
-			d.deltimIdle(node)
+			d.deltimIdle(node, d.updateIdle, d.updateActive)
 		} else {
 			d.deltim(d.win.minimum(), node.Now()-d.updateStart, node)
 		}
 		// reset update state
 		d.minDelay = math.MaxInt64
+		d.updateActive = 0
 		d.updateIdle = 0
 		d.updateStart = node.Now()
 		d.updateEnd = node.Now() + d.update
@@ -151,9 +152,8 @@ func (d *Deltim2) Dequeue(node Node) (pkt Packet, ok bool) {
 		pkt.CE = true
 	}
 
-	if len(d.queue) == 0 {
-		d.activeTime = node.Now() - d.activeStart
-	}
+	d.updateActive += node.Now() - d.activeStart
+	d.activeStart = node.Now()
 	d.idleTime = 0
 	d.priorTime = node.Now()
 
@@ -224,16 +224,16 @@ func (d *Deltim2) deltim(err Clock, dt Clock, node Node) {
 }
 
 // deltimIdle scales the accumulator by the utilization after an idle event.
-func (d *Deltim2) deltimIdle(node Node) {
-	i := min(d.idleTime, DeltimIdleWindow)
-	a := min(d.activeTime, DeltimIdleWindow-i)
+func (d *Deltim2) deltimIdle(node Node, idle Clock, active Clock) {
+	i := min(idle, DeltimIdleWindow)
+	a := min(active, DeltimIdleWindow-i)
 	p := float64(a+i) / float64(DeltimIdleWindow)
 	u := float64(a) / float64(a+i)
-	//a0 := d.acc
+	a0 := d.acc
 	d.acc = Clock(float64(d.acc)*u*p + float64(d.acc)*(1.0-p))
 	d.plotDeltaSigma(0, 0, node.Now())
-	//node.Logf("i:%d a:%d p:%.9f u:%.3f acc0:%d acc:%d",
-	//	i, a, p, u, a0, d.acc)
+	node.Logf("i:%d a:%d p:%.9f u:%.3f acc0:%d acc:%d",
+		i, a, p, u, a0, d.acc)
 }
 
 // oscillate increments the oscillator and returns any resulting mark.
