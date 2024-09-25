@@ -188,7 +188,7 @@ func (r *Receiver) updateThoughput(pkt Packet, node Node) {
 		r.count[pkt.Flow] = 0
 		r.countStart[pkt.Flow] = node.Now()
 
-		if pkt.Flow == r.maxRTTFlow {
+		if len(Flows) > 1 && pkt.Flow == r.maxRTTFlow {
 			g := CalcBitrate(r.countAll, time.Duration(e))
 			r.thruput.PlotX(
 				node.Now(),
