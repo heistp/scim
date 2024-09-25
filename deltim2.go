@@ -229,11 +229,11 @@ func (d *Deltim2) deltimIdle(node Node, idle Clock, active Clock) {
 	a := min(active, DeltimIdleWindow-i)
 	p := float64(a+i) / float64(DeltimIdleWindow)
 	u := float64(a) / float64(a+i)
-	a0 := d.acc
+	//a0 := d.acc
 	d.acc = Clock(float64(d.acc)*u*p + float64(d.acc)*(1.0-p))
 	d.plotDeltaSigma(0, 0, node.Now())
-	node.Logf("i:%d a:%d p:%.9f u:%.3f acc0:%d acc:%d",
-		i, a, p, u, a0, d.acc)
+	//node.Logf("i:%d a:%d p:%.9f u:%.3f acc0:%d acc:%d",
+	//	i, a, p, u, a0, d.acc)
 }
 
 // oscillate increments the oscillator and returns any resulting mark.
