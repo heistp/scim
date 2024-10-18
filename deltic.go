@@ -43,7 +43,7 @@ func (d *Deltic) Start(node Node) error {
 // Enqueue implements AQM.
 func (d *Deltic) Enqueue(pkt Packet, node Node) {
 	pkt.Enqueue = node.Now()
-	if JitterCompensation && len(d.queue) == 0 {
+	if DelticJitterCompensation && len(d.queue) == 0 {
 		d.jit.prior = node.Now()
 	}
 	d.queue = append(d.queue, pkt)
@@ -60,7 +60,7 @@ func (d *Deltic) Dequeue(node Node) (pkt Packet, ok bool) {
 
 	// calculate sojourn and interval
 	s := node.Now() - pkt.Enqueue
-	if JitterCompensation {
+	if DelticJitterCompensation {
 		d.jit.estimate(node.Now())
 		s = d.jit.adjustSojourn(s)
 	}

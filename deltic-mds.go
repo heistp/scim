@@ -17,8 +17,8 @@ type DelticMDS struct {
 	resonance Clock
 	// DelTiC variables
 	acc          Clock
-	sceOsc       Clock
-	ceOsc        Clock
+	mdsOsc       Clock
+	osc          Clock
 	priorTime    Clock
 	priorSojourn Clock
 	// Plots
@@ -32,8 +32,8 @@ func NewDelticMDS(target Clock) *DelticMDS {
 		target,                      // target
 		Clock(time.Second) / target, // resonance
 		0,                           // acc
-		0,                           // sceOsc
-		Clock(time.Second) / 2,      // ceOsc
+		0,                           // mdsOsc
+		Clock(time.Second) / 2,      // osc
 		0,                           // priorTime
 		0,                           // priorSojourn
 		newAqmPlot(),                // aqmPlot
@@ -109,8 +109,8 @@ func (d *DelticMDS) deltic(sojourn Clock, dt Clock, node Node) {
 	d.priorSojourn = sojourn
 	if d.acc += ((delta + sigma) * d.resonance); d.acc < 0 {
 		d.acc = 0
-		d.sceOsc = 0
-		d.ceOsc = Clock(time.Second) / 2
+		d.mdsOsc = 0
+		d.osc = Clock(time.Second) / 2
 	}
 	//node.Logf("sojourn:%d dt:%d delta:%d sigma:%d acc:%d sceOsc:%d",
 	//	sojourn, dt, delta, sigma, d.acc, d.sceOsc)
@@ -126,37 +126,37 @@ func (d *DelticMDS) oscillate(dt Clock, node Node, pkt Packet) mark {
 	// base oscillator increment
 	i := d.acc.MultiplyScaled(dt) * d.resonance
 
-	// SCE oscillator
+	// MDS oscillator
 	var s mark
-	d.sceOsc += i
-	switch o := d.sceOsc; {
+	d.mdsOsc += i
+	switch o := d.mdsOsc; {
 	case o < Clock(time.Second):
 	case o < 2*Clock(time.Second):
 		s = markSCE
-		d.sceOsc -= Clock(time.Second)
+		d.mdsOsc -= Clock(time.Second)
 	case o < Tau*Clock(time.Second):
 		s = markCE
-		d.sceOsc -= Tau * Clock(time.Second)
+		d.mdsOsc -= Tau * Clock(time.Second)
 	default:
 		s = markDrop
-		d.sceOsc -= Tau * Clock(time.Second)
-		if d.sceOsc >= Tau*Clock(time.Second) {
+		d.mdsOsc -= Tau * Clock(time.Second)
+		if d.mdsOsc >= Tau*Clock(time.Second) {
 			d.acc -= d.acc >> 4
 		}
 	}
 
-	// CE oscillator
+	// conventional oscillator
 	var c mark
-	d.ceOsc += i / Tau
-	switch o := d.ceOsc; {
+	d.osc += i / Tau
+	switch o := d.osc; {
 	case o < Clock(time.Second):
 	case o < 2*Clock(time.Second):
 		c = markCE
-		d.ceOsc -= Clock(time.Second)
+		d.osc -= Clock(time.Second)
 	default:
 		c = markDrop
-		d.ceOsc -= Clock(time.Second)
-		if d.ceOsc >= 2*Clock(time.Second) {
+		d.osc -= Clock(time.Second)
+		if d.osc >= 2*Clock(time.Second) {
 			d.acc -= d.acc >> 4
 		}
 	}
