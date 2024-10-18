@@ -196,12 +196,10 @@ func (h *HyStartPP) updateRtt(rtt Clock, flow *Flow, node Node) {
 	h.rtt = rtt
 }
 
-// Essp reduces both the exponential base and the pacing scaling factor in
-// response to congestion signals.  K is the number of acked bytes before CWND
-// is increased by one byte, and follows the Essp numbers on congestion
-// signals.  The initial scale factor is the limit of the product ∏(i) 1+1/K(i).
+// Essp is a slow start implementation that reduces both the exponential base
+// and the pacing scaling factor in response to congestion signals and delay.
 //
-// TODO improve doc
+// https://github.com/heistp/essp/
 type Essp struct {
 	stage    int
 	ackedRem Bytes
