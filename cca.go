@@ -24,7 +24,6 @@ type slowStartExiter interface {
 // Reno implements TCP Reno.
 type Reno struct {
 	sce         Responder
-	caAcked     Bytes
 	priorGrowth Clock
 	sceHistory  *clockRing
 }
@@ -33,7 +32,6 @@ type Reno struct {
 func NewReno(sce Responder) *Reno {
 	return &Reno{
 		sce,               // sce
-		0,                 // caAcked
 		0,                 // priorGrowth
 		newClockRing(Tau), // sceHistory
 	}
@@ -52,25 +50,23 @@ func (r *Reno) reactToSCE(flow *Flow, node Node) {
 	if r.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
 		flow.receiveNext > flow.signalNext {
 		flow.setCWND(r.sce.Respond(flow, node))
-	} else {
-		//node.Logf("ignore SCE")
 	}
-	r.caAcked = 0
 }
 
 // grow implements CCA.
 func (r *Reno) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
-	r.caAcked += acked
-	//if r.caAcked >= flow.cwnd { // RFC 5681 recommended
-	if node.Now()-r.priorGrowth > flow.srtt {
+	if pkt.ECE || pkt.ESCE {
+		return
+	}
+
+	if node.Now()-r.priorGrowth > flow.srtt { // time-based growth
 		flow.setCWND(flow.cwnd + MSS)
-		r.caAcked = 0
 		r.priorGrowth = node.Now()
 	}
 }
 
 // Reno2 implements an experimental version of Reno that should be nearly
-// equivalent to Reno, but grows smoothly based on time instead of once per RTT.
+// equivalent to Reno, but grows smoothly based on time.
 type Reno2 struct {
 	sce        Responder
 	growPrior  Clock
@@ -113,13 +109,13 @@ func (r *Reno2) reactToSCE(flow *Flow, node Node) {
 
 // grow implements CCA.
 func (r *Reno2) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
-	//if !pkt.ECE && !pkt.ESCE {
-	r.growTimer += node.Now() - r.growPrior
-	for r.growTimer >= flow.srtt/Clock(MSS) {
-		flow.setCWND(flow.cwnd + 1)
-		r.growTimer -= flow.srtt / Clock(MSS)
+	if !pkt.ECE && !pkt.ESCE {
+		r.growTimer += node.Now() - r.growPrior
+		for r.growTimer >= flow.srtt/Clock(MSS) {
+			flow.setCWND(flow.cwnd + 1)
+			r.growTimer -= flow.srtt / Clock(MSS)
+		}
 	}
-	//}
 	r.growPrior = node.Now()
 }
 
@@ -129,26 +125,17 @@ type Scalable struct {
 	growPrior      Clock
 	growOscillator Clock
 	growRem        Bytes
-	alpha          int
 	sceHistory     *clockRing
 }
 
 // NewScalable returns a new Scalable.
-func NewScalable(sce Responder, alpha int) *Scalable {
+func NewScalable(sce Responder) *Scalable {
 	return &Scalable{
 		sce,               // sce
-		0,                 // growPrior
+		0,                 // priorGrowth
 		0,                 // growOscillator
 		0,                 // growRem
-		alpha,             // alpha
 		newClockRing(Tau), // sceHistory
-	}
-}
-
-// slowStartExit implements CCA.
-func (s *Scalable) slowStartExit(flow *Flow, node Node) {
-	if ScalableRenoFloor {
-		s.growPrior = node.Now()
 	}
 }
 
@@ -166,44 +153,42 @@ func (s *Scalable) reactToSCE(flow *Flow, node Node) {
 	if s.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
 		flow.receiveNext > flow.signalNext {
 		flow.setCWND(s.sce.Respond(flow, node))
-	} else {
-		//node.Logf("ignore SCE")
 	}
 }
 
 // grow implements CCA.
 func (s *Scalable) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
-	if ScalableNoGrowthOnSignal && (pkt.ECE || pkt.ESCE) {
+	if pkt.ECE || pkt.ESCE {
 		return
 	}
 
-	// calculate Reno-linear growth.  Note that this time-based technique would
-	// need to be modified to handle when the sender is application-limited.
-	var r Bytes
-	if ScalableRenoFloor {
-		s.growOscillator += node.Now() - s.growPrior
-		for s.growOscillator >= flow.srtt/Clock(MSS) {
-			r++
-			s.growOscillator -= flow.srtt / Clock(MSS)
+	// Reno-linear growth when below scalable cwnd threshold
+	if flow.cwnd < ScalableLwnd {
+		// smoother, time-based growth, if enabled
+		if ScalableRenoSmooth {
+			s.growOscillator += node.Now() - s.growPrior
+			var r Bytes
+			for s.growOscillator >= flow.srtt/Clock(MSS) {
+				r++
+				s.growOscillator -= flow.srtt / Clock(MSS)
+			}
+			flow.setCWND(flow.cwnd + r)
+			return
 		}
-		s.growPrior = node.Now()
+		// standard growth, one MSS per RTT
+		if node.Now()-s.growPrior > flow.srtt {
+			flow.setCWND(flow.cwnd + MSS)
+			s.growPrior = node.Now()
+		}
+		return
 	}
 
-	// calculate Scalable growth
+	// Scalable growth
 	a := acked + s.growRem
-	g := a / Bytes(s.alpha)
-	s.growRem = a % Bytes(s.alpha)
-
-	/*
-		// growth debugging
-		if g > r {
-			node.Logf("scal +%d %d", g, flow.cwnd)
-		} else {
-			node.Logf("reno +%d %d", r, flow.cwnd)
-		}
-	*/
-
-	flow.setCWND(flow.cwnd + max(r, g))
+	g := a / ScalableAlpha
+	s.growRem = a % ScalableAlpha
+	flow.setCWND(flow.cwnd + g)
+	s.growPrior = node.Now()
 }
 
 // CUBIC implements a basic version of RFC9438 CUBIC.
@@ -227,9 +212,6 @@ func NewCUBIC(sce Responder) *CUBIC {
 		newClockRing(Tau), // sceHistory
 	}
 }
-
-// CubicBetaSCE is the MD performed by CUBIC in response to an SCE.
-var CubicBetaSCE = math.Pow(CubicBeta, 1.0/Tau)
 
 // slowStartExit implements CCA.
 func (c *CUBIC) slowStartExit(flow *Flow, node Node) {
@@ -270,8 +252,6 @@ func (c *CUBIC) reactToSCE(flow *Flow, node Node) {
 		c.tEpoch = node.Now()
 		c.cwndEpoch = flow.cwnd
 		c.wEst = c.cwndEpoch
-	} else {
-		//node.Logf("ignore SCE")
 	}
 }
 
@@ -344,9 +324,8 @@ type Maslo struct {
 func NewMaslo() *Maslo {
 	return &Maslo{
 		-1, // stage
-		//-1, // stage
-		0, // ortt
-		0, // priorRateOnSignal
+		0,  // ortt
+		0,  // priorRateOnSignal
 	}
 }
 
