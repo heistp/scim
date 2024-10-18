@@ -5,12 +5,14 @@ package main
 
 import "math/rand"
 
+// Ramp is an AQM that uses a simple linear marking ramp.
 type Ramp struct {
 	queue  []Packet
 	rand   *rand.Rand
 	sceAcc int
 }
 
+// NewRamp returns a new Ramp.
 func NewRamp() *Ramp {
 	return &Ramp{
 		make([]Packet, 0),
