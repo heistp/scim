@@ -1,14 +1,63 @@
 #!/bin/bash
 set -e
 
-# run with realtime priority if -r specified
-if [[ $1 == "-r" ]]; then
-    realtime="sudo chrt 10"
+# tiling config
+Y=100 # Y origin
+W=640 # plot width
+H=400 # plot height
+T=38 # title bar height
+WAIT=1 # plot rendering wait time
+
+# parse command line args
+while [[ $# -gt 0 ]]; do
+    case $1 in
+      -p|--plot)
+        skip_run=1
+        shift
+        ;;
+      -r|--realtime)
+        realtime="sudo chrt 10"
+        shift
+        ;;
+      -t|--tile)
+        if ! command -v wmctrl &> /dev/null; then
+            >&2 echo "-t argument for tiling requires wmctrl command"
+            exit 1
+        fi
+        tile=1
+        shift
+        ;;
+    esac
+done
+
+if [[ $skip_run != 1 ]]; then
+    # clean, build and generate plots
+    rm -f *.xpl
+    go build
+    $realtime ./scim
 fi
 
-rm -f *.xpl
-go build
-$realtime ./scim
-if command -v xplot &> /dev/null; then
+# display plots
+if [[ $tile == 1 ]]; then
+    xplot thruput.xpl &> /dev/null &
+    sleep $WAIT
+    wmctrl -r xplot -T "IP Throughput"
+    wmctrl -r "IP Throughput" -e 0,0,$Y,$W,$H
+    
+    xplot sojourn.xpl &> /dev/null &
+    sleep $WAIT
+    wmctrl -r xplot -T "Sojourn"
+    wmctrl -r "Sojourn" -e 0,$W,$Y,$W,$H
+    
+    xplot cwnd.xpl &> /dev/null &
+    sleep $WAIT
+    wmctrl -r xplot -T "CWND"
+    wmctrl -r "CWND" -e 0,0,$((Y+H+T)),$W,$H
+    
+    xplot mark-frequency.xpl &> /dev/null &
+    sleep $WAIT
+    wmctrl -r xplot -T "Mark Frequency"
+    wmctrl -r "Mark Frequency" -e 0,$W,$((Y+H+T)),$W,$H
+elif command -v xplot &> /dev/null; then
     xplot *.xpl &>/dev/null &
 fi
