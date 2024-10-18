@@ -21,9 +21,7 @@ const (
 // DelTiM (Delay Time Minimization) implements DelTiC with the sojourn time
 // taken as the minimum sojourn time down to one packet, within a given burst.
 // The minimum is tracked using a sliding window over the burst, for sub-burst
-// update times.  Idle time is used as a negative delta.
-//
-// TODO look at DelTiM 2 with low bitrate, like 40 Kbps, and MSS 1500
+// update times.
 type Deltim2 struct {
 	queue []Packet
 
@@ -34,8 +32,8 @@ type Deltim2 struct {
 	resonance Clock
 	// DelTiC variables
 	acc         Clock
-	sceOsc      Clock
-	ceOsc       Clock
+	mdsOsc      Clock
+	osc         Clock
 	priorTime   Clock
 	priorError  Clock
 	activeStart Clock
@@ -59,8 +57,8 @@ func NewDeltim2(burst, update Clock) *Deltim2 {
 		update,                     // update
 		Clock(time.Second) / burst, // resonance
 		0,                          // acc
-		0,                          // sceOsc
-		Clock(time.Second) / 2,     // ceOsc
+		0,                          // mdsOsc
+		Clock(time.Second) / 2,     // osc
 		0,                          // priorTime
 		0,                          // priorError
 		0,                          // activeStart
@@ -86,7 +84,7 @@ func (d *Deltim2) Enqueue(pkt Packet, node Node) {
 	if len(d.queue) == 0 {
 		d.idleTime = node.Now() - d.priorTime
 		d.activeStart = node.Now()
-		if JitterCompensation {
+		if DelticJitterCompensation {
 			d.jit.prior = node.Now()
 		}
 	}
@@ -109,7 +107,7 @@ func (d *Deltim2) Dequeue(node Node) (pkt Packet, ok bool) {
 	// update minimum delay from next packet, or 0 if no next packet
 	if len(d.queue) > 0 {
 		s := node.Now() - d.queue[0].Enqueue
-		if JitterCompensation {
+		if DelticJitterCompensation {
 			d.jit.estimate(node.Now())
 			s = d.jit.adjustSojourn(s)
 			d.plotAdjSojourn(s, len(d.queue) == 0, node.Now())
@@ -164,41 +162,6 @@ func (d *Deltim2) Dequeue(node Node) (pkt Packet, ok bool) {
 	return
 }
 
-/*
-// deltic is the delta-sigma control function, with idle time modification.
-func (d *Deltim2) deltic(dt Clock) {
-	if dt > Clock(time.Second) {
-		dt = Clock(time.Second)
-	}
-	var delta, sigma Clock
-	if d.updateIdle == 0 {
-		m := d.win.minimum()
-		delta = m - d.priorError
-		sigma = m.MultiplyScaled(dt)
-		d.priorError = m
-	} else {
-		// note: the backoff below is dubious mathematically, even if it seems
-		// to work pretty well across a wide range of conditions.  In corner
-		// cases, it doesn't back off quickly enough, for example at end of
-		// slow-start for a high bandwidth flow.
-		//
-		// Ideally, we'd like the positive error to equal the negative error,
-		// but since there's no negative sojourn time, it doesn't seem possible.
-		// There may be a better mathematical relationship for how to adjust the
-		// accumulator after an idle period. The answer is *not* to just clamp
-		// the accumulator, as that leads to oscillations and other bad behavior.
-		delta = -d.updateIdle
-		//sigma = -d.updateIdle.MultiplyScaled(dt)
-		d.priorError = 0
-	}
-	if d.acc += ((delta + sigma) * d.resonance); d.acc < 0 {
-		d.acc = 0
-		// note: clamping oscillators not found to help, and if it's done, then
-		// the ratio between the SCE and CE oscillators needs to be maintained
-	}
-}
-*/
-
 // deltim is the delta-sigma control function, with idle time modification.
 func (d *Deltim2) deltim(err Clock, dt Clock, node Node) {
 	if dt > Clock(time.Second) {
@@ -208,13 +171,6 @@ func (d *Deltim2) deltim(err Clock, dt Clock, node Node) {
 	delta = err - d.priorError
 	sigma = err.MultiplyScaled(dt)
 	d.priorError = err
-	/*
-		if err < 0 {
-			d.priorError = 0
-			//node.Logf("err:%d acc:%d delta:%d sigma:%d",
-			//	err, d.acc, delta, sigma)
-		}
-	*/
 	if d.acc += ((delta + sigma) * d.resonance); d.acc < 0 {
 		d.acc = 0
 		// note: clamping oscillators not found to help, and if it's done, then
@@ -246,37 +202,37 @@ func (d *Deltim2) oscillate(dt Clock, node Node, pkt Packet) mark {
 	// base oscillator increment
 	i := d.acc.MultiplyScaled(dt) * d.resonance
 
-	// SCE oscillator
+	// MDS oscillator
 	var s mark
-	d.sceOsc += i
-	switch o := d.sceOsc; {
+	d.mdsOsc += i
+	switch o := d.mdsOsc; {
 	case o < Clock(time.Second):
 	case o < 2*Clock(time.Second):
 		s = markSCE
-		d.sceOsc -= Clock(time.Second)
+		d.mdsOsc -= Clock(time.Second)
 	case o < Tau*Clock(time.Second):
 		s = markCE
-		d.sceOsc -= Tau * Clock(time.Second)
+		d.mdsOsc -= Tau * Clock(time.Second)
 	default:
 		s = markDrop
-		d.sceOsc -= Tau * Clock(time.Second)
-		if d.sceOsc >= Tau*Clock(time.Second) {
+		d.mdsOsc -= Tau * Clock(time.Second)
+		if d.mdsOsc >= Tau*Clock(time.Second) {
 			d.acc -= d.acc >> 4
 		}
 	}
 
-	// CE oscillator
+	// conventional oscillator
 	var c mark
-	d.ceOsc += i / Tau
-	switch o := d.ceOsc; {
+	d.osc += i / Tau
+	switch o := d.osc; {
 	case o < Clock(time.Second):
 	case o < 2*Clock(time.Second):
 		c = markCE
-		d.ceOsc -= Clock(time.Second)
+		d.osc -= Clock(time.Second)
 	default:
 		c = markDrop
-		d.ceOsc -= Clock(time.Second)
-		if d.ceOsc >= 2*Clock(time.Second) {
+		d.osc -= Clock(time.Second)
+		if d.osc >= 2*Clock(time.Second) {
 			d.acc -= d.acc >> 4
 		}
 	}
