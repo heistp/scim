@@ -56,7 +56,7 @@ func newAqmPlot() *aqmPlot {
 		0, // priorDrop
 		0, // emitSigCtr
 		Xplot{
-			Title: "Queue Sojourn Time",
+			Title: "Queue Sojourn Time (red: queue empty after dequeue)",
 			X: Axis{
 				Label: "Time (S)",
 			},
