@@ -5,6 +5,7 @@ package main
 
 import "fmt"
 
+// Iface represents a network interface with an AQM.
 type Iface struct {
 	rate     Bitrate
 	schedule []RateAt
@@ -12,11 +13,13 @@ type Iface struct {
 	empty    bool
 }
 
+// RateAt is used to set the interface's Bitrate at the given time.
 type RateAt struct {
 	At   Clock
 	Rate Bitrate
 }
 
+// An AQM implements Active Queue Management.
 type AQM interface {
 	Enqueue(Packet, Node)
 	Dequeue(Node) (pkt Packet, ok bool)
@@ -24,6 +27,7 @@ type AQM interface {
 	Len() int
 }
 
+// NewIface returns a new Iface.
 func NewIface(rate Bitrate, schedule []RateAt, aqm AQM) *Iface {
 	return &Iface{
 		rate,
