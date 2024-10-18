@@ -7,10 +7,10 @@ import (
 	"time"
 )
 
-// DelTim3 (Delay Time Minimization) implements DelTiC with the sojourn time
+// Deltim (Delay Time Minimization) implements DelTiC with the sojourn time
 // taken as the sojourn time down to one packet.  Active and idle time are used
 // to scale back the frequency after idle events.
-type Deltim3 struct {
+type Deltim struct {
 	queue []Packet
 	// parameters
 	burst Clock
@@ -18,8 +18,8 @@ type Deltim3 struct {
 	resonance Clock
 	// DelTiM variables
 	acc         Clock
-	sceOsc      Clock
-	ceOsc       Clock
+	mdsOsc      Clock
+	osc         Clock
 	priorTime   Clock
 	priorError  Clock
 	activeStart Clock
@@ -30,15 +30,15 @@ type Deltim3 struct {
 	*aqmPlot
 }
 
-// NewDeltim3 returns a new Deltim3.
-func NewDeltim3(burst Clock) *Deltim3 {
-	return &Deltim3{
+// NewDeltim returns a new Deltim.
+func NewDeltim(burst Clock) *Deltim {
+	return &Deltim{
 		make([]Packet, 0),          // queue
 		burst,                      // burst
 		Clock(time.Second) / burst, // resonance
 		0,                          // acc
-		0,                          // sceOsc
-		Clock(time.Second) / 2,     // ceOsc
+		0,                          // mdsOsc
+		Clock(time.Second) / 2,     // osc
 		0,                          // priorTime
 		0,                          // priorError
 		0,                          // activeStart
@@ -50,16 +50,16 @@ func NewDeltim3(burst Clock) *Deltim3 {
 }
 
 // Start implements Starter.
-func (d *Deltim3) Start(node Node) error {
+func (d *Deltim) Start(node Node) error {
 	return d.aqmPlot.Start(node)
 }
 
 // Enqueue implements AQM.
-func (d *Deltim3) Enqueue(pkt Packet, node Node) {
+func (d *Deltim) Enqueue(pkt Packet, node Node) {
 	if len(d.queue) == 0 {
 		d.idleTime = node.Now() - d.priorTime
 		d.activeStart = node.Now()
-		if JitterCompensation {
+		if DelticJitterCompensation {
 			d.jit.prior = node.Now()
 		}
 	}
@@ -69,21 +69,21 @@ func (d *Deltim3) Enqueue(pkt Packet, node Node) {
 }
 
 // Dequeue implements AQM.
-func (d *Deltim3) Dequeue(node Node) (pkt Packet, ok bool) {
+func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 	if len(d.queue) == 0 {
 		return
 	}
 	// pop from head
 	pkt, d.queue = d.queue[0], d.queue[1:]
 
-	// deltim error is sojourn time down to one packet, or negative idle time
+	// scale back the marking frequency after an idle event
 	if d.idleTime > 0 {
 		d.deltimIdle(node)
-	} else {
+	} else { // run regular deltic control function if not after idle
 		var e Clock
 		if len(d.queue) > 0 {
 			e = node.Now() - d.queue[0].Enqueue
-			if JitterCompensation {
+			if DelticJitterCompensation {
 				d.jit.estimate(node.Now())
 				e = d.jit.adjustSojourn(e)
 			}
@@ -120,8 +120,8 @@ func (d *Deltim3) Dequeue(node Node) (pkt Packet, ok bool) {
 	return
 }
 
-// deltim is the delta-sigma control function, with idle time modification.
-func (d *Deltim3) deltim(err Clock, dt Clock, node Node) {
+// deltim is the delta-sigma control function.
+func (d *Deltim) deltim(err Clock, dt Clock, node Node) {
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
 	}
@@ -129,13 +129,6 @@ func (d *Deltim3) deltim(err Clock, dt Clock, node Node) {
 	delta = err - d.priorError
 	sigma = err.MultiplyScaled(dt)
 	d.priorError = err
-	/*
-		if err < 0 {
-			d.priorError = 0
-			//node.Logf("err:%d acc:%d delta:%d sigma:%d",
-			//	err, d.acc, delta, sigma)
-		}
-	*/
 	if d.acc += ((delta + sigma) * d.resonance); d.acc < 0 {
 		d.acc = 0
 		// note: clamping oscillators not found to help, and if it's done, then
@@ -145,7 +138,7 @@ func (d *Deltim3) deltim(err Clock, dt Clock, node Node) {
 }
 
 // deltimIdle scales the accumulator by the utilization after an idle event.
-func (d *Deltim3) deltimIdle(node Node) {
+func (d *Deltim) deltimIdle(node Node) {
 	i := min(d.idleTime, DeltimIdleWindow)
 	a := min(d.activeTime, DeltimIdleWindow-i)
 	p := float64(a+i) / float64(DeltimIdleWindow)
@@ -158,7 +151,7 @@ func (d *Deltim3) deltimIdle(node Node) {
 }
 
 // oscillate increments the oscillator and returns any resulting mark.
-func (d *Deltim3) oscillate(dt Clock, node Node, pkt Packet) mark {
+func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
 	// clamp dt
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
@@ -167,37 +160,37 @@ func (d *Deltim3) oscillate(dt Clock, node Node, pkt Packet) mark {
 	// base oscillator increment
 	i := d.acc.MultiplyScaled(dt) * d.resonance
 
-	// SCE oscillator
+	// MDS oscillator
 	var s mark
-	d.sceOsc += i
-	switch o := d.sceOsc; {
+	d.mdsOsc += i
+	switch o := d.mdsOsc; {
 	case o < Clock(time.Second):
 	case o < 2*Clock(time.Second):
 		s = markSCE
-		d.sceOsc -= Clock(time.Second)
+		d.mdsOsc -= Clock(time.Second)
 	case o < Tau*Clock(time.Second):
 		s = markCE
-		d.sceOsc -= Tau * Clock(time.Second)
+		d.mdsOsc -= Tau * Clock(time.Second)
 	default:
 		s = markDrop
-		d.sceOsc -= Tau * Clock(time.Second)
-		if d.sceOsc >= Tau*Clock(time.Second) {
+		d.mdsOsc -= Tau * Clock(time.Second)
+		if d.mdsOsc >= Tau*Clock(time.Second) {
 			d.acc -= d.acc >> 4
 		}
 	}
 
-	// CE oscillator
+	// conventional oscillator
 	var c mark
-	d.ceOsc += i / Tau
-	switch o := d.ceOsc; {
+	d.osc += i / Tau
+	switch o := d.osc; {
 	case o < Clock(time.Second):
 	case o < 2*Clock(time.Second):
 		c = markCE
-		d.ceOsc -= Clock(time.Second)
+		d.osc -= Clock(time.Second)
 	default:
 		c = markDrop
-		d.ceOsc -= Clock(time.Second)
-		if d.ceOsc >= 2*Clock(time.Second) {
+		d.osc -= Clock(time.Second)
+		if d.osc >= 2*Clock(time.Second) {
 			d.acc -= d.acc >> 4
 		}
 	}
@@ -216,12 +209,12 @@ func (d *Deltim3) oscillate(dt Clock, node Node, pkt Packet) mark {
 }
 
 // Stop implements Stopper.
-func (d *Deltim3) Stop(node Node) error {
+func (d *Deltim) Stop(node Node) error {
 	return d.aqmPlot.Stop(node)
 }
 
 // Peek implements AQM.
-func (d *Deltim3) Peek(node Node) (pkt Packet, ok bool) {
+func (d *Deltim) Peek(node Node) (pkt Packet, ok bool) {
 	if len(d.queue) == 0 {
 		return
 	}
@@ -231,6 +224,6 @@ func (d *Deltim3) Peek(node Node) (pkt Packet, ok bool) {
 }
 
 // Len implements AQM.
-func (d *Deltim3) Len() int {
+func (d *Deltim) Len() int {
 	return len(d.queue)
 }
