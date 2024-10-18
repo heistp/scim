@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// FlowID represents the ID of a flow.
 type FlowID int
 
 // Sender approximates a TCP sender with multiple flows.
@@ -44,12 +45,12 @@ func NewSender(schedule []FlowAt) *Sender {
 			Decimation: PlotInFlightInterval,
 		},
 		Xplot{
-			Title: "CWND",
+			Title: "cwnd (x: flow is cwnd-limited)",
 			X: Axis{
 				Label: "Time (S)",
 			},
 			Y: Axis{
-				Label: "CWND (bytes)",
+				Label: "cwnd (bytes)",
 			},
 			Decimation: PlotCwndInterval,
 		},
