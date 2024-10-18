@@ -16,6 +16,8 @@ type Receiver struct {
 	start           time.Time
 	receivedPackets int
 	ackedPackets    int
+	sceMarks        int
+	ceMarks         int
 	total           []Bytes
 	maxRTTFlow      FlowID
 	thruput         Xplot
@@ -70,6 +72,8 @@ func NewReceiver() *Receiver {
 		time.Time{},               // start
 		0,                         // receivedPackets
 		0,                         // ackedPackets
+		0,                         // sceMarks
+		0,                         // ceMarks
 		make([]Bytes, len(Flows)), // total
 		0,                         // maxRTTFlow
 		Xplot{
@@ -119,6 +123,12 @@ func (r *Receiver) Handle(pkt Packet, node Node) error {
 func (r *Receiver) receive(pkt Packet, node Node) {
 	if pkt.ACK {
 		panic("receiver: ACK receive not implemented")
+	}
+	if pkt.CE {
+		r.ceMarks++
+	}
+	if pkt.SCE {
+		r.sceMarks++
 	}
 	f := &r.flow[pkt.Flow]
 	var a bool
@@ -217,7 +227,8 @@ func (r *Receiver) Stop(node Node) error {
 		node.Logf("total  bytes %d rate %f Mbps", a, ar.Mbps())
 	}
 	d := time.Since(r.start)
-	node.Logf("receiver ACK ratio: %f", r.ackRatio())
+	node.Logf("receiver ACK ratio:%f CE:%d SCE:%d",
+		r.ackRatio(), r.ceMarks, r.sceMarks)
 	node.Logf("sim performance: %.0f packets/sec",
 		(float64(r.receivedPackets) / d.Seconds()))
 	return nil
