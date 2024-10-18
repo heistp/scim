@@ -7,30 +7,32 @@ import (
 	"time"
 )
 
-// DelTiM (Delay Time Minimization) implements DelTiC with the sojourn time
-// taken as the minimum sojourn time down to one packet.  Idle time is used as
-// a negative delta.
-type Deltim struct {
+// DelTim3 (Delay Time Minimization) implements DelTiC with the sojourn time
+// taken as the sojourn time down to one packet.  Active and idle time are used
+// to scale back the frequency after idle events.
+type Deltim3 struct {
 	queue []Packet
 	// parameters
 	burst Clock
 	// calculated values
 	resonance Clock
 	// DelTiM variables
-	acc        Clock
-	sceOsc     Clock
-	ceOsc      Clock
-	priorTime  Clock
-	priorError Clock
-	idleTime   Clock
-	jit        jitterEstimator
+	acc         Clock
+	sceOsc      Clock
+	ceOsc       Clock
+	priorTime   Clock
+	priorError  Clock
+	activeStart Clock
+	activeTime  Clock
+	idleTime    Clock
+	jit         jitterEstimator
 	// Plots
 	*aqmPlot
 }
 
-// NewDeltim returns a new Deltim.
-func NewDeltim(burst Clock) *Deltim {
-	return &Deltim{
+// NewDeltim3 returns a new Deltim3.
+func NewDeltim3(burst Clock) *Deltim3 {
+	return &Deltim3{
 		make([]Packet, 0),          // queue
 		burst,                      // burst
 		Clock(time.Second) / burst, // resonance
@@ -39,6 +41,8 @@ func NewDeltim(burst Clock) *Deltim {
 		Clock(time.Second) / 2,     // ceOsc
 		0,                          // priorTime
 		0,                          // priorError
+		0,                          // activeStart
+		0,                          // activeTime
 		0,                          // idleTime
 		jitterEstimator{},          // jit
 		newAqmPlot(),               // aqmPlot
@@ -46,14 +50,15 @@ func NewDeltim(burst Clock) *Deltim {
 }
 
 // Start implements Starter.
-func (d *Deltim) Start(node Node) error {
+func (d *Deltim3) Start(node Node) error {
 	return d.aqmPlot.Start(node)
 }
 
 // Enqueue implements AQM.
-func (d *Deltim) Enqueue(pkt Packet, node Node) {
+func (d *Deltim3) Enqueue(pkt Packet, node Node) {
 	if len(d.queue) == 0 {
 		d.idleTime = node.Now() - d.priorTime
+		d.activeStart = node.Now()
 		if JitterCompensation {
 			d.jit.prior = node.Now()
 		}
@@ -64,7 +69,7 @@ func (d *Deltim) Enqueue(pkt Packet, node Node) {
 }
 
 // Dequeue implements AQM.
-func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
+func (d *Deltim3) Dequeue(node Node) (pkt Packet, ok bool) {
 	if len(d.queue) == 0 {
 		return
 	}
@@ -72,22 +77,20 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 	pkt, d.queue = d.queue[0], d.queue[1:]
 
 	// deltim error is sojourn time down to one packet, or negative idle time
-	var e Clock
 	if d.idleTime > 0 {
-		e = -d.idleTime
-	} else if len(d.queue) > 0 {
-		e = node.Now() - d.queue[0].Enqueue
-		if PlotByteSeconds {
-			bs := float64(Bytes(len(d.queue))*MTU) * time.Duration(e).Seconds()
-			d.plotByteSeconds(bs, node.Now())
-		}
-		if JitterCompensation {
-			d.jit.estimate(node.Now())
-			e = d.jit.adjustSojourn(e)
+		d.deltimIdle(node)
+	} else {
+		var e Clock
+		if len(d.queue) > 0 {
+			e = node.Now() - d.queue[0].Enqueue
+			if JitterCompensation {
+				d.jit.estimate(node.Now())
+				e = d.jit.adjustSojourn(e)
+			}
 			d.plotAdjSojourn(e, len(d.queue) == 0, node.Now())
 		}
+		d.deltim(e, node.Now()-d.priorTime, node)
 	}
-	d.deltim(e, node.Now()-d.priorTime, node)
 
 	// advance oscillator for non-idle time and mark
 	var m mark
@@ -104,6 +107,9 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 		pkt.CE = true
 	}
 
+	if len(d.queue) == 0 {
+		d.activeTime = node.Now() - d.activeStart
+	}
 	d.idleTime = 0
 	d.priorTime = node.Now()
 
@@ -115,20 +121,21 @@ func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
 }
 
 // deltim is the delta-sigma control function, with idle time modification.
-func (d *Deltim) deltim(err Clock, dt Clock, node Node) {
+func (d *Deltim3) deltim(err Clock, dt Clock, node Node) {
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
 	}
 	var delta, sigma Clock
 	delta = err - d.priorError
 	sigma = err.MultiplyScaled(dt)
-	if err > 0 {
-		d.priorError = err
-		//node.Logf("err:%d acc:%d delta:%d sigma:%d",
-		//	err, d.acc, delta, sigma)
-	} else {
-		d.priorError = 0
-	}
+	d.priorError = err
+	/*
+		if err < 0 {
+			d.priorError = 0
+			//node.Logf("err:%d acc:%d delta:%d sigma:%d",
+			//	err, d.acc, delta, sigma)
+		}
+	*/
 	if d.acc += ((delta + sigma) * d.resonance); d.acc < 0 {
 		d.acc = 0
 		// note: clamping oscillators not found to help, and if it's done, then
@@ -137,8 +144,21 @@ func (d *Deltim) deltim(err Clock, dt Clock, node Node) {
 	d.plotDeltaSigma(delta, sigma, node.Now())
 }
 
+// deltimIdle scales the accumulator by the utilization after an idle event.
+func (d *Deltim3) deltimIdle(node Node) {
+	i := min(d.idleTime, DeltimIdleWindow)
+	a := min(d.activeTime, DeltimIdleWindow-i)
+	p := float64(a+i) / float64(DeltimIdleWindow)
+	u := float64(a) / float64(a+i)
+	//a0 := d.acc
+	d.acc = Clock(float64(d.acc)*u*p + float64(d.acc)*(1.0-p))
+	d.plotDeltaSigma(0, 0, node.Now())
+	//node.Logf("i:%d a:%d p:%.9f u:%.3f acc0:%d acc:%d",
+	//	i, a, p, u, a0, d.acc)
+}
+
 // oscillate increments the oscillator and returns any resulting mark.
-func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
+func (d *Deltim3) oscillate(dt Clock, node Node, pkt Packet) mark {
 	// clamp dt
 	if dt > Clock(time.Second) {
 		dt = Clock(time.Second)
@@ -196,12 +216,12 @@ func (d *Deltim) oscillate(dt Clock, node Node, pkt Packet) mark {
 }
 
 // Stop implements Stopper.
-func (d *Deltim) Stop(node Node) error {
+func (d *Deltim3) Stop(node Node) error {
 	return d.aqmPlot.Stop(node)
 }
 
 // Peek implements AQM.
-func (d *Deltim) Peek(node Node) (pkt Packet, ok bool) {
+func (d *Deltim3) Peek(node Node) (pkt Packet, ok bool) {
 	if len(d.queue) == 0 {
 		return
 	}
@@ -211,6 +231,6 @@ func (d *Deltim) Peek(node Node) (pkt Packet, ok bool) {
 }
 
 // Len implements AQM.
-func (d *Deltim) Len() int {
+func (d *Deltim3) Len() int {
 	return len(d.queue)
 }

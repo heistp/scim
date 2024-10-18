@@ -11,6 +11,7 @@ import (
 	"text/template"
 )
 
+// xplotHeader is a Go template to generate the .xpl file header.
 const xplotHeader = `double double
 title
 {{.Title}}
