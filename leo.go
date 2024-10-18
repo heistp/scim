@@ -7,7 +7,7 @@ import (
 	"math"
 )
 
-// LeoStageMax is the maximum number of ESSP stages.
+// LeoStageMax is the maximum number of ESSP and Maslo stages.
 const LeoStageMax = 44
 
 var (
