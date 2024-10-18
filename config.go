@@ -4,6 +4,7 @@
 package main
 
 import (
+	"math"
 	"time"
 )
 
@@ -12,22 +13,25 @@ import (
 //
 
 // Sender: test duration
-const Duration = 60 * time.Second
+const Duration = 30 * time.Second
 
 // Sender and Delay: flows
 var (
 	Flows = []Flow{
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewMaslo(), Pacing, true),
-		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewReno(RMD), Pacing, true),
-		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewReno2(RMD), Pacing, true),
-		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewCUBIC(CMD), Pacing, true),
-		AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewScalable(SMD, 200), Pacing, true),
+		AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewReno(RMD), Pacing, true),
+		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewReno2(RMD), Pacing, true),
+		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewCUBIC(CMD), Pacing, true),
+		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewScalable(SMD), Pacing, true),
 	}
 	FlowSchedule = []FlowAt{
-		//FlowAt{1, Clock(30 * time.Second), true},
+		//FlowAt{1, Clock(10 * time.Second), true},
 		//FlowAt{1, Clock(60 * time.Second), false},
 	}
 	FlowDelay = []Clock{
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
 		Clock(20 * time.Millisecond),
 		Clock(20 * time.Millisecond),
 		Clock(20 * time.Millisecond),
@@ -51,28 +55,28 @@ var (
 var (
 	// CUBIC-SCE response
 	CMD = MD(CubicBetaSCE)
-	CRF = RateFairMD{CubicBeta, Clock(10 * time.Millisecond)}
-	CHF = HybridFairMD{CubicBeta, Clock(10 * time.Millisecond)}
-	CMF = MildFairMD{CubicBeta, Clock(10 * time.Millisecond)}
+	CRF = RateFairMD{CubicBeta, Clock(20 * time.Millisecond)}
+	CHF = HybridFairMD{CubicBeta, Clock(20 * time.Millisecond)}
+	CMF = MildFairMD{CubicBeta, Clock(20 * time.Millisecond)}
 
 	// Reno-SCE Response
 	RMD = MD(SCE_MD)
-	RRF = RateFairMD{CEMD, Clock(10 * time.Millisecond)}
-	RHF = HybridFairMD{CEMD, Clock(10 * time.Millisecond)}
-	RMF = MildFairMD{CEMD, Clock(10 * time.Millisecond)}
+	RRF = RateFairMD{CEMD, Clock(20 * time.Millisecond)}
+	RHF = HybridFairMD{CEMD, Clock(20 * time.Millisecond)}
+	RMF = MildFairMD{CEMD, Clock(20 * time.Millisecond)}
 
 	// Scalable Response
-	SMD = MD(SCE_MD)
-	SRF = RateFairMD{ScalableCEMD, Clock(10 * time.Millisecond)}
-	SHF = HybridFairMD{ScalableCEMD, Clock(10 * time.Millisecond)}
-	SMF = MildFairMD{ScalableCEMD, Clock(10 * time.Millisecond)}
+	SMD = MD(SCE_MD) // MD(ScalableBetaSCE)
+	SRF = RateFairMD{ScalableCEMD, Clock(20 * time.Millisecond)}
+	SHF = HybridFairMD{ScalableCEMD, Clock(20 * time.Millisecond)}
+	SMF = MildFairMD{ScalableCEMD, Clock(20 * time.Millisecond)}
 )
 
 // IFace: initial rate and rate schedule
 var RateInit = 100 * Mbps
 var RateSchedule = []RateAt{
-	//RateAt{Clock(10 * time.Second), 100 * Mbps},
-	//RateAt{Clock(30 * time.Second), 1000 * Mbps},
+	//RateAt{Clock(90 * time.Second), RateInit / 5},
+	//RateAt{Clock(210 * time.Second), RateInit},
 }
 
 //func init() {
@@ -93,23 +97,19 @@ var RateSchedule = []RateAt{
 //var UseAQM = NewDelticMDS(Clock(5000 * time.Microsecond))
 
 // Iface: DelTiM AQM config
-//var UseAQM = NewDeltim(Clock(5000 * time.Microsecond))
+var UseAQM = NewDeltim(Clock(5000 * time.Microsecond))
 
 // Iface: DelTiM2 AQM config
-//var UseAQM = NewDeltim2(Clock(5000*time.Microsecond),
-//	Clock(10*time.Microsecond))
+//var UseAQM = NewDeltim2(Clock(5*time.Millisecond), Clock(1*time.Millisecond))
 
-// Iface: DelTiM3 AQM config
-var (
-	UseAQM           = NewDeltim3(Clock(5000 * time.Microsecond))
-	DeltimIdleWindow = Clock(20 * time.Millisecond)
-)
+// Iface: DelTiM common config
+var DeltimIdleWindow = Clock(5000 * time.Microsecond) // equal to burst
 
 // Iface: Brickwall AQM config
 //var UseAQM = NewBrickwall(
-//	Clock(0*time.Millisecond),   // SCE
-//	Clock(100*time.Millisecond), // CE
-//	Clock(0*time.Millisecond),   // drop
+//	Clock(0*time.Millisecond),  // SCE
+//	Clock(12*time.Millisecond), // CE
+//	Clock(0*time.Millisecond),  // drop
 //)
 
 // Iface: Ramp AQM config
@@ -132,7 +132,7 @@ const (
 	PlotCwndInterval     = Clock(100 * time.Microsecond)
 	PlotRTT              = false
 	PlotRTTInterval      = Clock(100 * time.Microsecond)
-	PlotPacing           = true
+	PlotPacing           = false
 	PlotPacingInterval   = Clock(100 * time.Microsecond)
 	PlotSeq              = false
 	PlotSeqInterval      = Clock(100 * time.Microsecond)
@@ -146,10 +146,10 @@ const (
 const (
 	PlotSojourn             = true
 	PlotSojournInterval     = Clock(100 * time.Microsecond)
-	PlotAdjSojourn          = true
+	PlotAdjSojourn          = false
 	PlotAdjSojournInterval  = Clock(100 * time.Microsecond)
 	PlotQueueLength         = false
-	PlotQueueLengthInterval = Clock(100 * time.Microsecond)
+	PlotQueueLengthInterval = Clock(0 * time.Microsecond)
 	PlotDeltaSigma          = false
 	PlotByteSeconds         = false
 	PlotByteSecondsInterval = Clock(100 * time.Microsecond)
@@ -231,12 +231,19 @@ const (
 	CubicFastConvergence = true // RFC 9438 Section 4.7
 )
 
+// CubicBetaSCE is the MD performed by CUBIC in response to an SCE.
+var CubicBetaSCE = math.Pow(CubicBeta, 1.0/Tau)
+
 // Sender: Scalable params
 const (
-	ScalableCEMD             = 0.7   // RFC 8511
-	ScalableRenoFloor        = true  // if true, grow at least by Reno-linear
-	ScalableNoGrowthOnSignal = false // if true, do not grow on ECE or ESCE
+	ScalableCEMD       = 0.5        // or 0.7, or 0.875, if RFC 8511
+	ScalableAlpha      = Bytes(200) // Scalable TCP 1/a
+	ScalableLwnd       = Bytes(0)   // lwnd- max cwnd for Reno growth
+	ScalableRenoSmooth = false      // if true, use per-ACK Reno growth
 )
+
+// ScalableBetaSCE is the MD performed by Scalable in response to an SCE.
+var ScalableBetaSCE = math.Pow(ScalableCEMD, 1.0/Tau)
 
 // Sender: MASLO params
 const (
@@ -268,22 +275,12 @@ const (
 	HyStartLNoPacing   = 8                            // default 8
 )
 
-// Slow Start
-var (
-	Slick1  = NewSlick(Clock(1 * time.Millisecond))
-	Slick2  = NewSlick(Clock(2 * time.Millisecond))
-	Slick3  = NewSlick(Clock(3 * time.Millisecond))
-	Slick4  = NewSlick(Clock(4 * time.Millisecond))
-	Slick5  = NewSlick(Clock(5 * time.Millisecond))
-	Slick10 = NewSlick(Clock(10 * time.Millisecond))
-)
-
 // Iface: AQM queue length restriction at which panic occurs
 const IfaceHardQueueLen = 1000000
 
-// AQM
+// Iface: DelTiC/M common config
 const (
-	JitterCompensation = true
+	DelticJitterCompensation = true
 )
 
 // main
