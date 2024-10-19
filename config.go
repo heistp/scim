@@ -16,14 +16,13 @@ import (
 // Sender: test duration
 const Duration = 30 * time.Second
 
-// Sender and Delay: flows
+// Sender: flows and path delay
 //
 // Configure the flows below (Flows), including per-flow schedules
 // (FlowSchedule), and per-flow path round-trip times (FlowDelay).
 var (
 	Flows = []Flow{
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewMaslo(), Pacing, true),
-		AddFlow(ECN, NoSCE, NewEssp(), NoResponse{}, NewReno(RMD), Pacing, true),
 		AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewReno(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewReno2(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewCUBIC(CMD), Pacing, true),
@@ -89,7 +88,7 @@ var (
 //
 // RateInit is the initial bottleneck rate, and RateSchedule allows changing
 // the bottleneck rate at the given times.
-var RateInit = 1000 * Mbps
+var RateInit = 100 * Mbps
 var RateSchedule = []RateAt{
 	//RateAt{Clock(90 * time.Second), RateInit / 5},
 	//RateAt{Clock(210 * time.Second), RateInit},
