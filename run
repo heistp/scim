@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 # tiling config
@@ -51,8 +51,8 @@ if [[ $tile == 1 ]]; then
     
     xplot cwnd.xpl &> /dev/null &
     sleep $WAIT
-    wmctrl -r xplot -T "CWND"
-    wmctrl -r "CWND" -e 0,0,$((Y+H+T)),$W,$H
+    wmctrl -r xplot -T "cwnd"
+    wmctrl -r "cwnd" -e 0,0,$((Y+H+T)),$W,$H
     
     xplot mark-frequency.xpl &> /dev/null &
     sleep $WAIT
