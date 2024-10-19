@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
+
 set -e
 
-# tiling config
+# Tiling config (-t parameter)
+#
+# T might need to be adjusted for different window managers
+# WAIT might need to be increased for plots that render too slowly
 Y=100 # Y origin
 W=640 # plot width
 H=400 # plot height
@@ -11,15 +15,15 @@ WAIT=1 # plot rendering wait time
 # parse command line args
 while [[ $# -gt 0 ]]; do
     case $1 in
-      -p|--plot)
+      -p|--plot) # skip the run and just xplot the plots
         skip_run=1
         shift
         ;;
-      -r|--realtime)
+      -r|--realtime) # preface run with chrt 10 to give it realtime priority
         realtime="sudo chrt 10"
         shift
         ;;
-      -t|--tile)
+      -t|--tile) # tile plots using wmctrl (which must be installed)
         if ! command -v wmctrl &> /dev/null; then
             >&2 echo "-t argument for tiling requires wmctrl command"
             exit 1
@@ -37,7 +41,7 @@ if [[ $skip_run != 1 ]]; then
     $realtime ./scim
 fi
 
-# display plots
+# display plots, either with tiling or without
 if [[ $tile == 1 ]]; then
     xplot thruput.xpl &> /dev/null &
     sleep $WAIT
