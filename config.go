@@ -8,17 +8,22 @@ import (
 	"time"
 )
 
+////////////////
 //
-// Common Settings
+// Sender Settings
 //
 
 // Sender: test duration
 const Duration = 30 * time.Second
 
 // Sender and Delay: flows
+//
+// Configure the flows below (Flows), including per-flow schedules
+// (FlowSchedule), and per-flow path round-trip times (FlowDelay).
 var (
 	Flows = []Flow{
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewMaslo(), Pacing, true),
+		AddFlow(ECN, NoSCE, NewEssp(), NoResponse{}, NewReno(RMD), Pacing, true),
 		AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewReno(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewReno2(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewCUBIC(CMD), Pacing, true),
@@ -52,6 +57,8 @@ var (
 )
 
 // Sender: default responses
+//
+// These standard responses are referenced from the Flow declarations.
 var (
 	// CUBIC-SCE response
 	CMD = MD(CubicBetaSCE)
@@ -72,13 +79,23 @@ var (
 	SMF = MildFairMD{ScalableCEMD, Clock(20 * time.Millisecond)}
 )
 
+////////////////
+//
+// Interface Settings
+//
+// UseAQM is the AQM to use.  Only one may be defined.
+
 // IFace: initial rate and rate schedule
-var RateInit = 100 * Mbps
+//
+// RateInit is the initial bottleneck rate, and RateSchedule allows changing
+// the bottleneck rate at the given times.
+var RateInit = 1000 * Mbps
 var RateSchedule = []RateAt{
 	//RateAt{Clock(90 * time.Second), RateInit / 5},
 	//RateAt{Clock(210 * time.Second), RateInit},
 }
 
+// The init function below shows how to generate a rate schedule with code.
 //func init() {
 //	for t := 5 * Clock(time.Second); t < 100*Clock(time.Second); t += 5 * Clock(time.Second) {
 //		RateSchedule = append(RateSchedule, RateAt{t,
@@ -119,8 +136,9 @@ var (
 	SCERampMax = Clock(100 * time.Millisecond)
 )
 
+////////////////
 //
-// Plots
+// Plot Settings
 //
 
 // Sender: plots
@@ -168,6 +186,11 @@ const (
 	PlotThroughputPerRTT = 1
 )
 
+////////////////
+//
+// Receiver Settings
+//
+
 // Receiver: delayed ACKs (>0 enables delayed ACKs)
 //
 // QuickACKSignal: if true, always ACK SCE or CE immediately, otherwise use
@@ -179,6 +202,7 @@ const (
 	QuickACKSignal = true
 )
 
+////////////////
 //
 // Less Common Settings
 //
