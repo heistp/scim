@@ -4,9 +4,10 @@ Scim is a discrete event simulator for testing
 [ECN](https://datatracker.ietf.org/doc/rfc3168/)-based congestion control, with
 a focus on high-fidelity signaling.
 
-Scim was written for educational use, and for quickly trying new ideas.  It was
-originally written to test
-[Multiplicative Decrease Scaling](https://github.com/heistp/md-scaling/).
+Scim was written for educational use, and for quickly trying new ideas,
+such as 
+[Multiplicative Decrease Scaling](https://github.com/heistp/md-scaling/) and
+[Extended Slow Start with Pacing](https://github.com/heistp/essp/).
 It does not aim to precisely simulate real-world networks, but to show that
 congestion control algorithms (CCAs) and Active Queue Management (AQM)
 algorithms behave as expected in an idealized environment.
@@ -25,8 +26,10 @@ Note: with GCC 14, I had to build `xplot` from
 [xplot-0.90.7.1.tar.gz](http://www.xplot.org/xplot/xplot-0.90.7.1.tar.gz)
 as follows:
 
-`CFLAGS="-Wno-error=implicit-int -Wno-error=implicit-function-declaration" ./configure`
-`make`
+```
+CFLAGS="-Wno-error=implicit-int -Wno-error=implicit-function-declaration" ./configure
+make
+```
 
 ## Running and Configuring
 
