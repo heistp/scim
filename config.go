@@ -203,7 +203,7 @@ const (
 
 ////////////////
 //
-// Less Common Settings
+// Advanced Settings
 //
 
 // Sender: SCE MD-Scaling params
@@ -311,3 +311,19 @@ const (
 	ProfileCPU    = false
 	ProfileMemory = false
 )
+
+////////////////
+//
+// Config Functions
+//
+
+// rateMax returns the maximum bitrate.
+func rateMax() Bitrate {
+	m := RateInit
+	for _, a := range RateSchedule {
+		if a.Rate > m {
+			m = a.Rate
+		}
+	}
+	return m
+}
