@@ -33,13 +33,14 @@ yunits
 {{end -}}
 {{if not .NonzeroAxis -}}
 invisible 0 0
-invisible {{.Duration}} 0
+invisible {{.Duration}} {{if .Y.Max}}{{.Y.Max}}{{else}}0{{end}}
 {{end -}}
 `
 
 type Axis struct {
 	Label string
 	Units string
+	Max   string
 }
 
 type Xplot struct {

@@ -83,6 +83,7 @@ func NewReceiver() *Receiver {
 			},
 			Y: Axis{
 				Label: "Throughput (Mbps)",
+				Max:   strconv.FormatFloat(rateMax().Mbps(), 'f', -1, 64),
 			},
 		}, // thruput
 		f, // flow
