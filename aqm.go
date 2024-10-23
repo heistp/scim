@@ -62,6 +62,7 @@ func newAqmPlot() *aqmPlot {
 			},
 			Y: Axis{
 				Label: "Sojourn time (ms)",
+				Max:   PlotSojournMax,
 			},
 			Decimation: PlotSojournInterval,
 		}, // sojourn

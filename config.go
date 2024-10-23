@@ -160,9 +160,13 @@ const (
 )
 
 // Iface: plots
+//
+// PlotSojournMax is the maximum Y value for the sojourn plot, or the empty
+// string to auto-scale.
 const (
 	PlotSojourn             = true
 	PlotSojournInterval     = Clock(100 * time.Microsecond)
+	PlotSojournMax          = ""
 	PlotAdjSojourn          = false
 	PlotAdjSojournInterval  = Clock(100 * time.Microsecond)
 	PlotQueueLength         = false
