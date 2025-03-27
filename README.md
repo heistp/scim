@@ -17,7 +17,7 @@ algorithms behave as expected in an idealized environment.
 Scim can run on any Go-supported platform, but xplot is required to view the
 plots.
 
-1.  Install [Go](https://go.dev/dl) (1.22 or later required).
+1.  Install [Go](https://go.dev/dl) (see `go.mod` for version requirement).
 2.  `mkdir -p ~/go/src/github.com/heistp && cd "$_"`
 3.  `git clone https://github.com/heistp/scim`
 4.  Install [xplot](http://www.xplot.org/).
@@ -37,7 +37,7 @@ Change to the scim directory.  Either use the `./run` script (requires bash), or
 use `go build` manually and run `./scim`.
 
 Scim is configured via the file `config.go`, so the program must be recompiled
-each time the config is changed.  That's what the run script does.
+each time the config is changed.  The run script does this.
 
 ## Sample Plot
 
@@ -89,9 +89,12 @@ Plots:
 * AQM marking proportion or frequency
 * Throughput
 
-Scim does not handle packet loss, only ECN signaling.
+> [!NOTE]  
+> Scim does not handle packet loss, only ECN signaling.
 
-It is configured with a list of Handlers (see `main.go`), which form a ring.
+## Architecture
+
+Scim is configured with a list of Handlers (see `main.go`), which form a ring.
 Messages between Handlers are sent round-robin style, and events are processed
 linearly in time, so that any two simulator runs always produce the same
 results.  Each Handler runs in a separate goroutine, but they are synchronized

@@ -20,13 +20,18 @@ const Duration = 30 * time.Second
 //
 // Configure the flows below (Flows), including per-flow schedules
 // (FlowSchedule), and per-flow path round-trip times (FlowDelay).
+//
+// The shipped default includes a single Reno-SCE flow that uses standard
+// slow-start, with base reduction on SCE (see DefaultSSBaseReduction) and
+// CWND targeting on SS exit.
 var (
 	Flows = []Flow{
-		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewMaslo(), Pacing, true),
-		AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewReno(RMD), Pacing, true),
+		AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewReno(RMD), Pacing, true),
+		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewReno(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewReno2(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewCUBIC(CMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewScalable(SMD), Pacing, true),
+		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewMaslo(), Pacing, true),
 	}
 	FlowSchedule = []FlowAt{
 		//FlowAt{1, Clock(10 * time.Second), true},
@@ -140,52 +145,59 @@ var (
 // Plot Settings
 //
 
-// Sender: plots
+// Sender: plots from the sender
 const (
-	PlotInFlight         = false
+	PlotInFlight         = false // in-flight.xpl
 	PlotInFlightInterval = Clock(100 * time.Microsecond)
-	PlotCwnd             = true
-	PlotCwndLimit        = true
-	PlotCwndInterval     = Clock(100 * time.Microsecond)
-	PlotRTT              = false
-	PlotRTTInterval      = Clock(100 * time.Microsecond)
-	PlotPacing           = false
-	PlotPacingInterval   = Clock(100 * time.Microsecond)
-	PlotSeq              = false
-	PlotSeqInterval      = Clock(100 * time.Microsecond)
-	PlotSent             = false
-	PlotSentInterval     = Clock(100 * time.Microsecond)
-	PlotRate             = false
-	PlotRateInterval     = Clock(100 * time.Microsecond)
+
+	PlotCwnd         = true                          // cwnd.xpl
+	PlotCwndLimit    = true                          // limit on cwnd plot
+	PlotCwndInterval = Clock(100 * time.Microsecond) // for cwnd plot
+
+	PlotRTT         = false // tcp-rtt.xpl
+	PlotRTTInterval = Clock(100 * time.Microsecond)
+
+	PlotPacing         = false // pacing.xpl
+	PlotPacingInterval = Clock(100 * time.Microsecond)
+
+	PlotSeq         = false // seq.#.xpl
+	PlotSeqInterval = Clock(100 * time.Microsecond)
+
+	PlotSent         = false // sent.#.xpl
+	PlotSentInterval = Clock(100 * time.Microsecond)
+
+	PlotRate         = false // rate.#.xpl, accel*.#.apl
+	PlotRateInterval = Clock(100 * time.Microsecond)
 )
 
-// Iface: plots
-//
-// PlotSojournMax is the maximum Y value for the sojourn plot, or the empty
-// string to auto-scale.
+// Iface: plots from the iface
 const (
-	PlotSojourn             = true
-	PlotSojournInterval     = Clock(100 * time.Microsecond)
-	PlotSojournMax          = ""
-	PlotAdjSojourn          = false
-	PlotAdjSojournInterval  = Clock(100 * time.Microsecond)
-	PlotQueueLength         = false
+	PlotSojourn         = true // sojourn.xpl
+	PlotSojournInterval = Clock(100 * time.Microsecond)
+	PlotSojournMax      = "" // max Y value for sojourn plot, or auto
+
+	PlotAdjSojourn         = false // adj-sojourn.xpl
+	PlotAdjSojournInterval = Clock(100 * time.Microsecond)
+
+	PlotQueueLength         = false // queue-length.xpl
 	PlotQueueLengthInterval = Clock(0 * time.Microsecond)
-	PlotDeltaSigma          = false
-	PlotByteSeconds         = false
+
+	PlotDeltaSigma = false // delta-sigma.xpl
+
+	PlotByteSeconds         = false // queue-bytesec.xpl
 	PlotByteSecondsInterval = Clock(100 * time.Microsecond)
 )
 
 // AQM: plots
 const (
-	PlotMarkProportion = false
-	PlotMarkFrequency  = true
-	EmitMark           = false
+	PlotMarkProportion = false // mark-proportion.xpl
+	PlotMarkFrequency  = true  // mark-frequency.xpl
+	EmitMark           = false // print marks to stdout
 )
 
 // Receiver: plots
 const (
-	PlotThroughput       = true
+	PlotThroughput       = true // thruput.xpl
 	PlotThroughputPerRTT = 1
 )
 
@@ -312,8 +324,8 @@ const (
 
 // main
 const (
-	ProfileCPU    = false
-	ProfileMemory = false
+	ProfileCPU    = false // do CPU profiling to scim-cpu.prof
+	ProfileMemory = false // do memory profiling to scim-mem.prof
 )
 
 ////////////////
