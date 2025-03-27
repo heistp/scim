@@ -17,10 +17,11 @@ algorithms behave as expected in an idealized environment.
 Scim can run on any Go-supported platform, but xplot is required to view the
 plots.
 
-1.  Install [Go](https://go.dev/dl) (see `go.mod` for version requirement).
-2.  `mkdir -p ~/go/src/github.com/heistp && cd "$_"`
-3.  `git clone https://github.com/heistp/scim`
-4.  Install [xplot](http://www.xplot.org/).
+1. Install [Go](https://go.dev/dl) (see [go.mod](go.mod) for version
+   requirement).
+2. `mkdir -p ~/go/src/github.com/heistp && cd "$_"`
+3. `git clone https://github.com/heistp/scim`
+4. Install [xplot](http://www.xplot.org/).
 
 Note: with GCC 14, I had to build `xplot` from
 [xplot-0.90.7.1.tar.gz](http://www.xplot.org/xplot/xplot-0.90.7.1.tar.gz)
