@@ -37,8 +37,17 @@ make
 Change to the scim directory.  Either use the `./run` script (requires bash), or
 use `go build` manually and run `./scim`.
 
-Scim is configured via the file `config.go`, so the program must be recompiled
-each time the config is changed.  The run script does this.
+Scim is configured via the file `config.go`.  See the comments in this file for
+what options are available.  The program must be recompiled each time the config
+is changed.
+
+The `run` script compiles and runs scim, and displays the plots. It supports a
+few flags to control it:
+
+* `-p` skips the run and just displays the plots
+* `-r` runs scim with realtime priority, which may improve performance
+* `-t` tiles plots using [wmctrl](https://en.wikipedia.org/wiki/Wmctrl)
+  (must be installed)
 
 ## Sample Plot
 
