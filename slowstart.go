@@ -199,7 +199,7 @@ func (h *HyStartPP) updateRtt(rtt Clock, flow *Flow, node Node) {
 // Essp is a slow start implementation that reduces both the exponential base
 // and the pacing scaling factor in response to congestion signals and delay.
 //
-// https://github.com/heistp/essp/
+// https://github.com/chromi/essp/
 type Essp struct {
 	stage    int
 	ackedRem Bytes
