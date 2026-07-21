@@ -9,11 +9,20 @@ import (
 	"time"
 )
 
-// A CCA implements a congestion control algorithm.
+// A CCA implements a congestion control algorithm. CCA implementations may also
+// implement handleCEer, handleSCEer or slowStartExiter as necessary.
 type CCA interface {
-	handleCE(*Flow, Node)
-	handleSCE(*Flow, Node)
 	grow(Bytes, Packet, *Flow, Node)
+}
+
+// A handleCEer can handle CE marks.
+type handleCEer interface {
+	handleCE(*Flow, Node)
+}
+
+// A handleCEer can handle SCE marks.
+type handleSCEer interface {
+	handleSCE(*Flow, Node)
 }
 
 // A slowStartExiter can take some action on slow-start exit.

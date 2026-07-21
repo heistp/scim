@@ -8,11 +8,20 @@ import (
 )
 
 // A SlowStart implements slow-start for a sender.  SlowStart implementations
-// may also implement initer or updateRtter, as necessary.
+// may also implement initer, updateRtter, handleCEer or handleSCEer as
+// necessary.
 type SlowStart interface {
-	handleCE(*Flow, Node) (exit bool)
-	handleSCE(*Flow, Node) (exit bool)
 	grow(acked Bytes, flow *Flow, node Node) (exit bool)
+}
+
+// A handleCESSer can handle CE marks, and return true to exit SS.
+type handleCESSer interface {
+	handleCE(*Flow, Node) (exit bool)
+}
+
+// A handleSCESSer can handle SCE marks, and return true to exit SS.
+type handleSCESSer interface {
+	handleSCE(*Flow, Node) (exit bool)
 }
 
 // An initer an initialize a SlowStart algorithm.
