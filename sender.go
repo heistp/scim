@@ -646,7 +646,6 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 		}
 	}
 	// react to congestion signals
-	// NOTE check for ECN support after drop logic implemented
 	if pkt.ECE {
 		switch f.state {
 		case FlowStateSS:
@@ -673,6 +672,22 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 		case FlowStateCA:
 			if h, ok := f.cca.(handleSCEer); ok {
 				h.handleSCE(f, node)
+			}
+		}
+	}
+	if pkt.Telemetry != (Telemetry{}) {
+		switch f.state {
+		case FlowStateSS:
+			if h, ok := f.slowStart.(handleTelemetrySSer); ok {
+				if h.handleTelemetry(pkt.Telemetry, f, node) {
+					f.exitSlowStart(node, "Telemetry")
+					// TODO does signalNext need to be set for telemetry?
+					f.signalNext = f.seq
+				}
+			}
+		case FlowStateCA:
+			if h, ok := f.cca.(handleTelemetryer); ok {
+				h.handleTelemetry(pkt.Telemetry, f, node)
 			}
 		}
 	}

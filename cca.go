@@ -25,6 +25,11 @@ type handleSCEer interface {
 	handleSCE(*Flow, Node)
 }
 
+// A handleTelemetryer can handle telemetry data.
+type handleTelemetryer interface {
+	handleTelemetry(Telemetry, *Flow, Node)
+}
+
 // A slowStartExiter can take some action on slow-start exit.
 type slowStartExiter interface {
 	slowStartExit(*Flow, Node)

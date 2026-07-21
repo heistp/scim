@@ -24,6 +24,11 @@ type handleSCESSer interface {
 	handleSCE(*Flow, Node) (exit bool)
 }
 
+// A handleTelemetrySSer can handle Telemetry data, and return true to exit SS.
+type handleTelemetrySSer interface {
+	handleTelemetry(Telemetry, *Flow, Node) (exit bool)
+}
+
 // An initer an initialize a SlowStart algorithm.
 type initer interface {
 	init(*Flow, Node)

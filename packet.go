@@ -26,6 +26,9 @@ type Packet struct {
 	// non-standard fields for simulation purposes
 	Delayed bool
 
+	// Telemetry is used for simulating telemetry-based CCAs.
+	Telemetry
+
 	// AQM fields
 	Enqueue Clock
 }
