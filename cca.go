@@ -11,8 +11,8 @@ import (
 
 // A CCA implements a congestion control algorithm.
 type CCA interface {
-	reactToCE(*Flow, Node)
-	reactToSCE(*Flow, Node)
+	handleCE(*Flow, Node)
+	handleSCE(*Flow, Node)
 	grow(Bytes, Packet, *Flow, Node)
 }
 
@@ -37,16 +37,16 @@ func NewReno(sce Responder) *Reno {
 	}
 }
 
-// reactToCE implements CCA.
-func (r *Reno) reactToCE(flow *Flow, node Node) {
+// handleCE implements CCA.
+func (r *Reno) handleCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
 		flow.setCWND(Bytes(float64(flow.cwnd) * CEMD))
 		flow.signalNext = flow.seq
 	}
 }
 
-// reactToSCE implements CCA.
-func (r *Reno) reactToSCE(flow *Flow, node Node) {
+// handleSCE implements CCA.
+func (r *Reno) handleSCE(flow *Flow, node Node) {
 	if r.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
 		flow.receiveNext > flow.signalNext {
 		flow.setCWND(r.sce.Respond(flow, node))
@@ -89,16 +89,16 @@ func (r *Reno2) slowStartExit(flow *Flow, node Node) {
 	r.growPrior = node.Now()
 }
 
-// reactToCE implements CCA.
-func (r *Reno2) reactToCE(flow *Flow, node Node) {
+// handleCE implements CCA.
+func (r *Reno2) handleCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
 		flow.setCWND(Bytes(float64(flow.cwnd) * CEMD))
 		flow.signalNext = flow.seq
 	}
 }
 
-// reactToSCE implements CCA.
-func (r *Reno2) reactToSCE(flow *Flow, node Node) {
+// handleSCE implements CCA.
+func (r *Reno2) handleSCE(flow *Flow, node Node) {
 	if r.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
 		flow.receiveNext > flow.signalNext {
 		flow.setCWND(r.sce.Respond(flow, node))
@@ -139,8 +139,8 @@ func NewScalable(sce Responder) *Scalable {
 	}
 }
 
-// reactToCE implements CCA.
-func (s *Scalable) reactToCE(flow *Flow, node Node) {
+// handleCE implements CCA.
+func (s *Scalable) handleCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
 		c := flow.cwnd
 		flow.setCWND(Bytes(float64(c) * ScalableCEMD))
@@ -148,8 +148,8 @@ func (s *Scalable) reactToCE(flow *Flow, node Node) {
 	}
 }
 
-// reactToSCE implements CCA.
-func (s *Scalable) reactToSCE(flow *Flow, node Node) {
+// handleSCE implements CCA.
+func (s *Scalable) handleSCE(flow *Flow, node Node) {
 	if s.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
 		flow.receiveNext > flow.signalNext {
 		flow.setCWND(s.sce.Respond(flow, node))
@@ -221,8 +221,8 @@ func (c *CUBIC) slowStartExit(flow *Flow, node Node) {
 	c.updateWmax(flow.cwnd)
 }
 
-// reactToCE implements CCA.
-func (c *CUBIC) reactToCE(flow *Flow, node Node) {
+// handleCE implements CCA.
+func (c *CUBIC) handleCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
 		c.updateWmax(flow.cwnd)
 		flow.setCWND(Bytes(float64(flow.cwnd) * CubicBeta))
@@ -243,8 +243,8 @@ func (c *CUBIC) updateWmax(cwnd Bytes) {
 	}
 }
 
-// reactToSCE implements CCA.
-func (c *CUBIC) reactToSCE(flow *Flow, node Node) {
+// handleSCE implements CCA.
+func (c *CUBIC) handleSCE(flow *Flow, node Node) {
 	if c.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
 		flow.receiveNext > flow.signalNext {
 		c.updateWmax(flow.cwnd)
@@ -340,8 +340,8 @@ func (m *Maslo) slowStartExit(flow *Flow, node Node) {
 	m.setSafeStage(flow, node)
 }
 
-// reactToCE implements CCA.
-func (m *Maslo) reactToCE(flow *Flow, node Node) {
+// handleCE implements CCA.
+func (m *Maslo) handleCE(flow *Flow, node Node) {
 	m.priorRateOnSignal = flow.pacingRate
 	if flow.receiveNext > flow.signalNext {
 		flow.pacingRate = Bitrate(float64(flow.pacingRate) * MasloBeta)
@@ -353,8 +353,8 @@ func (m *Maslo) reactToCE(flow *Flow, node Node) {
 	}
 }
 
-// reactToSCE implements CCA.
-func (m *Maslo) reactToSCE(flow *Flow, node Node) {
+// handleSCE implements CCA.
+func (m *Maslo) handleSCE(flow *Flow, node Node) {
 	m.priorRateOnSignal = flow.pacingRate
 	//r0 := flow.pacingRate
 	if MasloSCEMDApproximation {

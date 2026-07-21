@@ -650,22 +650,22 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 	if pkt.ECE {
 		switch f.state {
 		case FlowStateSS:
-			if f.slowStart.reactToCE(f, node) {
+			if f.slowStart.handleCE(f, node) {
 				f.exitSlowStart(node, "CE")
 				f.signalNext = f.seq
 			}
 		case FlowStateCA:
-			f.cca.reactToCE(f, node)
+			f.cca.handleCE(f, node)
 		}
 	} else if pkt.ESCE && f.sce == SCE {
 		switch f.state {
 		case FlowStateSS:
-			if f.slowStart.reactToSCE(f, node) {
+			if f.slowStart.handleSCE(f, node) {
 				f.exitSlowStart(node, "SCE")
 				f.signalNext = f.seq
 			}
 		case FlowStateCA:
-			f.cca.reactToSCE(f, node)
+			f.cca.handleSCE(f, node)
 		}
 	}
 	// grow cwnd

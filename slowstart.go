@@ -10,8 +10,8 @@ import (
 // A SlowStart implements slow-start for a sender.  SlowStart implementations
 // may also implement initer or updateRtter, as necessary.
 type SlowStart interface {
-	reactToCE(*Flow, Node) (exit bool)
-	reactToSCE(*Flow, Node) (exit bool)
+	handleCE(*Flow, Node) (exit bool)
+	handleSCE(*Flow, Node) (exit bool)
 	grow(acked Bytes, flow *Flow, node Node) (exit bool)
 }
 
@@ -37,14 +37,14 @@ func NewStdSS() *StdSS {
 	}
 }
 
-// reactToCE implements SlowStart.
-func (*StdSS) reactToCE(flow *Flow, node Node) (exit bool) {
+// handleCE implements SlowStart.
+func (*StdSS) handleCE(flow *Flow, node Node) (exit bool) {
 	exit = true
 	return
 }
 
-// reactToSCE implements SlowStart.
-func (s *StdSS) reactToSCE(flow *Flow, node Node) (exit bool) {
+// handleSCE implements SlowStart.
+func (s *StdSS) handleSCE(flow *Flow, node Node) (exit bool) {
 	s.sceCtr++
 	exit = s.sceCtr >= DefaultSSExitThreshold
 	return
@@ -109,14 +109,14 @@ func NewHyStartPP() *HyStartPP {
 	}
 }
 
-// reactToCE implements SlowStart.
-func (*HyStartPP) reactToCE(flow *Flow, node Node) (exit bool) {
+// handleCE implements SlowStart.
+func (*HyStartPP) handleCE(flow *Flow, node Node) (exit bool) {
 	exit = true
 	return
 }
 
-// reactToSCE implements SlowStart.
-func (h *HyStartPP) reactToSCE(flow *Flow, node Node) (exit bool) {
+// handleSCE implements SlowStart.
+func (h *HyStartPP) handleSCE(flow *Flow, node Node) (exit bool) {
 	h.sceCtr++
 	exit = h.sceCtr >= DefaultSSExitThreshold
 	return
@@ -224,8 +224,8 @@ func (l *Essp) init(flow *Flow, node Node) {
 		flow.id, l.stage, l.k(), l.scale(), flow.cwnd, flow.getPacingRate().Bps())
 }
 
-// reactToCE implements SlowStart.
-func (l *Essp) reactToCE(flow *Flow, node Node) (exit bool) {
+// handleCE implements SlowStart.
+func (l *Essp) handleCE(flow *Flow, node Node) (exit bool) {
 	if flow.receiveNext <= flow.signalNext {
 		return
 	}
@@ -279,8 +279,8 @@ func (l *Essp) advance(why string, flow *Flow, node Node) (exit bool) {
 	return
 }
 
-// reactToSCE implements SlowStart.
-func (l *Essp) reactToSCE(flow *Flow, node Node) (exit bool) {
+// handleSCE implements SlowStart.
+func (l *Essp) handleSCE(flow *Flow, node Node) (exit bool) {
 	if flow.receiveNext <= flow.signalNext {
 		return
 	}
