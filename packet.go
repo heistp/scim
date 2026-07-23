@@ -30,7 +30,8 @@ type Packet struct {
 	Telemetry
 
 	// AQM fields
-	Enqueue Clock
+	Enqueue    Clock
+	EnqueueLen Bytes
 }
 
 // handleSim implements output.

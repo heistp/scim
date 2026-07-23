@@ -3,7 +3,7 @@ package main
 // Telemetry contains data set on packets for telemetry-based CCAs.
 type Telemetry struct {
 	Sojourn Clock // time between enqueue and dequeue
-	QLen    Bytes // queue length in bytes after packet is enqueued
+	QLen    Bytes // queue length in bytes before packet is enqueued
 	PktLen  Bytes // packet length (could have grown due to encapsulation)
 }
 
@@ -21,10 +21,9 @@ func NewTelemetryQueue() *TelemetryQueue {
 // Enqueue implements AQM.
 func (t *TelemetryQueue) Enqueue(pkt Packet, node Node) {
 	pkt.Enqueue = node.Now()
+	pkt.EnqueueLen = t.length
 	t.queue = append(t.queue, pkt)
 	t.length += pkt.Len
-	pkt.QLen = t.length
-	pkt.PktLen = pkt.Len
 }
 
 // Dequeue implements AQM.
@@ -33,7 +32,12 @@ func (t *TelemetryQueue) Dequeue(node Node) (pkt Packet, ok bool) {
 		return
 	}
 	pkt, t.queue = t.queue[0], t.queue[1:]
-	pkt.Sojourn = node.Now() - pkt.Enqueue
+	s := node.Now() - pkt.Enqueue
+	if s > pkt.Sojourn {
+		pkt.Sojourn = s
+		pkt.PktLen = pkt.Len
+		pkt.QLen = pkt.EnqueueLen
+	}
 	t.length -= pkt.Len
 	ok = true
 	return
