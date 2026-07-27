@@ -51,7 +51,7 @@ func NewReno(sce Responder) *Reno {
 	}
 }
 
-// handleCE implements CCA.
+// handleCE implements handleCEer.
 func (r *Reno) handleCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
 		flow.setCWND(Bytes(float64(flow.cwnd) * CEMD))
@@ -59,7 +59,7 @@ func (r *Reno) handleCE(flow *Flow, node Node) {
 	}
 }
 
-// handleSCE implements CCA.
+// handleSCE implements handleSCEer.
 func (r *Reno) handleSCE(flow *Flow, node Node) {
 	if r.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
 		flow.receiveNext > flow.signalNext {
@@ -103,7 +103,7 @@ func (r *Reno2) slowStartExit(flow *Flow, node Node) {
 	r.growPrior = node.Now()
 }
 
-// handleCE implements CCA.
+// handleCE implements handleCEer.
 func (r *Reno2) handleCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
 		flow.setCWND(Bytes(float64(flow.cwnd) * CEMD))
@@ -111,7 +111,7 @@ func (r *Reno2) handleCE(flow *Flow, node Node) {
 	}
 }
 
-// handleSCE implements CCA.
+// handleSCE implements handleSCEer.
 func (r *Reno2) handleSCE(flow *Flow, node Node) {
 	if r.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
 		flow.receiveNext > flow.signalNext {
@@ -153,7 +153,7 @@ func NewScalable(sce Responder) *Scalable {
 	}
 }
 
-// handleCE implements CCA.
+// handleCE implements handleCEer.
 func (s *Scalable) handleCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
 		c := flow.cwnd
@@ -162,7 +162,7 @@ func (s *Scalable) handleCE(flow *Flow, node Node) {
 	}
 }
 
-// handleSCE implements CCA.
+// handleSCE implements handleSCEer.
 func (s *Scalable) handleSCE(flow *Flow, node Node) {
 	if s.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
 		flow.receiveNext > flow.signalNext {
@@ -235,7 +235,7 @@ func (c *CUBIC) slowStartExit(flow *Flow, node Node) {
 	c.updateWmax(flow.cwnd)
 }
 
-// handleCE implements CCA.
+// handleCE implements handleCEer.
 func (c *CUBIC) handleCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
 		c.updateWmax(flow.cwnd)
@@ -257,7 +257,7 @@ func (c *CUBIC) updateWmax(cwnd Bytes) {
 	}
 }
 
-// handleSCE implements CCA.
+// handleSCE implements handleSCEer.
 func (c *CUBIC) handleSCE(flow *Flow, node Node) {
 	if c.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
 		flow.receiveNext > flow.signalNext {
@@ -325,6 +325,54 @@ func (c *CUBIC) target(cwnd Bytes, t Clock) Bytes {
 		return cwnd * 3 / 2
 	}
 	return w
+}
+
+// Stuttgart implements a CCA that responds to congestion telemetry.
+type Stuttgart struct {
+	growRem       Bytes
+	priorQLen     Bytes
+	preTargetSeq  Seq
+	preTargetCwnd Bytes
+}
+
+// NewStuttgart returns a new Stuttgart.
+func NewStuttgart(sce Responder) *Stuttgart {
+	return &Stuttgart{}
+}
+
+// handleTelemetry implements handleTelemetryer.
+func (s *Stuttgart) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
+	if tel.QLen == 0 {
+		if s.priorQLen > 0 && flow.receiveNext < s.preTargetSeq {
+			flow.cwnd = s.preTargetCwnd
+		}
+	} else {
+		// TODO
+	}
+	s.priorQLen = tel.QLen
+
+	//- If qlen == 0:
+	//  - If prior_qlen > 0 && RCV.NXT <= pre_target_seq:
+	//    - cwnd = pre_target_cwnd
+	//- Else: # qlen > 0
+	//  - bbw := EWMA of (qlen / sojourn)  # bottleneck bandwidth
+	//  - fbw := cwnd(bytes) / RTT(sec)    # flow bandwidth
+	//  - qp := sojourn / RTT              # queue proportion
+	//  - fqp := qp * fbw / bbw            # flow queue proportion
+	//  - cwnd = cwnd(-1RTT) - cwnd(-1RTT) * fqp
+	//  - if prior_qlen == 0:
+	//    - pre_target_cwnd = cwnd
+	//    - pre_target_seq = SND.NXT
+	//- prior_qlen = qlen
+}
+
+// grow implements CCA.
+func (s *Stuttgart) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
+	// Scalable growth
+	a := acked + s.growRem
+	g := a / ScalableAlpha
+	s.growRem = a % ScalableAlpha
+	flow.setCWND(flow.cwnd + g)
 }
 
 // Maslo implements the MASLO TCP CCA.
