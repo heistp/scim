@@ -9,7 +9,7 @@ import (
 )
 
 // Bytes is a number of bytes.
-type Bytes int64
+type Bytes uint64
 
 const (
 	Byte     Bytes = 1

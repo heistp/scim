@@ -32,6 +32,7 @@ type rflow struct {
 	priorAcked Seq
 	priorECE   bool
 	priorESCE  bool
+	tel        []Telemetry
 }
 
 // sendAck sends an ack for the given Packet.
@@ -49,6 +50,13 @@ func (f *rflow) sendAck(pkt Packet, node Node) {
 	f.priorECE = pkt.ECE
 	f.priorESCE = pkt.ESCE
 	f.priorAcked = pkt.Seq
+	if len(f.tel) > 0 {
+		var tt Telemetry
+		for _, t := range f.tel {
+			tt = tt.Merge(t)
+		}
+		pkt.Telemetry = tt
+	}
 	node.Send(pkt)
 }
 
@@ -63,6 +71,7 @@ func NewReceiver() *Receiver {
 			-1,       // priorAcked
 			false,    // priorECE
 			false,    // priorESCE
+			nil,      // tel
 		})
 	}
 	return &Receiver{
@@ -146,6 +155,9 @@ func (r *Receiver) receive(pkt Packet, node Node) {
 		}
 	} else {
 		f.next = pkt.NextSeq()
+	}
+	if pkt.Telemetry != (Telemetry{}) {
+		f.tel = append(f.tel, pkt.Telemetry)
 	}
 	if a || // immediate ACK due to out-of-order packet or filling of hole
 		DelayedACKTime == 0 || // delayed ACKs disabled
