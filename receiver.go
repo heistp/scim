@@ -56,6 +56,7 @@ func (f *rflow) sendAck(pkt Packet, node Node) {
 			tt = tt.Merge(t)
 		}
 		pkt.Telemetry = tt
+		f.tel = nil
 	}
 	node.Send(pkt)
 }
