@@ -344,6 +344,7 @@ func NewStuttgart(sce Responder) *Stuttgart {
 
 // handleTelemetry implements handleTelemetryer.
 func (s *Stuttgart) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
+	// on the first telemetry seen, just set prior values
 	if !s.initialized {
 		s.priorQLen = tel.QLen
 		s.priorTotal = tel.Total
@@ -352,19 +353,27 @@ func (s *Stuttgart) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
 	}
 
 	if tel.QLen == 0 {
+		// If QLen returned to 0 with an RTT, restore cwnd to the value it was
+		// before cwnd targeting took place.
 		if s.priorQLen > 0 && flow.receiveNext < s.preTargetSeq {
 			flow.cwnd = s.preTargetCwnd
 		}
 	} else {
+		// If changing state from QLen == 0 to QLen > 0, record the cwnd and
+		// sequence number prior to starting cwnd targeting.
+		if s.priorQLen == 0 {
+			s.preTargetCwnd = flow.cwnd
+			s.preTargetSeq = flow.seq
+		}
+
+		// Do cwnd targeting by rewinding cwnd to in-flight bytes one RTT ago
+		// (since telemetry is delayed by ~1 RTT), and removing this flow's
+		// contribution to the sojourn time.
 		sent := tel.Total - s.priorTotal
 		qp := float64(tel.Sojourn) / float64(flow.srtt)
 		fqp := qp * float64(tel.PktLen) / float64(sent)
 		flight := flow.inFlightWin.at(node.Now() - flow.srtt)
 		flow.cwnd = flight - Bytes(float64(flight)*float64(fqp))
-		if s.priorQLen == 0 {
-			s.preTargetCwnd = flow.cwnd
-			s.preTargetSeq = flow.seq
-		}
 	}
 	s.priorQLen = tel.QLen
 	s.priorTotal = tel.Total
@@ -372,7 +381,7 @@ func (s *Stuttgart) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
 
 // grow implements CCA.
 func (s *Stuttgart) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
-	// Scalable growth
+	// do Scalable TCP style growth, regardless of signals or telemetry
 	a := acked + s.growRem
 	g := a / ScalableAlpha
 	s.growRem = a % ScalableAlpha
