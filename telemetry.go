@@ -25,11 +25,18 @@ type TelemetryQueue struct {
 	queue  []Packet
 	length Bytes
 	total  Bytes
+	// Plots
+	*aqmPlot
 }
 
 // NewTelemetryQueue returns a new TelemetryQueue.
 func NewTelemetryQueue() *TelemetryQueue {
-	return &TelemetryQueue{}
+	return &TelemetryQueue{
+		nil,          // queue
+		0,            // length
+		0,            // total
+		newAqmPlot(), // aqmPlot
+	}
 }
 
 // Enqueue implements AQM.
@@ -38,6 +45,8 @@ func (t *TelemetryQueue) Enqueue(pkt Packet, node Node) {
 	pkt.EnqueueLen = t.length
 	t.queue = append(t.queue, pkt)
 	t.length += pkt.Len
+
+	t.plotLength(len(t.queue), node.Now())
 }
 
 // Dequeue implements AQM.
@@ -45,7 +54,9 @@ func (t *TelemetryQueue) Dequeue(node Node) (pkt Packet, ok bool) {
 	if len(t.queue) == 0 {
 		return
 	}
+
 	pkt, t.queue = t.queue[0], t.queue[1:]
+	ok = true
 	s := node.Now() - pkt.Enqueue
 	t.total += pkt.Len
 	if s > pkt.Sojourn {
@@ -55,7 +66,10 @@ func (t *TelemetryQueue) Dequeue(node Node) (pkt Packet, ok bool) {
 		pkt.Total = t.total
 	}
 	t.length -= pkt.Len
-	ok = true
+
+	t.plotSojourn(node.Now()-pkt.Enqueue, len(t.queue) == 0, node.Now())
+	t.plotLength(len(t.queue), node.Now())
+
 	return
 }
 
