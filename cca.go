@@ -338,7 +338,7 @@ type Stuttgart struct {
 }
 
 // NewStuttgart returns a new Stuttgart.
-func NewStuttgart(sce Responder) *Stuttgart {
+func NewStuttgart() *Stuttgart {
 	return &Stuttgart{}
 }
 
