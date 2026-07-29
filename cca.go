@@ -331,8 +331,10 @@ func (c *CUBIC) target(cwnd Bytes, t Clock) Bytes {
 type Stuttgart struct {
 	growRem       Bytes
 	priorQLen     Bytes
+	priorTotal    Bytes
 	preTargetSeq  Seq
 	preTargetCwnd Bytes
+	initialized   bool
 }
 
 // NewStuttgart returns a new Stuttgart.
@@ -342,28 +344,30 @@ func NewStuttgart(sce Responder) *Stuttgart {
 
 // handleTelemetry implements handleTelemetryer.
 func (s *Stuttgart) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
+	if !s.initialized {
+		s.priorQLen = tel.QLen
+		s.priorTotal = tel.Total
+		s.initialized = true
+		return
+	}
+
 	if tel.QLen == 0 {
 		if s.priorQLen > 0 && flow.receiveNext < s.preTargetSeq {
 			flow.cwnd = s.preTargetCwnd
 		}
 	} else {
-		// TODO
+		sent := tel.Total - s.priorTotal
+		qp := float64(tel.Sojourn) / float64(flow.srtt)
+		fqp := qp * float64(tel.PktLen) / float64(sent)
+		flight := flow.inFlightWin.at(node.Now() - flow.srtt)
+		flow.cwnd = flight - Bytes(float64(flight)*float64(fqp))
+		if s.priorQLen == 0 {
+			s.preTargetCwnd = flow.cwnd
+			s.preTargetSeq = flow.seq
+		}
 	}
 	s.priorQLen = tel.QLen
-
-	//- If qlen == 0:
-	//  - If prior_qlen > 0 && RCV.NXT <= pre_target_seq:
-	//    - cwnd = pre_target_cwnd
-	//- Else: # qlen > 0
-	//  - bbw := EWMA of (qlen / sojourn)  # bottleneck bandwidth
-	//  - fbw := cwnd(bytes) / RTT(sec)    # flow bandwidth
-	//  - qp := sojourn / RTT              # queue proportion
-	//  - fqp := qp * fbw / bbw            # flow queue proportion
-	//  - cwnd = cwnd(-1RTT) - cwnd(-1RTT) * fqp
-	//  - if prior_qlen == 0:
-	//    - pre_target_cwnd = cwnd
-	//    - pre_target_seq = SND.NXT
-	//- prior_qlen = qlen
+	s.priorTotal = tel.Total
 }
 
 // grow implements CCA.
