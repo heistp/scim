@@ -26,7 +26,8 @@ const Duration = 30 * time.Second
 // CWND targeting on SS exit.
 var (
 	Flows = []Flow{
-		AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewReno(RMD), Pacing, true),
+		AddFlow(NoECN, NoSCE, NoSS{}, NoResponse{}, NewStuttgart(), Pacing, true),
+		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewReno(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewReno(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewReno2(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewCUBIC(CMD), Pacing, true),
@@ -118,7 +119,7 @@ var RateSchedule = []RateAt{
 //var UseAQM = NewDelticMDS(Clock(5000 * time.Microsecond))
 
 // Iface: DelTiM AQM config
-var UseAQM = NewDeltim(Clock(5000 * time.Microsecond))
+//var UseAQM = NewDeltim(Clock(5000 * time.Microsecond))
 
 // Iface: DelTiM2 AQM config
 //var UseAQM = NewDeltim2(Clock(5*time.Millisecond), Clock(1*time.Millisecond))
@@ -139,6 +140,9 @@ var (
 	SCERampMin = Clock(TransferTime(RateInit, Bytes(MTU))) * 1
 	SCERampMax = Clock(100 * time.Millisecond)
 )
+
+// Iface: Telemetry config
+var UseAQM = NewTelemetryQueue()
 
 ////////////////
 //
@@ -179,7 +183,7 @@ const (
 	PlotAdjSojourn         = false // adj-sojourn.xpl
 	PlotAdjSojournInterval = Clock(100 * time.Microsecond)
 
-	PlotQueueLength         = false // queue-length.xpl
+	PlotQueueLength         = true // queue-length.xpl
 	PlotQueueLengthInterval = Clock(0 * time.Microsecond)
 
 	PlotDeltaSigma = false // delta-sigma.xpl
@@ -191,7 +195,7 @@ const (
 // AQM: plots
 const (
 	PlotMarkProportion = false // mark-proportion.xpl
-	PlotMarkFrequency  = true  // mark-frequency.xpl
+	PlotMarkFrequency  = false // mark-frequency.xpl
 	EmitMark           = false // print marks to stdout
 )
 
@@ -276,7 +280,7 @@ var CubicBetaSCE = math.Pow(CubicBeta, 1.0/Tau)
 // Sender: Scalable params
 const (
 	ScalableCEMD       = 0.5        // or 0.7, or 0.875, if RFC 8511
-	ScalableAlpha      = Bytes(200) // Scalable TCP 1/a
+	ScalableAlpha      = Bytes(100) // Scalable TCP 1/a
 	ScalableLwnd       = Bytes(0)   // lwnd- max cwnd for Reno growth
 	ScalableRenoSmooth = false      // if true, use per-ACK Reno growth
 )
