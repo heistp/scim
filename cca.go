@@ -54,7 +54,7 @@ func NewReno(sce Responder) *Reno {
 // handleCE implements handleCEer.
 func (r *Reno) handleCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
-		flow.setCWND(Bytes(float64(flow.cwnd) * CEMD))
+		flow.setCWND(Bytes(float64(flow.cwnd)*CEMD), node)
 		flow.signalNext = flow.seq
 	}
 }
@@ -63,7 +63,7 @@ func (r *Reno) handleCE(flow *Flow, node Node) {
 func (r *Reno) handleSCE(flow *Flow, node Node) {
 	if r.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
 		flow.receiveNext > flow.signalNext {
-		flow.setCWND(r.sce.Respond(flow, node))
+		flow.setCWND(r.sce.Respond(flow, node), node)
 	}
 }
 
@@ -74,7 +74,7 @@ func (r *Reno) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	}
 
 	if node.Now()-r.priorGrowth > flow.srtt { // time-based growth
-		flow.setCWND(flow.cwnd + MSS)
+		flow.setCWND(flow.cwnd+MSS, node)
 		r.priorGrowth = node.Now()
 	}
 }
@@ -106,7 +106,7 @@ func (r *Reno2) slowStartExit(flow *Flow, node Node) {
 // handleCE implements handleCEer.
 func (r *Reno2) handleCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
-		flow.setCWND(Bytes(float64(flow.cwnd) * CEMD))
+		flow.setCWND(Bytes(float64(flow.cwnd)*CEMD), node)
 		flow.signalNext = flow.seq
 	}
 }
@@ -115,7 +115,7 @@ func (r *Reno2) handleCE(flow *Flow, node Node) {
 func (r *Reno2) handleSCE(flow *Flow, node Node) {
 	if r.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
 		flow.receiveNext > flow.signalNext {
-		flow.setCWND(r.sce.Respond(flow, node))
+		flow.setCWND(r.sce.Respond(flow, node), node)
 	} else {
 		//node.Logf("ignore SCE")
 	}
@@ -126,7 +126,7 @@ func (r *Reno2) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	if !pkt.ECE && !pkt.ESCE {
 		r.growTimer += node.Now() - r.growPrior
 		for r.growTimer >= flow.srtt/Clock(MSS) {
-			flow.setCWND(flow.cwnd + 1)
+			flow.setCWND(flow.cwnd+1, node)
 			r.growTimer -= flow.srtt / Clock(MSS)
 		}
 	}
@@ -157,7 +157,7 @@ func NewScalable(sce Responder) *Scalable {
 func (s *Scalable) handleCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
 		c := flow.cwnd
-		flow.setCWND(Bytes(float64(c) * ScalableCEMD))
+		flow.setCWND(Bytes(float64(c)*ScalableCEMD), node)
 		flow.signalNext = flow.seq
 	}
 }
@@ -166,7 +166,7 @@ func (s *Scalable) handleCE(flow *Flow, node Node) {
 func (s *Scalable) handleSCE(flow *Flow, node Node) {
 	if s.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
 		flow.receiveNext > flow.signalNext {
-		flow.setCWND(s.sce.Respond(flow, node))
+		flow.setCWND(s.sce.Respond(flow, node), node)
 	}
 }
 
@@ -186,12 +186,12 @@ func (s *Scalable) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 				r++
 				s.growOscillator -= flow.srtt / Clock(MSS)
 			}
-			flow.setCWND(flow.cwnd + r)
+			flow.setCWND(flow.cwnd+r, node)
 			return
 		}
 		// standard growth, one MSS per RTT
 		if node.Now()-s.growPrior > flow.srtt {
-			flow.setCWND(flow.cwnd + MSS)
+			flow.setCWND(flow.cwnd+MSS, node)
 			s.growPrior = node.Now()
 		}
 		return
@@ -201,7 +201,7 @@ func (s *Scalable) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	a := acked + s.growRem
 	g := a / ScalableAlpha
 	s.growRem = a % ScalableAlpha
-	flow.setCWND(flow.cwnd + g)
+	flow.setCWND(flow.cwnd+g, node)
 	s.growPrior = node.Now()
 }
 
@@ -239,7 +239,7 @@ func (c *CUBIC) slowStartExit(flow *Flow, node Node) {
 func (c *CUBIC) handleCE(flow *Flow, node Node) {
 	if flow.receiveNext > flow.signalNext {
 		c.updateWmax(flow.cwnd)
-		flow.setCWND(Bytes(float64(flow.cwnd) * CubicBeta))
+		flow.setCWND(Bytes(float64(flow.cwnd)*CubicBeta), node)
 		c.tEpoch = node.Now()
 		c.cwndEpoch = flow.cwnd
 		c.wEst = c.cwndEpoch
@@ -262,7 +262,7 @@ func (c *CUBIC) handleSCE(flow *Flow, node Node) {
 	if c.sceHistory.add(node.Now(), node.Now()-flow.srtt) &&
 		flow.receiveNext > flow.signalNext {
 		c.updateWmax(flow.cwnd)
-		flow.setCWND(c.sce.Respond(flow, node))
+		flow.setCWND(c.sce.Respond(flow, node), node)
 		c.tEpoch = node.Now()
 		c.cwndEpoch = flow.cwnd
 		c.wEst = c.cwndEpoch
@@ -277,11 +277,11 @@ func (c *CUBIC) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	//c0 := flow.cwnd
 	//node.Logf("t:%d u:%d e:%d beta:%f", t, u, e, c.beta)
 	if u < e { // Reno-friendly region
-		flow.setCWND(e)
+		flow.setCWND(e, node)
 		//node.Logf("  friendly cwnd0:%d cwnd:%d", c0, flow.cwnd)
 	} else { // concave and convex regions
 		r := c.target(flow.cwnd, t+flow.srtt)
-		flow.setCWND(flow.cwnd + MSS*(r-flow.cwnd)/flow.cwnd)
+		flow.setCWND(flow.cwnd+MSS*(r-flow.cwnd)/flow.cwnd, node)
 		/*
 			if flow.cwnd < c.wMax {
 				node.Logf("  concave cwnd:%d cwnd0:%d r:%d t:%d srtt:%d",
@@ -362,7 +362,7 @@ func (m *Maslo) handleCE(flow *Flow, node Node) {
 		if MasloOrttAdjustment {
 			m.ortt = Clock(float64(m.ortt) * MasloBeta)
 		}
-		m.syncCWND(flow)
+		m.syncCWND(flow, node)
 		flow.signalNext = flow.seq
 	}
 }
@@ -388,7 +388,7 @@ func (m *Maslo) handleSCE(flow *Flow, node Node) {
 	//m.ortt -= m.ortt * Clock(MSS) / Clock(flow.cwnd)
 
 	//node.Logf("r0:%.3f r:%.3f", r0.Mbps(), flow.pacingRate.Mbps())
-	m.syncCWND(flow)
+	m.syncCWND(flow, node)
 }
 
 // grow implements CCA.
@@ -402,7 +402,7 @@ func (m *Maslo) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	if m.startProbe(flow, node) {
 		return
 	}
-	m.syncCWND(flow)
+	m.syncCWND(flow, node)
 	//node.Logf("maslo grow k:%d acked:%d rate:%.3f->%.3f cwnd:%d->%d", m.k(),
 	//	acked, r0.Mbps(), flow.pacingRate.Mbps(), c0, flow.cwnd)
 }
@@ -432,7 +432,7 @@ func (m *Maslo) startProbe(flow *Flow, node Node) (ok bool) {
 	c0 := flow.cwnd
 	// new version below scales CWND
 	k := Bytes(e.k())
-	flow.setCWND(Bytes(y*r) * (k - 1) / k)
+	flow.setCWND(Bytes(y*r)*(k-1)/k, node)
 	// old version below does not scale CWND
 	//flow.cwnd = Bytes(y * r)
 	flow.disableExplicitPacing()
@@ -459,7 +459,7 @@ func (m *Maslo) updateRtt(rtt Clock, flow *Flow, node Node) {
 	flow.pacingRate += Bitrate(float64(flow.pacingRate) *
 		(time.Duration(m.ortt - flow.srtt).Seconds()) /
 		(1.0/MasloM + 1.0/p + max(m.ortt, flow.srtt).Seconds()))
-	m.syncCWND(flow)
+	m.syncCWND(flow, node)
 	//dr := time.Duration(m.ortt - flow.srtt).Seconds()
 	//node.Logf("ortt:%dns srtt:%dns ortt-srtt:%.9fs drate:%.0f bps",
 	//	m.ortt, flow.srtt, dr, flow.pacingRate.Bps()-r0.Bps())
@@ -606,14 +606,14 @@ func (m *Maslo) stageFloor(stage int) Clock {
 }
 
 // syncCWND synchronizes the CWND with the pacing rate.
-func (m *Maslo) syncCWND(flow *Flow) {
+func (m *Maslo) syncCWND(flow *Flow, node Node) {
 	// new version
 	c := flow.cwndFromPacingRate()
 	c = Bytes(float64(c) * MasloCwndScaleFactor)
 	if c < MasloMinimumCwnd {
 		c = MasloMinimumCwnd
 	}
-	flow.setCWND(c)
+	flow.setCWND(c, node)
 	// old version
 	//y := flow.pacingRate.Yps()                  // rate in bytes/sec.
 	//r := time.Duration(flow.srtt).Seconds()     // smoothed RTT in seconds

@@ -205,6 +205,7 @@ type Flow struct {
 
 	cca         CCA
 	cwnd        Bytes
+	cwndWin     bytesWindow
 	inFlight    Bytes
 	inFlightWin bytesWindow
 
@@ -285,6 +286,7 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 		ssExit,               // slowStartExit
 		cca,                  // cca
 		IW,                   // cwnd
+		bytesWindow{},        // cwndWin
 		0,                    // inFlight
 		bytesWindow{},        // inFlightWindow
 		false,                // pacingWait
@@ -706,7 +708,7 @@ func (f *Flow) handleAck(pkt Packet, node Node) {
 // exitSlowStart adjusts cwnd for slow-start exit and changes state to CA.
 func (f *Flow) exitSlowStart(node Node, reason string) {
 	cwnd0 := f.cwnd
-	f.setCWND(f.slowStartExit.Respond(f, node))
+	f.setCWND(f.slowStartExit.Respond(f, node), node)
 	node.Logf("flow:%d slow-start exit %s cwnd:%d cwnd0:%d",
 		f.id, reason, f.cwnd, cwnd0)
 	if x, ok := f.cca.(slowStartExiter); ok {
@@ -748,11 +750,13 @@ func (f *Flow) updateRTT(pkt Packet, node Node) {
 
 // setCWND updates the congestion window to the given value and performs
 // clamping so that it doesn't fall below 2x MSS.
-func (f *Flow) setCWND(cwnd Bytes) {
+func (f *Flow) setCWND(cwnd Bytes, node Node) {
 	if cwnd < 2*MSS {
 		cwnd = 2 * MSS
 	}
 	f.cwnd = cwnd
+	now := node.Now()
+	f.cwndWin.add(now, f.cwnd, now-f.srtt)
 }
 
 // bytesWindow stores a value in bytes over time.

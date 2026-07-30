@@ -102,7 +102,7 @@ func (s *StdSS) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 		exit = true
 		return
 	}
-	flow.setCWND(flow.cwnd + i)
+	flow.setCWND(flow.cwnd+i, node)
 	return
 }
 
@@ -171,7 +171,7 @@ func (h *HyStartPP) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 		case SSGrowthABC2:
 			i = acked
 		}
-		flow.setCWND(flow.cwnd + i)
+		flow.setCWND(flow.cwnd+i, node)
 	} else {
 		if h.hystartRound(flow) {
 			h.cssRounds++
@@ -188,10 +188,10 @@ func (h *HyStartPP) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 			return
 		}
 		if flow.pacing == NoPacing {
-			flow.setCWND(flow.cwnd +
-				min(acked, HyStartLNoPacing*MSS)/HyCSSGrowthDivisor)
+			flow.setCWND(flow.cwnd+
+				min(acked, HyStartLNoPacing*MSS)/HyCSSGrowthDivisor, node)
 		} else {
-			flow.setCWND(flow.cwnd + acked/HyCSSGrowthDivisor)
+			flow.setCWND(flow.cwnd+acked/HyCSSGrowthDivisor, node)
 		}
 	}
 
@@ -286,7 +286,7 @@ func (l *Essp) advance(why string, flow *Flow, node Node) (exit bool) {
 	if EsspCWNDTargeting {
 		c := c0 * Bytes(l.minRtt) / Bytes(l.rtt)
 		if flow.cwnd > c {
-			flow.setCWND(c)
+			flow.setCWND(c, node)
 		}
 		defer l.resetRtt() // defers to after logging
 	}
@@ -322,7 +322,7 @@ func (l *Essp) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 	}
 	a := acked + l.ackedRem
 	//c0 := flow.cwnd
-	flow.setCWND(flow.cwnd + a/Bytes(l.k()))
+	flow.setCWND(flow.cwnd+a/Bytes(l.k()), node)
 	l.ackedRem = a % Bytes(l.k())
 	//node.Logf("flow:%d grow cwnd0:%d cwnd:%d", flow.id, c0, flow.cwnd)
 	return

@@ -14,7 +14,7 @@ import (
 //
 
 // Sender: test duration
-const Duration = 30 * time.Second
+const Duration = 10 * time.Second
 
 // Sender: flows and path delay
 //
@@ -151,7 +151,7 @@ var UseAQM = NewTelemetryQueue()
 
 // Sender: plots from the sender
 const (
-	PlotInFlight         = false // in-flight.xpl
+	PlotInFlight         = true // in-flight.xpl
 	PlotInFlightInterval = Clock(100 * time.Microsecond)
 
 	PlotCwnd         = true                          // cwnd.xpl

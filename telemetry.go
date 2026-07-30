@@ -117,7 +117,8 @@ func (s *Stuttgart) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
 		// If QLen returned to 0 with an RTT, restore cwnd to the value it was
 		// before cwnd targeting took place.
 		if s.priorQLen > 0 && flow.receiveNext < s.preTargetSeq {
-			flow.cwnd = s.preTargetCwnd
+			flow.setCWND(s.preTargetCwnd, node)
+			//node.Logf("restore cwnd")
 		}
 	} else {
 		// If changing state from QLen == 0 to QLen > 0, record the cwnd and
@@ -125,16 +126,21 @@ func (s *Stuttgart) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
 		if s.priorQLen == 0 {
 			s.preTargetCwnd = flow.cwnd
 			s.preTargetSeq = flow.seq
+			//node.Logf("record cwnd")
 		}
 
 		// Do cwnd targeting by rewinding cwnd to in-flight bytes one RTT ago
 		// (since telemetry is delayed by ~1 RTT), and removing this flow's
 		// contribution to the sojourn time.
 		sent := tel.Total - s.priorTotal
-		qp := float64(tel.Sojourn) / float64(flow.srtt)
+		qp := float64(tel.Sojourn) / float64(flow.rtt)
 		fqp := qp * float64(tel.PktLen) / float64(sent)
-		flight := flow.inFlightWin.at(node.Now() - flow.srtt)
-		flow.cwnd = flight - Bytes(float64(flight)*float64(fqp))
+		flight := flow.cwndWin.at(node.Now() - flow.rtt)
+		//cwnd0 := flow.cwnd
+		flow.setCWND(flight-Bytes(float64(flight)*float64(fqp)), node)
+
+		//node.Logf("sent:%d tot:%d ptot:%d qp:%f soj:%d rtt:%d fqp:%f len:%d flight:%d cwnd0:%d cwnd:%d",
+		//	sent, tel.Total, s.priorTotal, qp, tel.Sojourn, flow.rtt, fqp, tel.PktLen, flight, cwnd0, flow.cwnd)
 	}
 	s.priorQLen = tel.QLen
 	s.priorTotal = tel.Total
@@ -146,5 +152,5 @@ func (s *Stuttgart) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	a := acked + s.growRem
 	g := a / ScalableAlpha
 	s.growRem = a % ScalableAlpha
-	flow.setCWND(flow.cwnd + g)
+	flow.setCWND(flow.cwnd+g, node)
 }
