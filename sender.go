@@ -530,7 +530,7 @@ func (f *Flow) sendPacket(pkt Packet, node Node) bool {
 // addInFlight adds the given number of bytes to the in-flight bytes.
 func (f *Flow) addInFlight(b Bytes, now Clock) {
 	f.inFlight += b
-	f.inFlightWin.add(now, f.inFlight, now-f.srtt)
+	f.inFlightWin.add(now, f.inFlight, now-2*f.srtt)
 }
 
 // pacingDelay returns the Clock time to wait to pace the given bytes.
@@ -756,7 +756,7 @@ func (f *Flow) setCWND(cwnd Bytes, node Node) {
 	}
 	f.cwnd = cwnd
 	now := node.Now()
-	f.cwndWin.add(now, f.cwnd, now-f.srtt)
+	f.cwndWin.add(now, f.cwnd, now-2*f.srtt)
 }
 
 // bytesWindow stores a value in bytes over time.
