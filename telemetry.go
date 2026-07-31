@@ -97,6 +97,7 @@ type Stuttgart struct {
 	preTargetCwnd Bytes
 	growPrior     Clock
 	growTimer     Clock
+	priorGrowth   Seq
 	initialized   bool
 }
 
@@ -156,17 +157,17 @@ func (s *Stuttgart) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 		return
 	}
 
-	// Scalable growth, based on acked bytes
-	//a := acked + s.growRem
-	//g := a / ScalableAlpha
-	//s.growRem = a % ScalableAlpha
-	//flow.setCWND(flow.cwnd+g, node)
+	// Reno growth- sequence number based
+	if flow.receiveNext >= s.priorGrowth {
+		flow.setCWND(flow.cwnd+MSS, node)
+		s.priorGrowth = flow.seq
+	}
 
 	// Reno growth- time-based
-	if node.Now()-s.growPrior > flow.srtt { // time-based growth
-		flow.setCWND(flow.cwnd+MSS, node)
-		s.growPrior = node.Now()
-	}
+	//if node.Now()-s.growPrior > flow.srtt { // time-based growth
+	//	flow.setCWND(flow.cwnd+MSS, node)
+	//	s.growPrior = node.Now()
+	//}
 
 	// Reno growth- time-based and smoothed
 	//s.growTimer += node.Now() - s.growPrior
@@ -175,4 +176,10 @@ func (s *Stuttgart) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	//	s.growTimer -= flow.srtt / Clock(MSS)
 	//}
 	//s.growPrior = node.Now()
+
+	// Scalable growth, based on acked bytes
+	//a := acked + s.growRem
+	//g := a / ScalableAlpha
+	//s.growRem = a % ScalableAlpha
+	//flow.setCWND(flow.cwnd+g, node)
 }
