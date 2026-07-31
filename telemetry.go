@@ -95,6 +95,8 @@ type Stuttgart struct {
 	priorTotal    Bytes
 	preTargetSeq  Seq
 	preTargetCwnd Bytes
+	growPrior     Clock
+	growTimer     Clock
 	initialized   bool
 }
 
@@ -129,18 +131,19 @@ func (s *Stuttgart) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
 			//node.Logf("record cwnd")
 		}
 
-		// Do cwnd targeting by rewinding cwnd to in-flight bytes one RTT ago
-		// (since telemetry is delayed by ~1 RTT), and removing this flow's
-		// contribution to the sojourn time.
+		// Do cwnd targeting by rewinding cwnd to one RTT ago (since telemetry
+		// is delayed by ~1 RTT), and removing this flow's contribution to the
+		// sojourn time.
 		sent := tel.Total - s.priorTotal
 		qp := float64(tel.Sojourn) / float64(flow.rtt)
 		fqp := qp * float64(tel.PktLen) / float64(sent)
-		flight := flow.cwndWin.at(node.Now() - flow.rtt)
+		cwnd1RttAgo := flow.cwndWin.at(node.Now() - flow.rtt)
 		//cwnd0 := flow.cwnd
-		flow.setCWND(flight-Bytes(float64(flight)*float64(fqp)), node)
+		cwnd1 := cwnd1RttAgo - Bytes(float64(cwnd1RttAgo)*float64(fqp))
+		flow.setCWND(cwnd1, node)
 
-		//node.Logf("sent:%d tot:%d ptot:%d qp:%f soj:%d rtt:%d fqp:%f len:%d flight:%d cwnd0:%d cwnd:%d",
-		//	sent, tel.Total, s.priorTotal, qp, tel.Sojourn, flow.rtt, fqp, tel.PktLen, flight, cwnd0, flow.cwnd)
+		//node.Logf("flow:%d sent:%d tot:%d ptot:%d qp:%f soj:%d rtt:%d fqp:%f len:%d cwnd1RttAgo:%d cwnd0:%d cwnd1:%d",
+		//	flow.id, sent, tel.Total, s.priorTotal, qp, tel.Sojourn, flow.rtt, fqp, tel.PktLen, cwnd1RttAgo, cwnd0, cwnd1)
 	}
 	s.priorQLen = tel.QLen
 	s.priorTotal = tel.Total
@@ -148,9 +151,28 @@ func (s *Stuttgart) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
 
 // grow implements CCA.
 func (s *Stuttgart) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
-	// do Scalable TCP style growth, regardless of signals or telemetry
-	a := acked + s.growRem
-	g := a / ScalableAlpha
-	s.growRem = a % ScalableAlpha
-	flow.setCWND(flow.cwnd+g, node)
+	// skip growth when there were already packets in the queue
+	if pkt.QLen > 0 {
+		return
+	}
+
+	// Scalable growth, based on acked bytes
+	//a := acked + s.growRem
+	//g := a / ScalableAlpha
+	//s.growRem = a % ScalableAlpha
+	//flow.setCWND(flow.cwnd+g, node)
+
+	// Reno growth- time-based
+	if node.Now()-s.growPrior > flow.srtt { // time-based growth
+		flow.setCWND(flow.cwnd+MSS, node)
+		s.growPrior = node.Now()
+	}
+
+	// Reno growth- time-based and smoothed
+	//s.growTimer += node.Now() - s.growPrior
+	//for s.growTimer >= flow.srtt/Clock(MSS) {
+	//	flow.setCWND(flow.cwnd+1, node)
+	//	s.growTimer -= flow.srtt / Clock(MSS)
+	//}
+	//s.growPrior = node.Now()
 }
