@@ -4,6 +4,7 @@ package main
 type Telemetry struct {
 	Sojourn Clock // time between enqueue and dequeue
 	QLen    Bytes // queue length in bytes before packet is enqueued
+	DQLen   Bytes // queue length in bytes after packet is dequeued
 	PktLen  Bytes // packet length (could have grown due to encapsulation)
 	Total   Bytes // total bytes sent by bottleneck
 }
@@ -15,6 +16,7 @@ func (t Telemetry) Merge(newer Telemetry) Telemetry {
 	return Telemetry{
 		newer.Sojourn,
 		newer.QLen,
+		newer.DQLen,
 		t.PktLen + newer.PktLen,
 		newer.Total,
 	}
@@ -59,13 +61,14 @@ func (t *TelemetryQueue) Dequeue(node Node) (pkt Packet, ok bool) {
 	ok = true
 	s := node.Now() - pkt.Enqueue
 	t.total += pkt.Len
+	t.length -= pkt.Len
 	if s > pkt.Sojourn {
 		pkt.Sojourn = s
 		pkt.PktLen = pkt.Len
 		pkt.QLen = pkt.EnqueueLen
+		pkt.DQLen = t.length
 		pkt.Total = t.total
 	}
-	t.length -= pkt.Len
 
 	t.plotSojourn(node.Now()-pkt.Enqueue, len(t.queue) == 0, node.Now())
 	t.plotLength(len(t.queue), node.Now())
@@ -182,4 +185,21 @@ func (s *Stuttgart) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	//g := a / ScalableAlpha
 	//s.growRem = a % ScalableAlpha
 	//flow.setCWND(flow.cwnd+g, node)
+}
+
+// Liberec implements a CCA that responds to congestion telemetry.
+type Liberec struct {
+}
+
+// NewLiberec returns a new Liberec.
+func NewLiberec() *Liberec {
+	return &Liberec{}
+}
+
+// handleTelemetry implements handleTelemetryer.
+func (l *Liberec) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
+}
+
+// grow implements CCA.
+func (l *Liberec) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 }
