@@ -21,7 +21,7 @@ type Packet struct {
 	SCECapable SCECapable
 	SCE        bool
 	ESCE       bool
-	Sent       Clock
+	SentAt     Clock
 
 	// non-standard fields for simulation purposes
 	Delayed bool

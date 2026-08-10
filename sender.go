@@ -489,7 +489,7 @@ func (f *Flow) sendPacket(pkt Packet, node Node) bool {
 	pkt.Seq = f.seq
 	pkt.ECNCapable = f.ecn
 	pkt.SCECapable = f.sce
-	pkt.Sent = node.Now()
+	pkt.SentAt = node.Now()
 	node.Send(pkt)
 	if PlotSeq {
 		f.seqPlot.Dot(node.Now(), strconv.FormatInt(int64(pkt.Seq), 10),
@@ -723,7 +723,7 @@ func (f *Flow) updateRTT(pkt Packet, node Node) {
 	if pkt.Delayed {
 		return
 	}
-	rtt := node.Now() - pkt.Sent
+	rtt := node.Now() - pkt.SentAt
 	f.rtt = rtt
 	if rtt < f.minRtt {
 		f.minRtt = rtt

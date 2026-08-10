@@ -6,7 +6,7 @@ type Telemetry struct {
 	QLen    Bytes // queue length in bytes before packet is enqueued
 	DQLen   Bytes // queue length in bytes after packet is dequeued
 	PktLen  Bytes // packet length (could have grown due to encapsulation)
-	Total   Bytes // total bytes sent by bottleneck
+	Sent    Bytes // total bytes sent by bottleneck
 }
 
 // Merge combines newer Telemetry data for delayed ACK logic. The newer values
@@ -18,7 +18,7 @@ func (t Telemetry) Merge(newer Telemetry) Telemetry {
 		newer.QLen,
 		newer.DQLen,
 		t.PktLen + newer.PktLen,
-		newer.Total,
+		newer.Sent,
 	}
 }
 
@@ -67,7 +67,7 @@ func (t *TelemetryQueue) Dequeue(node Node) (pkt Packet, ok bool) {
 		pkt.PktLen = pkt.Len
 		pkt.QLen = pkt.EnqueueLen
 		pkt.DQLen = t.length
-		pkt.Total = t.total
+		pkt.Sent = t.total
 	}
 
 	t.plotSojourn(node.Now()-pkt.Enqueue, len(t.queue) == 0, node.Now())
@@ -114,7 +114,7 @@ func (s *Stuttgart) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
 	// on the first telemetry seen, just set prior values
 	if !s.initialized {
 		s.priorQLen = tel.QLen
-		s.priorTotal = tel.Total
+		s.priorTotal = tel.Sent
 		s.initialized = true
 		return
 	}
@@ -138,7 +138,7 @@ func (s *Stuttgart) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
 		// Do cwnd targeting by rewinding cwnd to one RTT ago (since telemetry
 		// is delayed by ~1 RTT), and removing this flow's contribution to the
 		// sojourn time.
-		sent := tel.Total - s.priorTotal
+		sent := tel.Sent - s.priorTotal
 		qp := float64(tel.Sojourn) / float64(flow.rtt)
 		fqp := qp * float64(tel.PktLen) / float64(sent)
 		cwnd1RttAgo := flow.cwndWin.at(node.Now() - flow.rtt)
@@ -150,7 +150,7 @@ func (s *Stuttgart) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
 		//	flow.id, sent, tel.Total, s.priorTotal, qp, tel.Sojourn, flow.rtt, fqp, tel.PktLen, cwnd1RttAgo, cwnd0, cwnd1)
 	}
 	s.priorQLen = tel.QLen
-	s.priorTotal = tel.Total
+	s.priorTotal = tel.Sent
 }
 
 // grow implements CCA.
@@ -189,6 +189,15 @@ func (s *Stuttgart) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 
 // Liberec implements a CCA that responds to congestion telemetry.
 type Liberec struct {
+	priorCwnd      Bytes
+	priorCwnd2     Bytes
+	nextControl    Seq
+	minDQLen       Bytes
+	queueSent      Bytes
+	priorQueueSent Bytes
+	flowSent       Bytes
+	doGrow         bool
+	initialized    bool
 }
 
 // NewLiberec returns a new Liberec.
@@ -198,8 +207,50 @@ func NewLiberec() *Liberec {
 
 // handleTelemetry implements handleTelemetryer.
 func (l *Liberec) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
+	// on the first telemetry seen, set initial values
+	if !l.initialized {
+		l.priorCwnd = flow.cwnd
+		l.priorCwnd2 = flow.cwnd
+		l.minDQLen = MaxBytes
+		l.priorQueueSent = tel.Sent
+		l.nextControl = flow.seq
+		l.initialized = true
+		return
+	}
+
+	// keep track of bytes sent through queue
+	l.flowSent += tel.PktLen
+
+	// wait until next control seq
+	if flow.receiveNext <= l.nextControl {
+		if tel.DQLen < l.minDQLen {
+			l.minDQLen = tel.DQLen
+		}
+		return
+	}
+
+	if l.minDQLen > 0 {
+		// reduce cwnd to 2x RTT ago minus standing queue in last RTT
+		s := tel.Sent - l.priorQueueSent        // queue sent in RTT
+		fqp := float64(l.flowSent) / float64(s) // flow queue proportion
+		fsq := Bytes(float64(l.minDQLen) * fqp) // flow standing queue
+		c := l.priorCwnd2 - fsq/2 + MSS/2
+
+		//node.Logf("f:%d s:%d fqp:%f fsq:%d", l.flowSent, s, fqp, fsq)
+		flow.setCWND(c, node)
+	} else {
+		flow.setCWND(flow.cwnd+MSS, node)
+	}
+
+	l.priorCwnd2 = l.priorCwnd
+	l.priorCwnd = flow.cwnd
+	l.flowSent = 0
+	l.priorQueueSent = tel.Sent
+	l.minDQLen = MaxBytes
+	l.nextControl = flow.seq
 }
 
 // grow implements CCA.
 func (l *Liberec) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
+	// growth handled in handleTelemetry
 }
