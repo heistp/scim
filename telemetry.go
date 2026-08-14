@@ -189,20 +189,19 @@ func (s *Stuttgart) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 
 // Liberec implements a CCA that responds to congestion telemetry.
 type Liberec struct {
+	growBy         Bytes
 	priorCwnd      Bytes
 	priorCwnd2     Bytes
 	nextControl    Seq
 	minDQLen       Bytes
-	queueSent      Bytes
 	priorQueueSent Bytes
 	flowSent       Bytes
-	doGrow         bool
 	initialized    bool
 }
 
 // NewLiberec returns a new Liberec.
-func NewLiberec() *Liberec {
-	return &Liberec{}
+func NewLiberec(growBy Bytes) *Liberec {
+	return &Liberec{growBy: growBy}
 }
 
 // handleTelemetry implements handleTelemetryer.
@@ -230,16 +229,14 @@ func (l *Liberec) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
 	}
 
 	if l.minDQLen > 0 {
-		// reduce cwnd to 2x RTT ago minus standing queue in last RTT
 		s := tel.Sent - l.priorQueueSent        // queue sent in RTT
 		fqp := float64(l.flowSent) / float64(s) // flow queue proportion
 		fsq := Bytes(float64(l.minDQLen) * fqp) // flow standing queue
-		c := l.priorCwnd2 - fsq/2 + MSS/2
-
-		//node.Logf("f:%d s:%d fqp:%f fsq:%d", l.flowSent, s, fqp, fsq)
+		c := l.priorCwnd2 - fsq/2 + l.growBy/2
 		flow.setCWND(c, node)
+		//node.Logf("f:%d s:%d fqp:%f fsq:%d", l.flowSent, s, fqp, fsq)
 	} else {
-		flow.setCWND(flow.cwnd+MSS, node)
+		flow.setCWND(flow.cwnd+l.growBy, node)
 	}
 
 	l.priorCwnd2 = l.priorCwnd
