@@ -29,6 +29,7 @@ type TelemetryQueue struct {
 	total  Bytes
 	// Plots
 	*aqmPlot
+	minDQLen Xplot
 }
 
 // NewTelemetryQueue returns a new TelemetryQueue.
@@ -38,6 +39,16 @@ func NewTelemetryQueue() *TelemetryQueue {
 		0,            // length
 		0,            // total
 		newAqmPlot(), // aqmPlot
+		Xplot{
+			Title: "Minimum Post-Dequeue Queue Length",
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Length (Bytes)",
+			},
+			Decimation: PlotMinDQLenInterval,
+		}, // qlen
 	}
 }
 
@@ -49,6 +60,26 @@ func (t *TelemetryQueue) Enqueue(pkt Packet, node Node) {
 	t.length += pkt.Len
 
 	t.plotLength(len(t.queue), node.Now())
+}
+
+// Start implements Starter.
+func (t *TelemetryQueue) Start(node Node) (err error) {
+	t.aqmPlot.Start(node)
+	if PlotMinDQLen {
+		if err = t.minDQLen.Open("min-dqlen.xpl"); err != nil {
+			return
+		}
+	}
+	return
+}
+
+// Stop implements Stopper.
+func (t *TelemetryQueue) Stop(node Node) error {
+	t.aqmPlot.Stop(node)
+	if PlotMinDQLen {
+		t.minDQLen.Close()
+	}
+	return nil
 }
 
 // Dequeue implements AQM.
@@ -72,6 +103,14 @@ func (t *TelemetryQueue) Dequeue(node Node) (pkt Packet, ok bool) {
 
 	t.plotSojourn(node.Now()-pkt.Enqueue, len(t.queue) == 0, node.Now())
 	t.plotLength(len(t.queue), node.Now())
+
+	if PlotMinDQLen {
+		c := colorWhite
+		if t.length == 0 {
+			c = colorRed
+		}
+		t.minDQLen.Dot(node.Now(), t.length.String(), c)
+	}
 
 	return
 }
@@ -190,6 +229,7 @@ func (s *Stuttgart) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 // Liberec implements a CCA that responds to congestion telemetry.
 type Liberec struct {
 	growBy         Bytes
+	md             Bytes
 	priorCwnd      Bytes
 	priorCwnd2     Bytes
 	nextControl    Seq
@@ -200,8 +240,8 @@ type Liberec struct {
 }
 
 // NewLiberec returns a new Liberec.
-func NewLiberec(growBy Bytes) *Liberec {
-	return &Liberec{growBy: growBy}
+func NewLiberec(growBy, md Bytes) *Liberec {
+	return &Liberec{growBy: growBy, md: md}
 }
 
 // handleTelemetry implements handleTelemetryer.
@@ -232,9 +272,10 @@ func (l *Liberec) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
 		s := tel.Sent - l.priorQueueSent        // queue sent in RTT
 		fqp := float64(l.flowSent) / float64(s) // flow queue proportion
 		fsq := Bytes(float64(l.minDQLen) * fqp) // flow standing queue
-		c := l.priorCwnd2 - fsq/2 + l.growBy/2
+		c := l.priorCwnd2 - fsq/2*l.md + l.growBy/2
 		flow.setCWND(c, node)
-		//node.Logf("f:%d s:%d fqp:%f fsq:%d", l.flowSent, s, fqp, fsq)
+		//node.Logf("f:%d s:%d fqp:%f fsq:%d q:%d",
+		//	l.flowSent, s, fqp, fsq, l.minDQLen)
 	} else {
 		flow.setCWND(flow.cwnd+l.growBy, node)
 	}

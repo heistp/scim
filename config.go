@@ -14,7 +14,7 @@ import (
 //
 
 // Sender: test duration
-const Duration = 10 * time.Second
+const Duration = 30 * time.Second
 
 // Sender: flows and path delay
 //
@@ -26,7 +26,8 @@ const Duration = 10 * time.Second
 // CWND targeting on SS exit.
 var (
 	Flows = []Flow{
-		AddFlow(NoECN, NoSCE, NoSS{}, NoResponse{}, NewStuttgart(), Pacing, true),
+		AddFlow(NoECN, NoSCE, NoSS{}, NoResponse{}, NewLiberec(MSS, 1), Pacing, true),
+		//AddFlow(NoECN, NoSCE, NoSS{}, NoResponse{}, NewStuttgart(), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewReno(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewReno(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewReno2(RMD), Pacing, true),
@@ -39,6 +40,19 @@ var (
 		//FlowAt{1, Clock(60 * time.Second), false},
 	}
 	FlowDelay = []Clock{
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
+		Clock(20 * time.Millisecond),
 		Clock(20 * time.Millisecond),
 		Clock(20 * time.Millisecond),
 		Clock(20 * time.Millisecond),
@@ -96,7 +110,7 @@ var (
 // the bottleneck rate at the given times.
 var RateInit = 100 * Mbps
 var RateSchedule = []RateAt{
-	//RateAt{Clock(90 * time.Second), RateInit / 5},
+	//RateAt{Clock(20 * time.Second), RateInit / 5},
 	//RateAt{Clock(210 * time.Second), RateInit},
 }
 
@@ -151,7 +165,7 @@ var UseAQM = NewTelemetryQueue()
 
 // Sender: plots from the sender
 const (
-	PlotInFlight         = true // in-flight.xpl
+	PlotInFlight         = false // in-flight.xpl
 	PlotInFlightInterval = Clock(100 * time.Microsecond)
 
 	PlotCwnd         = true                          // cwnd.xpl
@@ -184,12 +198,15 @@ const (
 	PlotAdjSojournInterval = Clock(100 * time.Microsecond)
 
 	PlotQueueLength         = true // queue-length.xpl
-	PlotQueueLengthInterval = Clock(0 * time.Microsecond)
+	PlotQueueLengthInterval = Clock(100 * time.Microsecond)
 
 	PlotDeltaSigma = false // delta-sigma.xpl
 
 	PlotByteSeconds         = false // queue-bytesec.xpl
 	PlotByteSecondsInterval = Clock(100 * time.Microsecond)
+
+	PlotMinDQLen         = false
+	PlotMinDQLenInterval = Clock(100 * time.Microsecond)
 )
 
 // AQM: plots
