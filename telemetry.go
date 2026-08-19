@@ -130,7 +130,8 @@ func (t *TelemetryQueue) Len() int {
 	return len(t.queue)
 }
 
-// Stuttgart implements a CCA that responds to congestion telemetry.
+// Stuttgart implements a CCA that responds to congestion telemetry by using
+// cwnd targeting to remove each flow's contribution to the queue sojourn time.
 type Stuttgart struct {
 	growRem       Bytes
 	priorQLen     Bytes
@@ -226,7 +227,10 @@ func (s *Stuttgart) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	//flow.setCWND(flow.cwnd+g, node)
 }
 
-// Liberec implements a CCA that responds to congestion telemetry.
+// Liberec implements a CCA that responds to congestion telemetry once per RTT
+// by removing half of each flow's portion of the standing queue, and adding
+// growBy/2 bytes, using conventional AIMD for bandwidth sharing and queue
+// control.
 type Liberec struct {
 	growBy         Bytes
 	md             Bytes
