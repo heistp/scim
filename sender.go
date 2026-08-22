@@ -438,7 +438,11 @@ func (f *Flow) setActive(active bool, node Node) {
 	f.active = active
 	if active {
 		if !f.open {
-			f.sendPacket(Packet{Len: HeaderLen, SYN: true}, node)
+			p := Packet{
+				Len: HeaderLen,
+				SYN: true,
+			}
+			f.sendPacket(p, node)
 		} else {
 			f.send(node)
 		}
@@ -490,6 +494,9 @@ func (f *Flow) sendPacket(pkt Packet, node Node) bool {
 	pkt.ECNCapable = f.ecn
 	pkt.SCECapable = f.sce
 	pkt.SentAt = node.Now()
+	if m, ok := f.cca.(modifyPacketer); ok {
+		m.modifyPacket(&pkt, f, node)
+	}
 	node.Send(pkt)
 	if PlotSeq {
 		f.seqPlot.Dot(node.Now(), strconv.FormatInt(int64(pkt.Seq), 10),
@@ -599,6 +606,14 @@ func (f *Flow) handleSynAck(pkt Packet, node Node) {
 	f.updateRTT(pkt, node)
 	if i, ok := f.slowStart.(initer); ok {
 		i.init(f, node)
+	}
+	// If a Flow sets NoSS for its slow-start algorithm, it may already be in
+	// state CA, and if it handles telemetry, we give it telemetry from the
+	// SYN-ACK here.
+	if f.state == FlowStateCA {
+		if h, ok := f.cca.(handleTelemetryer); ok {
+			h.handleTelemetry(pkt.Telemetry, f, node)
+		}
 	}
 	f.send(node)
 }

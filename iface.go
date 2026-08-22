@@ -21,8 +21,8 @@ type RateAt struct {
 
 // An AQM implements Active Queue Management.
 type AQM interface {
-	Enqueue(Packet, Node)
-	Dequeue(Node) (pkt Packet, ok bool)
+	Enqueue(Packet, *Iface, Node)
+	Dequeue(*Iface, Node) (pkt Packet, ok bool)
 	Peek(Node) (pkt Packet, ok bool)
 	Len() int
 }
@@ -56,7 +56,7 @@ func (i *Iface) Handle(pkt Packet, node Node) error {
 		panic(fmt.Sprintf("%T reached hard max queue length of %d",
 			i.aqm, i.aqm.Len()))
 	}
-	i.aqm.Enqueue(pkt, node)
+	i.aqm.Enqueue(pkt, i, node)
 	if i.empty {
 		i.empty = false
 		i.timer(node, pkt)
@@ -74,7 +74,7 @@ func (i *Iface) Ding(data any, node Node) error {
 	// if not a Bitrate, dequeue and send if a Packet is available
 	var p, n Packet
 	var ok bool
-	if p, ok = i.aqm.Dequeue(node); !ok {
+	if p, ok = i.aqm.Dequeue(i, node); !ok {
 		i.empty = true
 		return nil
 	}

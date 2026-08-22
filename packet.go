@@ -26,8 +26,11 @@ type Packet struct {
 	// non-standard fields for simulation purposes
 	Delayed bool
 
-	// Telemetry is used for simulating telemetry-based CCAs.
+	// Telemetry is the output from telemetry supporting bottlenecks.
 	Telemetry
+
+	// TelemetryIn is the input to telemetry supporting bottlenecks.
+	TelemetryIn TelemetryIn
 
 	// AQM fields
 	Enqueue    Clock

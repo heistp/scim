@@ -41,7 +41,7 @@ func (d *Deltic) Start(node Node) error {
 }
 
 // Enqueue implements AQM.
-func (d *Deltic) Enqueue(pkt Packet, node Node) {
+func (d *Deltic) Enqueue(pkt Packet, iface *Iface, node Node) {
 	pkt.Enqueue = node.Now()
 	if DelticJitterCompensation && len(d.queue) == 0 {
 		d.jit.prior = node.Now()
@@ -51,7 +51,7 @@ func (d *Deltic) Enqueue(pkt Packet, node Node) {
 }
 
 // Dequeue implements AQM.
-func (d *Deltic) Dequeue(node Node) (pkt Packet, ok bool) {
+func (d *Deltic) Dequeue(iface *Iface, node Node) (pkt Packet, ok bool) {
 	if len(d.queue) == 0 {
 		return
 	}

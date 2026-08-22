@@ -30,6 +30,11 @@ type handleTelemetryer interface {
 	handleTelemetry(Telemetry, *Flow, Node)
 }
 
+// A modifyPacketer can change packet data before it's sent.
+type modifyPacketer interface {
+	modifyPacket(*Packet, *Flow, Node)
+}
+
 // A slowStartExiter can take some action on slow-start exit.
 type slowStartExiter interface {
 	slowStartExit(*Flow, Node)

@@ -46,14 +46,14 @@ func (d *DelticMDS) Start(node Node) error {
 }
 
 // Enqueue implements AQM.
-func (d *DelticMDS) Enqueue(pkt Packet, node Node) {
+func (d *DelticMDS) Enqueue(pkt Packet, iface *Iface, node Node) {
 	pkt.Enqueue = node.Now()
 	d.queue = append(d.queue, pkt)
 	d.plotLength(len(d.queue), node.Now())
 }
 
 // Dequeue implements AQM.
-func (d *DelticMDS) Dequeue(node Node) (pkt Packet, ok bool) {
+func (d *DelticMDS) Dequeue(iface *Iface, node Node) (pkt Packet, ok bool) {
 	if len(d.queue) == 0 {
 		return
 	}

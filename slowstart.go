@@ -43,6 +43,11 @@ type updateRtter interface {
 type NoSS struct {
 }
 
+// init implements SlowStart.
+func (NoSS) init(flow *Flow, node Node) {
+	flow.state = FlowStateCA
+}
+
 // grow implements SlowStart.
 func (NoSS) grow(acked Bytes, flow *Flow, node Node) (exit bool) {
 	exit = true

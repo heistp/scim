@@ -14,12 +14,13 @@ import (
 type Bitrate int64
 
 const (
-	Bps  Bitrate = 1
-	Yps          = 8 * Bps
-	Kbps         = 1000 * Bps
-	Mbps         = 1000 * Kbps
-	Gbps         = 1000 * Mbps
-	Tbps         = 1000 * Gbps
+	Bps         Bitrate = 1
+	Yps                 = 8 * Bps
+	Kbps                = 1000 * Bps
+	Mbps                = 1000 * Kbps
+	Gbps                = 1000 * Mbps
+	Tbps                = 1000 * Gbps
+	ZeroBitrate         = 0 * Bps
 )
 
 var qdiscRateUnits = map[string]string{

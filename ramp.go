@@ -22,13 +22,13 @@ func NewRamp() *Ramp {
 }
 
 // Enqueue implements AQM.
-func (r *Ramp) Enqueue(pkt Packet, node Node) {
+func (r *Ramp) Enqueue(pkt Packet, iface *Iface, node Node) {
 	pkt.Enqueue = node.Now()
 	r.queue = append(r.queue, pkt)
 }
 
 // Dequeue implements AQM.
-func (r *Ramp) Dequeue(node Node) (pkt Packet) {
+func (r *Ramp) Dequeue(iface *Iface, node Node) (pkt Packet) {
 	pkt, r.queue = r.queue[0], r.queue[1:]
 	s := node.Now() - pkt.Enqueue
 	var m bool

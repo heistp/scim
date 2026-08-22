@@ -55,7 +55,7 @@ func (d *Deltim) Start(node Node) error {
 }
 
 // Enqueue implements AQM.
-func (d *Deltim) Enqueue(pkt Packet, node Node) {
+func (d *Deltim) Enqueue(pkt Packet, iface *Iface, node Node) {
 	if len(d.queue) == 0 {
 		d.idleTime = node.Now() - d.priorTime
 		d.activeStart = node.Now()
@@ -69,7 +69,7 @@ func (d *Deltim) Enqueue(pkt Packet, node Node) {
 }
 
 // Dequeue implements AQM.
-func (d *Deltim) Dequeue(node Node) (pkt Packet, ok bool) {
+func (d *Deltim) Dequeue(iface *Iface, node Node) (pkt Packet, ok bool) {
 	if len(d.queue) == 0 {
 		return
 	}

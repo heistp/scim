@@ -31,14 +31,14 @@ func (b *Brickwall) Start(node Node) error {
 }
 
 // Enqueue implements AQM.
-func (b *Brickwall) Enqueue(pkt Packet, node Node) {
+func (b *Brickwall) Enqueue(pkt Packet, iface *Iface, node Node) {
 	pkt.Enqueue = node.Now()
 	b.queue = append(b.queue, pkt)
 	b.plotLength(len(b.queue), node.Now())
 }
 
 // Dequeue implements AQM.
-func (b *Brickwall) Dequeue(node Node) (pkt Packet, ok bool) {
+func (b *Brickwall) Dequeue(iface *Iface, node Node) (pkt Packet, ok bool) {
 	if len(b.queue) == 0 {
 		return
 	}

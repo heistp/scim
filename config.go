@@ -26,7 +26,8 @@ const Duration = 30 * time.Second
 // CWND targeting on SS exit.
 var (
 	Flows = []Flow{
-		AddFlow(NoECN, NoSCE, NoSS{}, NoResponse{}, NewLiberec(MSS, 1), Pacing, true),
+		AddFlow(NoECN, NoSCE, NoSS{}, NoResponse{}, NewGreenwich(1.0), Pacing, true),
+		//AddFlow(NoECN, NoSCE, NoSS{}, NoResponse{}, NewLiberec(MSS, 1), Pacing, true),
 		//AddFlow(NoECN, NoSCE, NoSS{}, NoResponse{}, NewStuttgart(), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewReno(RMD), Pacing, true),
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewReno(RMD), Pacing, true),
@@ -110,8 +111,8 @@ var (
 // the bottleneck rate at the given times.
 var RateInit = 100 * Mbps
 var RateSchedule = []RateAt{
-	//RateAt{Clock(20 * time.Second), RateInit / 5},
-	//RateAt{Clock(210 * time.Second), RateInit},
+	//RateAt{Clock(10 * time.Second), RateInit / 5},
+	//RateAt{Clock(20 * time.Second), RateInit * 2},
 }
 
 // The init function below shows how to generate a rate schedule with code.
@@ -280,7 +281,7 @@ const (
 	MTU       = Bytes(1500)
 	HeaderLen = 20 + 20 + 12 // IPv4 + TCP + timestamps
 	MSS       = MTU - HeaderLen
-	IW        = 10 * MSS
+	IW        = 1 * MSS
 	RTTAlpha  = 0.125 // RFC 6298
 )
 
@@ -316,6 +317,16 @@ const (
 	MasloSCEMDApproximation = true // if true, approximate SCE response
 	MasloAdjustSafeRTT      = true // if true, adjust RTT for K calculations
 	MasloMinimumCwnd        = Bytes(float64(4*MSS) * MasloCwndScaleFactor)
+)
+
+// Sender: Greenwich params
+const (
+	// GreenwichMaxCap is the max capacity used as a fraction of the total
+	GreenwichMaxCap = 0.95
+	// GreenwichMaxControlTime is the max time between control loop updates
+	GreenwichMaxControlTime = Clock(10 * time.Millisecond)
+	// GreenwichMaxControlPackets is the max packets between control loop updates
+	GreenwichMaxControlPackets = 10
 )
 
 // Sender: pacing params
