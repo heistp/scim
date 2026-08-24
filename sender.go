@@ -363,6 +363,12 @@ func AddFlow(ecn ECNCapable, sce SCECapable, ss SlowStart, ssExit Responder,
 	return NewFlow(i, ecn, sce, ss, ssExit, cca, pacing, active)
 }
 
+// AddFlowCCA is a convenience function that disables ECN, SCE and slow start
+// for all-encompassing CCAs.
+func AddFlowCCA(cca CCA, pacing PacingEnabled, active bool) Flow {
+	return AddFlow(NoECN, NoSCE, NoSS{}, NoResponse{}, cca, pacing, active)
+}
+
 // FlowID is the currently assigned flow ID, incremented as flows are added.
 var flowID FlowID = 0
 
