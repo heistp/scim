@@ -19,7 +19,6 @@ type Sender struct {
 	inFlight Xplot
 	cwnd     Xplot
 	rtt      Xplot
-	pacing   Xplot
 }
 
 // FlowAt is used to mark flows active or inactive to start and stop them.
@@ -65,16 +64,6 @@ func NewSender(schedule []FlowAt) *Sender {
 			NonzeroAxis: true,
 			Decimation:  PlotRTTInterval,
 		},
-		Xplot{
-			Title: "Pacing Rate",
-			X: Axis{
-				Label: "Time (S)",
-			},
-			Y: Axis{
-				Label: "Rate (Mbps)",
-			},
-			Decimation: PlotPacingInterval,
-		},
 	}
 }
 
@@ -92,11 +81,6 @@ func (s *Sender) Start(node Node) (err error) {
 	}
 	if PlotRTT {
 		if err = s.rtt.Open("tcp-rtt.xpl"); err != nil {
-			return
-		}
-	}
-	if PlotPacing {
-		if err = s.pacing.Open("pacing.xpl"); err != nil {
 			return
 		}
 	}
@@ -132,11 +116,6 @@ func (s *Sender) Handle(pkt Packet, node Node) error {
 	if PlotRTT {
 		s.rtt.Dot(node.Now(), s.flow[pkt.Flow].srtt.StringMS(), color(pkt.Flow))
 	}
-	if PlotPacing {
-		r := s.flow[pkt.Flow].getPacingRate()
-		s.pacing.Dot(node.Now(), strconv.FormatFloat(r.Mbps(), 'f', -1, 64),
-			color(pkt.Flow))
-	}
 	if node.Now() > Clock(Duration) {
 		node.Shutdown()
 	} else {
@@ -169,9 +148,6 @@ func (s *Sender) Stop(node Node) (err error) {
 	}
 	if PlotRTT {
 		s.rtt.Close()
-	}
-	if PlotPacing {
-		s.pacing.Close()
 	}
 	for i := range s.flow {
 		f := &s.flow[i]
@@ -227,6 +203,7 @@ type Flow struct {
 	accel2Plot    Xplot
 	sentAccelWin  bytesWindow
 	ackedAccelWin bytesWindow
+	pacingPlot    Xplot
 }
 
 // FlowState represents the congestion control state of the Flow.
@@ -351,6 +328,16 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 		}, // accelPlot
 		bytesWindow{}, // sentAccelWin
 		bytesWindow{}, // ackedAccelWin
+		Xplot{
+			Title: fmt.Sprintf("Flow %d - Pacing Rate", id),
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Rate (Mbps)",
+			},
+			Decimation: PlotPacingInterval,
+		}, // pacingPlot
 	}
 }
 
@@ -400,6 +387,12 @@ func (f *Flow) Start(node Node) (err error) {
 			return
 		}
 	}
+	if PlotPacing {
+		n := fmt.Sprintf("pacing.%d.xpl", f.id)
+		if err = f.pacingPlot.Open(n); err != nil {
+			return
+		}
+	}
 	if s, ok := f.slowStart.(Starter); ok {
 		if err = s.Start(node); err != nil {
 			return
@@ -425,6 +418,9 @@ func (f *Flow) Stop(node Node) (err error) {
 		f.ratePlot.Close()
 		f.accelPlot.Close()
 		f.accel2Plot.Close()
+	}
+	if PlotPacing {
+		f.pacingPlot.Close()
 	}
 	if s, ok := f.slowStart.(Stopper); ok {
 		if err = s.Stop(node); err != nil {
@@ -533,6 +529,13 @@ func (f *Flow) sendPacket(pkt Packet, node Node) bool {
 			a2 := da * Bytes(time.Second) / Bytes(f.srtt)
 			f.accel2Plot.Dot(node.Now(), strconv.FormatInt(int64(a2), 10),
 				colorRed)
+		}
+	}
+	if PlotPacing {
+		r := f.getPacingRate()
+		if r >= 0 {
+			f.pacingPlot.Dot(node.Now(), strconv.FormatFloat(
+				r.Mbps(), 'f', -1, 64), colorWhite)
 		}
 	}
 	f.addInFlight(pkt.SegmentLen(), node.Now())
