@@ -133,7 +133,8 @@ func (t *TelemetryQueue) Dequeue(iface *Iface, node Node) (pkt Packet, ok bool) 
 	t.total += pkt.Len
 	t.length -= pkt.Len
 
-	// TODO add logic for conditionally reading and writing telemetry
+	// TODO add logic for conditionally reading and writing telemetry, and
+	// only increasing CSTA sent bytes for CSTA traffic.
 	{
 		pkt.Sojourn = s
 		pkt.PktLen = pkt.Len
