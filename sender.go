@@ -19,6 +19,7 @@ type Sender struct {
 	inFlight Xplot
 	cwnd     Xplot
 	rtt      Xplot
+	pacing   Xplot
 }
 
 // FlowAt is used to mark flows active or inactive to start and stop them.
@@ -31,8 +32,8 @@ type FlowAt struct {
 // NewSender returns a new Sender.
 func NewSender(schedule []FlowAt) *Sender {
 	return &Sender{
-		Flows,
-		schedule,
+		Flows,    // flow
+		schedule, // schedule
 		Xplot{
 			Title: "Data in-flight",
 			X: Axis{
@@ -42,7 +43,7 @@ func NewSender(schedule []FlowAt) *Sender {
 				Label: "In-flight (bytes)",
 			},
 			Decimation: PlotInFlightInterval,
-		},
+		}, // inFlight
 		Xplot{
 			Title: "cwnd (x: flow is cwnd-limited)",
 			X: Axis{
@@ -52,7 +53,7 @@ func NewSender(schedule []FlowAt) *Sender {
 				Label: "cwnd (bytes)",
 			},
 			Decimation: PlotCwndInterval,
-		},
+		}, // cwnd
 		Xplot{
 			Title: "RTT",
 			X: Axis{
@@ -63,7 +64,17 @@ func NewSender(schedule []FlowAt) *Sender {
 			},
 			NonzeroAxis: true,
 			Decimation:  PlotRTTInterval,
-		},
+		}, // rtt
+		Xplot{
+			Title: "Pacing Rate",
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Rate (Mbps)",
+			},
+			Decimation: PlotPacingInterval,
+		}, // pacing
 	}
 }
 
@@ -84,11 +95,17 @@ func (s *Sender) Start(node Node) (err error) {
 			return
 		}
 	}
+	if PlotPacing {
+		if err = s.pacing.Open("pacing.xpl"); err != nil {
+			return
+		}
+	}
 	for _, a := range s.schedule {
 		node.Timer(a.At, a)
 	}
 	for i := range s.flow {
 		f := &s.flow[i]
+		f.sender = s
 		if err = f.Start(node); err != nil {
 			return
 		}
@@ -149,6 +166,9 @@ func (s *Sender) Stop(node Node) (err error) {
 	if PlotRTT {
 		s.rtt.Close()
 	}
+	if PlotPacing {
+		s.pacing.Close()
+	}
 	for i := range s.flow {
 		f := &s.flow[i]
 		if err = f.Stop(node); err != nil {
@@ -160,6 +180,7 @@ func (s *Sender) Stop(node Node) (err error) {
 
 // Flow represents the state for a single Flow.
 type Flow struct {
+	sender *Sender
 	id     FlowID
 	active bool
 	open   bool
@@ -203,7 +224,6 @@ type Flow struct {
 	accel2Plot    Xplot
 	sentAccelWin  bytesWindow
 	ackedAccelWin bytesWindow
-	pacingPlot    Xplot
 }
 
 // FlowState represents the congestion control state of the Flow.
@@ -245,6 +265,7 @@ const (
 func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 	ssExit Responder, cca CCA, pacing PacingEnabled, active bool) Flow {
 	return Flow{
+		nil,                  // sender
 		id,                   // id
 		active,               // active
 		false,                // open
@@ -328,16 +349,6 @@ func NewFlow(id FlowID, ecn ECNCapable, sce SCECapable, ss SlowStart,
 		}, // accelPlot
 		bytesWindow{}, // sentAccelWin
 		bytesWindow{}, // ackedAccelWin
-		Xplot{
-			Title: fmt.Sprintf("Flow %d - Pacing Rate", id),
-			X: Axis{
-				Label: "Time (S)",
-			},
-			Y: Axis{
-				Label: "Rate (Mbps)",
-			},
-			Decimation: PlotPacingInterval,
-		}, // pacingPlot
 	}
 }
 
@@ -387,12 +398,6 @@ func (f *Flow) Start(node Node) (err error) {
 			return
 		}
 	}
-	if PlotPacing {
-		n := fmt.Sprintf("pacing.%d.xpl", f.id)
-		if err = f.pacingPlot.Open(n); err != nil {
-			return
-		}
-	}
 	if s, ok := f.slowStart.(Starter); ok {
 		if err = s.Start(node); err != nil {
 			return
@@ -418,9 +423,6 @@ func (f *Flow) Stop(node Node) (err error) {
 		f.ratePlot.Close()
 		f.accelPlot.Close()
 		f.accel2Plot.Close()
-	}
-	if PlotPacing {
-		f.pacingPlot.Close()
 	}
 	if s, ok := f.slowStart.(Stopper); ok {
 		if err = s.Stop(node); err != nil {
@@ -534,8 +536,8 @@ func (f *Flow) sendPacket(pkt Packet, node Node) bool {
 	if PlotPacing {
 		r := f.getPacingRate()
 		if r >= 0 {
-			f.pacingPlot.Dot(node.Now(), strconv.FormatFloat(
-				r.Mbps(), 'f', -1, 64), colorWhite)
+			f.sender.pacing.Dot(node.Now(), strconv.FormatFloat(
+				r.Mbps(), 'f', -1, 64), color(pkt.Flow))
 		}
 	}
 	f.addInFlight(pkt.SegmentLen(), node.Now())

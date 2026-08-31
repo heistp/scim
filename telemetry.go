@@ -6,13 +6,14 @@ import (
 
 // Telemetry contains data set on packets for telemetry-based CCAs.
 type Telemetry struct {
-	Sojourn    Clock   // time between enqueue and dequeue
-	QLen       Bytes   // queue length in bytes before packet is enqueued
-	DQLen      Bytes   // queue length in bytes after packet is dequeued
-	PktLen     Bytes   // packet length (could have grown due to encapsulation)
-	Sent       Bytes   // total bytes sent by bottleneck
-	Capacity   Bitrate // bottleneck capacity
-	Timeulator Clock   // time accumulator
+	Sojourn      Clock   // time between enqueue and dequeue
+	QLen         Bytes   // queue length in bytes before packet is enqueued
+	DQLen        Bytes   // queue length in bytes after packet is dequeued
+	PktLen       Bytes   // packet length (could have grown due to encapsulation)
+	Capacity     Bitrate // bottleneck capacity
+	CSTACapacity Bitrate // capacity allocated for CSTA
+	Sent         Bytes   // total bytes sent by bottleneck
+	Timeulator   Clock   // time accumulator
 }
 
 // Merge combines newer Telemetry data for delayed ACK logic. The newer values
@@ -24,18 +25,21 @@ func (t Telemetry) Merge(newer Telemetry) Telemetry {
 		newer.QLen,
 		newer.DQLen,
 		t.PktLen + newer.PktLen,
-		newer.Sent,
 		newer.Capacity,
+		newer.CSTACapacity,
+		newer.Sent,
 		newer.Timeulator,
 	}
 }
 
 // TelemetryIn is set by senders.
 type TelemetryIn struct {
-	Timeulator Clock
+	Timecrement Clock // timeulator increment
 }
 
-// TelemetryQueue is an AQM that measures and sets telemetry data.
+// TelemetryQueue is an AQM that measures and sets telemetry data. Note that
+// this same queue is used for both CSTA and AIMD experiments, so there is more
+// code here than would be needed for either one individually.
 type TelemetryQueue struct {
 	queue      []Packet
 	length     Bytes
@@ -43,7 +47,8 @@ type TelemetryQueue struct {
 	timeulator Clock
 	// Plots
 	*aqmPlot
-	minDQLen Xplot
+	minDQLen       Xplot
+	timeulatorPlot Xplot
 }
 
 // NewTelemetryQueue returns a new TelemetryQueue.
@@ -63,7 +68,17 @@ func NewTelemetryQueue() *TelemetryQueue {
 				Label: "Length (Bytes)",
 			},
 			Decimation: PlotMinDQLenInterval,
-		}, // qlen
+		}, // minDQLen
+		Xplot{
+			Title: "Timeulator",
+			X: Axis{
+				Label: "Time (S)",
+			},
+			Y: Axis{
+				Label: "Time (S)",
+			},
+			Decimation: PlotTimeulatorInterval,
+		}, // timeulatorPlot
 	}
 }
 
@@ -73,7 +88,7 @@ func (t *TelemetryQueue) Enqueue(pkt Packet, iface *Iface, node Node) {
 	pkt.EnqueueLen = t.length
 	t.queue = append(t.queue, pkt)
 	t.length += pkt.Len
-	t.timeulator += pkt.TelemetryIn.Timeulator
+	t.timeulator += pkt.TelemetryIn.Timecrement
 
 	t.plotLength(len(t.queue), node.Now())
 }
@@ -86,6 +101,11 @@ func (t *TelemetryQueue) Start(node Node) (err error) {
 			return
 		}
 	}
+	if PlotTimeulator {
+		if err = t.timeulatorPlot.Open("timeulator.xpl"); err != nil {
+			return
+		}
+	}
 	return
 }
 
@@ -94,6 +114,9 @@ func (t *TelemetryQueue) Stop(node Node) error {
 	t.aqmPlot.Stop(node)
 	if PlotMinDQLen {
 		t.minDQLen.Close()
+	}
+	if PlotTimeulator {
+		t.timeulatorPlot.Close()
 	}
 	return nil
 }
@@ -109,14 +132,16 @@ func (t *TelemetryQueue) Dequeue(iface *Iface, node Node) (pkt Packet, ok bool) 
 	s := node.Now() - pkt.Enqueue
 	t.total += pkt.Len
 	t.length -= pkt.Len
-	// TODO modify telemetry update logic
-	if s > pkt.Sojourn {
+
+	// TODO add logic for conditionally reading and writing telemetry
+	{
 		pkt.Sojourn = s
 		pkt.PktLen = pkt.Len
 		pkt.QLen = pkt.EnqueueLen
 		pkt.DQLen = t.length
 		pkt.Sent = t.total
 		pkt.Telemetry.Capacity = iface.rate
+		pkt.Telemetry.CSTACapacity = Bitrate(float64(iface.rate) * CSTAMaxCap)
 		pkt.Telemetry.Timeulator = t.timeulator
 	}
 
@@ -129,6 +154,10 @@ func (t *TelemetryQueue) Dequeue(iface *Iface, node Node) (pkt Packet, ok bool) 
 			c = colorRed
 		}
 		t.minDQLen.Dot(node.Now(), t.length.String(), c)
+	}
+
+	if PlotTimeulator {
+		t.timeulatorPlot.Dot(node.Now(), t.timeulator, colorWhite)
 	}
 
 	return
@@ -147,6 +176,158 @@ func (t *TelemetryQueue) Peek(node Node) (pkt Packet, ok bool) {
 // Len implements AQM.
 func (t *TelemetryQueue) Len() int {
 	return len(t.queue)
+}
+
+// CSTA (Capacity Sharing with Time Accumulation) implements a CCA that uses a
+// novel "timeulator" concept to rapidly converge to capacity and fair share.
+type CSTA struct {
+	portion                   float64 // allocated bottleneck portion
+	portionMax                float64 // max portion for fixed rate flows
+	rate                      Bitrate // current send rate
+	rateMax                   Bitrate // max rate for fixed rate flows
+	priorBottleneckTimeulator Clock
+	priorSend                 Clock
+	priorControl              Clock
+	priorBottleneckSent       Bytes
+	nextControlTime           Clock
+	nextControlCounter        int
+	sendInitialized           bool
+	telInitialized            bool
+	telSeen                   int
+}
+
+// NewCSTA returns a new CSTA.
+func NewCSTA(portion float64) *CSTA {
+	return &CSTA{
+		portion:    portion,
+		portionMax: portion,
+	}
+}
+
+// NewCSTARate returns a new fixed rate CSTA.
+func NewCSTARate(portion float64, rateMax Bitrate) *CSTA {
+	return &CSTA{
+		portion:    0,
+		portionMax: portion,
+		rateMax:    rateMax,
+	}
+}
+
+// handleTelemetry implements handleTelemetryer.
+func (g *CSTA) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
+	now := node.Now()
+
+	// first RTT: get RTT and capacity
+	if !g.telInitialized {
+		g.priorControl = now
+		g.priorBottleneckTimeulator = tel.Timeulator
+		g.priorBottleneckSent = tel.Sent
+		g.nextControlTime = now
+		g.telInitialized = true
+		return
+	}
+
+	// this counter lets us always process telemetry for the first two RTTs
+	if g.telSeen < 3 {
+		g.telSeen++
+	}
+
+	// wait until next control
+	if now < g.nextControlTime &&
+		g.nextControlCounter < CSTAMaxControlPackets &&
+		g.telSeen > 2 {
+		return
+	}
+
+	// dt: change in time since last control
+	// bdt: bottleneck delta timeulator
+	// bp: bottleneck portions
+	dt := now - g.priorControl
+	bdt := tel.Timeulator - g.priorBottleneckTimeulator
+	bp := float64(bdt) / float64(dt)
+
+	// xrate: maximum rate
+	// brate: bottleneck rate
+	xrate := tel.CSTACapacity
+	brate := CalcBitrate(tel.Sent-g.priorBottleneckSent, time.Duration(dt))
+
+	// when rateMax is set, calculation portion dynamically
+	if g.rateMax > 0 {
+		if bp == 0 {
+			g.portion = float64(g.rateMax) / float64(xrate)
+		} else {
+			g.portion = bp * float64(g.rateMax) / float64(xrate)
+		}
+		if g.portion > g.portionMax {
+			g.portion = g.portionMax
+		}
+	}
+
+	// If bottleneck portions is 0, it means we didn't see enough telemetry
+	// updates such that it changed. We return to avoid a div by 0, but
+	// once we have proper bandwidth and bottleneck portion estimators deciding
+	// when to run the control loop, we shouldn't need to do this.
+	if bp == 0 {
+		node.Logf("bp=0")
+		return
+	}
+
+	// fp: flow portion
+	// trate: target rate
+	fp := g.portion / bp
+	trate := Bitrate(float64(xrate) * fp)
+
+	// increment rate safely to get to target rate
+	if g.rate < trate {
+		// arate: available rate
+		if arate := Bitrate(float64(xrate-brate) * fp); arate > 0 {
+			if g.rate += arate; g.rate > trate {
+				g.rate = trate
+			}
+		}
+	} else {
+		g.rate = trate
+	}
+
+	// We always set cwnd to matching the pacing rate and srtt, but we may not
+	// want to do this in a production CCA.
+	cwnd := Bytes(g.rate.Yps() * flow.srtt.Seconds())
+
+	flow.setCWND(cwnd, node)
+	flow.pacingRate = g.rate
+
+	//node.Logf("f:%d t:%d dt:%d bdt:%d bp:%f fp:%f rate:%f cwnd:%d",
+	//	flow.id, tel.Timeulator, dt, bdt, bp, fp, g.rate.Mbps(), cwnd)
+
+	// set prior and next variables to end control loop
+	g.priorControl = now
+	g.priorBottleneckTimeulator = tel.Timeulator
+	g.priorBottleneckSent = tel.Sent
+	g.nextControlTime = now + CSTAMaxControlTime
+	g.nextControlCounter = 0
+}
+
+// modifyPacketer impements modifyPacketer.
+func (g *CSTA) modifyPacket(pkt *Packet, flow *Flow, node Node) {
+	now := node.Now()
+	if !g.sendInitialized {
+		g.priorSend = now
+		g.sendInitialized = true
+		return
+	}
+
+	// dt: change in time since last send
+	// fdt: flow delta timeulator
+	dt := now - g.priorSend
+	fdt := Clock(float64(dt) * g.portion)
+	pkt.TelemetryIn.Timecrement = fdt
+	g.priorSend = now
+	//node.Logf("snd portion:%f dt:%d fdt:%d", g.portion, dt, fdt)
+}
+
+// grow implements CCA.
+func (g *CSTA) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
+	// growth handled in handleTelemetry
 }
 
 // Stuttgart implements a CCA that responds to congestion telemetry by using
@@ -313,126 +494,5 @@ func (l *Liberec) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
 
 // grow implements CCA.
 func (l *Liberec) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
-	// growth handled in handleTelemetry
-}
-
-// Greenwich implements a CCA that uses a novel "timeulator" concept to rapidly
-// converge to capacity and fair share.
-type Greenwich struct {
-	portion                   float64
-	priorBottleneckTimeulator Clock
-	priorSend                 Clock
-	priorControl              Clock
-	priorBottleneckSent       Bytes
-	rate                      Bitrate
-	nextControlTime           Clock
-	nextControlCounter        int
-	sendInitialized           bool
-	telInitialized            bool
-	telSeen                   int
-}
-
-// NewGreenwich returns a new Greenwich.
-func NewGreenwich(portion float64) *Greenwich {
-	return &Greenwich{
-		portion: portion,
-	}
-}
-
-// handleTelemetry implements handleTelemetryer.
-func (g *Greenwich) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
-	// first RTT: get RTT and capacity
-	now := node.Now()
-	if !g.telInitialized {
-		g.priorControl = now
-		g.priorBottleneckTimeulator = tel.Timeulator
-		g.priorBottleneckSent = tel.Sent
-		g.nextControlTime = now
-		g.telInitialized = true
-		return
-	}
-
-	// this counter lets us always process telemetry for the first two RTTs
-	if g.telSeen < 3 {
-		g.telSeen++
-	}
-
-	// wait until next control
-	if now < g.nextControlTime &&
-		g.nextControlCounter < GreenwichMaxControlPackets &&
-		g.telSeen > 2 {
-		return
-	}
-
-	// dt: change in time since last control
-	// bdt: bottleneck delta timeulator
-	// bp: bottleneck portions
-	dt := now - g.priorControl
-	bdt := tel.Timeulator - g.priorBottleneckTimeulator
-	bp := float64(bdt) / float64(dt)
-
-	// xrate: maximum rate
-	// brate: bottleneck rate
-	xrate := Bitrate(float64(tel.Capacity) * GreenwichMaxCap)
-	brate := CalcBitrate(tel.Sent-g.priorBottleneckSent, time.Duration(dt))
-
-	// fp: flow portion
-	// trate: target rate
-	if bp == 0 {
-		node.Logf("bp=0")
-		return
-	}
-	fp := g.portion / bp
-	trate := Bitrate(float64(xrate) * fp)
-
-	// increment rate safely to get to target rate
-	if g.rate < trate {
-		// arate: available rate
-		arate := Bitrate(float64(xrate-brate) * fp)
-		if arate < 0 {
-			arate = 0
-		}
-		if g.rate += arate; g.rate > trate {
-			g.rate = trate
-		}
-	} else {
-		g.rate = trate
-	}
-
-	cwnd := Bytes(g.rate.Yps() * flow.srtt.Seconds())
-
-	flow.setCWND(cwnd, node)
-	flow.pacingRate = g.rate
-
-	//node.Logf("tel t:%d dt:%d bdt:%d bp:%f fp:%f rate:%f cwnd:%d",
-	//	tel.Timeulator, dt, bdt, bp, fp, g.rate.Mbps(), cwnd)
-
-	g.priorControl = now
-	g.priorBottleneckTimeulator = tel.Timeulator
-	g.priorBottleneckSent = tel.Sent
-	g.nextControlTime = now + GreenwichMaxControlTime
-	g.nextControlCounter = 0
-}
-
-// modifyPacketer impements modifyPacketer.
-func (g *Greenwich) modifyPacket(pkt *Packet, flow *Flow, node Node) {
-	now := node.Now()
-	if !g.sendInitialized {
-		g.priorSend = now
-		g.sendInitialized = true
-		return
-	}
-
-	// dt: change in time since last send
-	// fdt: flow delta timeulator
-	dt := now - g.priorSend
-	fdt := Clock(float64(dt) * g.portion)
-	pkt.TelemetryIn.Timeulator = fdt
-	g.priorSend = now
-	//node.Logf("snd dt:%d fdt:%d", dt, fdt)
-}
-
-// grow implements CCA.
-func (g *Greenwich) grow(acked Bytes, pkt Packet, flow *Flow, node Node) {
 	// growth handled in handleTelemetry
 }

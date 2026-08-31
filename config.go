@@ -14,7 +14,7 @@ import (
 //
 
 // Sender: test duration
-const Duration = 30 * time.Second
+const Duration = 15 * time.Second
 
 // Sender: flows and path delay
 //
@@ -26,7 +26,7 @@ const Duration = 30 * time.Second
 // CWND targeting on SS exit.
 var (
 	Flows = []Flow{
-		AddFlow(NoECN, NoSCE, NoSS{}, NoResponse{}, NewGreenwich(1.0), Pacing, true),
+		AddFlowCCA(NewCSTA(1.0), Pacing, true),
 		//AddFlow(NoECN, NoSCE, NoSS{}, NoResponse{}, NewLiberec(MSS, 1), Pacing, true),
 		//AddFlow(NoECN, NoSCE, NoSS{}, NoResponse{}, NewStuttgart(), Pacing, true),
 		//AddFlow(ECN, SCE, NewStdSS(), TargetCWND{}, NewReno(RMD), Pacing, true),
@@ -37,8 +37,12 @@ var (
 		//AddFlow(ECN, SCE, NewEssp(), NoResponse{}, NewMaslo(), Pacing, true),
 	}
 	FlowSchedule = []FlowAt{
-		//FlowAt{1, Clock(10 * time.Second), true},
-		//FlowAt{1, Clock(60 * time.Second), false},
+		//FlowAt{1, Clock(5 * time.Second), true},
+		//FlowAt{1, Clock(10 * time.Second), false},
+		//FlowAt{2, Clock(10 * time.Second), true},
+		//FlowAt{2, Clock(20 * time.Second), false},
+		//FlowAt{3, Clock(15 * time.Second), true},
+		//FlowAt{3, Clock(25 * time.Second), false},
 	}
 	FlowDelay = []Clock{
 		Clock(20 * time.Millisecond),
@@ -110,9 +114,14 @@ var (
 // RateInit is the initial bottleneck rate, and RateSchedule allows changing
 // the bottleneck rate at the given times.
 var RateInit = 100 * Mbps
+
 var RateSchedule = []RateAt{
-	//RateAt{Clock(10 * time.Second), RateInit / 5},
-	//RateAt{Clock(20 * time.Second), RateInit * 2},
+	//RateAt{Clock(5 * time.Second), RateInit / 2},
+	//RateAt{Clock(10 * time.Second), RateInit / 4},
+	//RateAt{Clock(15 * time.Second), RateInit},
+	//RateAt{Clock(20 * time.Second), RateInit},
+	//RateAt{Clock(25 * time.Second), RateInit / 5},
+	//RateAt{Clock(30 * time.Second), RateInit},
 }
 
 // The init function below shows how to generate a rate schedule with code.
@@ -169,14 +178,14 @@ const (
 	PlotInFlight         = false // in-flight.xpl
 	PlotInFlightInterval = Clock(100 * time.Microsecond)
 
-	PlotCwnd         = true                          // cwnd.xpl
+	PlotCwnd         = false                         // cwnd.xpl
 	PlotCwndLimit    = true                          // limit on cwnd plot
 	PlotCwndInterval = Clock(100 * time.Microsecond) // for cwnd plot
 
 	PlotRTT         = false // tcp-rtt.xpl
 	PlotRTTInterval = Clock(100 * time.Microsecond)
 
-	PlotPacing         = false // pacing.xpl
+	PlotPacing         = true // pacing.xpl
 	PlotPacingInterval = Clock(100 * time.Microsecond)
 
 	PlotSeq         = false // seq.#.xpl
@@ -208,6 +217,9 @@ const (
 
 	PlotMinDQLen         = false
 	PlotMinDQLenInterval = Clock(100 * time.Microsecond)
+
+	PlotTimeulator         = true
+	PlotTimeulatorInterval = Clock(100 * time.Microsecond)
 )
 
 // AQM: plots
@@ -319,14 +331,14 @@ const (
 	MasloMinimumCwnd        = Bytes(float64(4*MSS) * MasloCwndScaleFactor)
 )
 
-// Sender: Greenwich params
+// Sender: CSTA params
 const (
-	// GreenwichMaxCap is the max capacity used as a fraction of the total
-	GreenwichMaxCap = 0.95
-	// GreenwichMaxControlTime is the max time between control loop updates
-	GreenwichMaxControlTime = Clock(10 * time.Millisecond)
-	// GreenwichMaxControlPackets is the max packets between control loop updates
-	GreenwichMaxControlPackets = 10
+	// CSTAMaxCap is the max capacity used as a fraction of the total
+	CSTAMaxCap = 0.90
+	// CSTAMaxControlTime is the max time between control loop updates
+	CSTAMaxControlTime = Clock(10 * time.Millisecond)
+	// CSTAMaxControlPackets is the max packets between control loop updates
+	CSTAMaxControlPackets = 10
 )
 
 // Sender: pacing params

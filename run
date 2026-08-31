@@ -43,25 +43,35 @@ fi
 
 # display plots, either with tiling or without
 if [[ $tile == 1 ]]; then
+    xplot pacing.xpl &> /dev/null &
+    sleep $WAIT
+    wmctrl -r xplot -T "Pacing Rate"
+    wmctrl -r "Pacing Rate" -e 0,0,$Y,$W,$H
+
     xplot thruput.xpl &> /dev/null &
     sleep $WAIT
     wmctrl -r xplot -T "IP Throughput"
-    wmctrl -r "IP Throughput" -e 0,0,$Y,$W,$H
+    wmctrl -r "IP Throughput" -e 0,0,$((Y+H+T)),$W,$H
     
     xplot sojourn.xpl &> /dev/null &
     sleep $WAIT
-    wmctrl -r xplot -T "Sojourn"
-    wmctrl -r "Sojourn" -e 0,$W,$Y,$W,$H
+    wmctrl -r xplot -T "Queue Sojourn Time"
+    wmctrl -r "Queue Sojourn Time" -e 0,$W,$Y,$W,$H
     
-    xplot cwnd.xpl &> /dev/null &
+    #xplot cwnd.xpl &> /dev/null &
+    #sleep $WAIT
+    #wmctrl -r xplot -T "cwnd"
+    #wmctrl -r "cwnd" -e 0,0,$((Y+H+T)),$W,$H
+
+    xplot queue-length.xpl &> /dev/null &
     sleep $WAIT
-    wmctrl -r xplot -T "cwnd"
-    wmctrl -r "cwnd" -e 0,0,$((Y+H+T)),$W,$H
+    wmctrl -r xplot -T "Queue Length"
+    wmctrl -r "Queue Length" -e 0,$W,$((Y+H+T)),$W,$H
     
-    xplot mark-frequency.xpl &> /dev/null &
-    sleep $WAIT
-    wmctrl -r xplot -T "Mark Frequency"
-    wmctrl -r "Mark Frequency" -e 0,$W,$((Y+H+T)),$W,$H
+    #xplot mark-frequency.xpl &> /dev/null &
+    #sleep $WAIT
+    #wmctrl -r xplot -T "Mark Frequency"
+    #wmctrl -r "Mark Frequency" -e 0,$W,$((Y+H+T)),$W,$H
 elif command -v xplot &> /dev/null; then
     xplot *.xpl &>/dev/null &
 fi
