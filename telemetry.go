@@ -214,7 +214,8 @@ func NewCSTARate(portion float64, rateMax Bitrate) *CSTA {
 	}
 }
 
-// handleTelemetry implements handleTelemetryer.
+// handleTelemetry implements handleTelemetryer.  This is called for every
+// ACK packet that contains telemetry.
 func (g *CSTA) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
 	now := node.Now()
 
@@ -300,7 +301,11 @@ func (g *CSTA) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
 	//node.Logf("f:%d t:%d dt:%d bdt:%d bp:%f fp:%f rate:%f cwnd:%d",
 	//	flow.id, tel.Timeulator, dt, bdt, bp, fp, g.rate.Mbps(), cwnd)
 
-	// set prior and next variables to end control loop
+	// Set prior and next variables to end control loop.  The right time between
+	// control loop cycles needs further investigation.  It's currently
+	// controlled by either a fixed number of packets or fixed elapsed time, but
+	// should likely be instead tied to confidence in the estimations of
+	// bandwidth and bottleneck portions.
 	g.priorControl = now
 	g.priorBottleneckTimeulator = tel.Timeulator
 	g.priorBottleneckSent = tel.Sent
@@ -308,7 +313,8 @@ func (g *CSTA) handleTelemetry(tel Telemetry, flow *Flow, node Node) {
 	g.nextControlCounter = 0
 }
 
-// modifyPacketer impements modifyPacketer.
+// modifyPacketer impements modifyPacketer.  Here we set the timeulator
+// increment passed as input to CSTA supporting hops.
 func (g *CSTA) modifyPacket(pkt *Packet, flow *Flow, node Node) {
 	now := node.Now()
 	if !g.sendInitialized {
